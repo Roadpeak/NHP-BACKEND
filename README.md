@@ -12,10 +12,29 @@ pnpm install
 pnpm db:up          # Postgres 16 + PostGIS on localhost:5434
 pnpm migrate        # push the Prisma schema
 pnpm harden         # apply the guarantees (roles, triggers, constraints)
-pnpm test           # prove the twelve refusals
+pnpm seed           # reference data from ../nhp-seed
+pnpm test           # prove the refusals
 ```
 
 `pnpm setup` runs all of the above in order.
+
+### Running the API
+
+```bash
+pnpm seed:demo      # one facility, one checked-in doctor, one patient
+pnpm serve          # http://localhost:4400/api/v1
+```
+
+`seed:demo` prints an `X-Practitioner-Id`. Auth is not built yet, so the API
+identifies the clinician from that header — a **development shortcut** any
+client could forge, which is why the server refuses to start in production
+without an explicit override.
+
+Note the id changes on every reseed, and `pnpm test` wipes the demo data.
+Re-run `pnpm seed:demo` afterwards and update the frontend's
+`NEXT_PUBLIC_DEMO_PRACTITIONER_ID`.
+
+Port 4400 is deliberate — 4000 is taken by another project on this machine.
 
 Port 5434 is deliberate — 5433 is already taken by another project on this
 machine.

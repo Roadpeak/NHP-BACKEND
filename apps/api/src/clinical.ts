@@ -11,6 +11,8 @@
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { canWriteClinical } from './practitioner.js';
+import { decryptField } from './crypto.js';
+import { ageAt } from './identity.js';
 
 export type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -660,6 +662,8 @@ export async function patientSummary(db: Db, personId: string) {
       select: {
         id: true,
         displayNumber: true,
+        givenName: true,
+        familyName: true,
         dateOfBirth: true,
         sexAtBirth: true,
         bloodGroup: true,
@@ -701,7 +705,20 @@ export async function patientSummary(db: Db, personId: string) {
 
   if (!person) throw new ClinicalError('Patient not found', 'PERSON_NOT_FOUND');
 
-  return { person, allergies, medications, chronicConditions: chronic };
+  // Names are encrypted at rest. Decrypting here rather than at the HTTP
+  // layer keeps every caller — API, worker, report — on the same path, so
+  // one of them cannot forget.
+  return {
+    person: {
+      ...person,
+      givenName: decryptField(person.givenName),
+      familyName: decryptField(person.familyName),
+      age: ageAt(person.dateOfBirth),
+    },
+    allergies,
+    medications,
+    chronicConditions: chronic,
+  };
 }
 
 /** Paginated timeline. Never load a whole life at once. */

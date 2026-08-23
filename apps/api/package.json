@@ -11,19 +11,24 @@
     "seed": "tsx src/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "studio": "prisma studio"
+    "studio": "prisma studio",
+    "serve": "tsx watch src/server.ts",
+    "seed:demo": "tsx src/seed-demo.ts",
+    "demo:reset": "tsx src/seed-demo.ts --reset"
   },
   "dependencies": {
-    "@prisma/client": "^6.2.1"
+    "@fastify/cors": "^11.3.0",
+    "@prisma/client": "^6.2.1",
+    "fastify": "^5.12.1"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
     "dotenv": "^16.4.7",
     "pg": "^8.13.1",
     "prisma": "^6.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8",
-    "@types/node": "^22.10.2",
-    "@types/pg": "^8.11.10"
+    "vitest": "^2.1.8"
   }
 }
