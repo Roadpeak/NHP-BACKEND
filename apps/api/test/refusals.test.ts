@@ -384,6 +384,63 @@ describe('the audit log', () => {
     expect(err.message).toMatch(/append-only|permission denied|forbidden/i);
   });
 
+  it('REFUSAL 13 — rejects UPDATE on break_glass', async () => {
+    // Break-glass is evidence. If the app role could UPDATE it, a clinician
+    // could rewrite their own justification or mark their own emergency
+    // access reviewed — defeating nhp_review_break_glass() entirely.
+    await owner.query(
+      `INSERT INTO break_glass (id, person_id, practitioner_id, check_in_id,
+                                facility_id, reason_code, justification,
+                                categories, opened_at, expires_at, review_status)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, 'UNCONSCIOUS',
+               'Patient unconscious on arrival, no next of kin present',
+               ARRAY['HIV']::"SensCat"[], now(), now() + interval '4 hours',
+               'PENDING')`,
+      [f.personId, f.practitionerId, f.checkInId, f.facilityId],
+    );
+
+    const err = await expectRejection(
+      app,
+      `UPDATE break_glass SET justification = 'tampered' WHERE person_id = $1`,
+      [f.personId],
+    );
+    expect(err.message).toMatch(/append-only|permission denied|forbidden/i);
+
+    const { rows } = await owner.query(
+      `SELECT justification FROM break_glass WHERE person_id = $1`,
+      [f.personId],
+    );
+    expect(rows[0].justification).toMatch(/unconscious on arrival/i);
+  });
+
+  it('REFUSAL 14 — rejects DELETE on break_glass', async () => {
+    const err = await expectRejection(app, `DELETE FROM break_glass WHERE person_id = $1`, [
+      f.personId,
+    ]);
+    expect(err.message).toMatch(/append-only|permission denied|forbidden/i);
+  });
+
+  it('allows review only through nhp_review_break_glass()', async () => {
+    const { rows: bg } = await owner.query(
+      `SELECT id FROM break_glass WHERE person_id = $1 LIMIT 1`,
+      [f.personId],
+    );
+
+    await app.query(
+      `SELECT nhp_review_break_glass($1::text, $2::text, $3::text, $4::text)`,
+      [bg[0].id, 'REVIEWED_OK', 'auditor-1', 'Consistent with the ED record'],
+    );
+
+    const { rows } = await owner.query(
+      `SELECT review_status, reviewed_by, justification FROM break_glass WHERE id = $1`,
+      [bg[0].id],
+    );
+    expect(rows[0].review_status).toBe('REVIEWED_OK');
+    expect(rows[0].reviewed_by).toBe('auditor-1');
+    // Review records an outcome; it never edits the evidence.
+    expect(rows[0].justification).toMatch(/unconscious on arrival/i);
+  });
+
   it('forces DENIED_SELF_ACCESS when a practitioner opens their own record', async () => {
     const { rows: prac } = await owner.query(
       `SELECT person_id FROM practitioner WHERE id = $1`,

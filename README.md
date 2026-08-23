@@ -76,6 +76,8 @@ not that the application declines to try.
 | 10 | consent grant with no expiry | NOT NULL + CHECK |
 | 11 | merge approved by one person | CHECK constraint |
 | 12 | Tier 3 aggregate below county level | CHECK constraint |
+| 13 | UPDATE on break_glass | revoked grant + trigger |
+| 14 | DELETE on break_glass | revoked grant + trigger |
 
 Plus eleven positive-path tests proving the system still *works* — a
 legitimate write succeeds, a correction supersedes without editing, a
@@ -118,7 +120,9 @@ refuses.
 - [x] **Phase 2** — facilities: registry, capabilities, KEPH levels
 - [x] **Phase 3** — clinicians: licences, affiliation, check-in
 - [x] **Phase 4** — clinical core: encounters, coded diagnoses, prescribing
-- [ ] Phases 5–9 — consent, triage, Ministry, referrals, hardening
+- [x] **Phase 5** — consent, tiered access, break-glass
+- [ ] Phase 6 — triage: symptom rules, facility recommendation
+- [ ] Phases 7–9 — Ministry analytics, referrals, hardening
 
 ## Phase 1 — identity
 
@@ -250,6 +254,32 @@ recorded against the prescriber.
 marks the original superseded through `nhp_supersede()` — the only permitted
 UPDATE path. Both versions survive; the timeline shows the current one; an
 auditor sees who changed what and why.
+
+## Phase 5 — consent and break-glass
+
+Three tiers. Tier 1 (allergies, blood group) is never gated — friction there
+kills people. Tier 2 is visible but logged. Tier 3 (HIV, mental health,
+reproductive health, substance use, GBV) needs consent or break-glass.
+
+**The withholding rule** is the one easiest to get wrong: a clinician is
+told restricted records *exist* without being shown them. Hiding their
+existence means the clinician never knows to ask the patient, which defeats
+the clinical purpose of the tier entirely.
+
+Consent is per-category, not all-or-nothing — someone may disclose a mental
+health history and not their HIV status. Every grant expires; the database
+caps it at a year.
+
+Break-glass grants access **immediately** — an unconscious patient cannot
+consent and a clinician must never wait for approval. What makes it
+expensive is everything after: a 20-character justification, a 4-hour
+window, automatic entry into the auditor queue, a patient notification, and
+the facility's rate on its own dashboard. A clinician cannot break-glass
+their own record.
+
+`denialAnomalies` is the fraud signal from the blueprint: a clinician who
+searches forty IDs and is denied on thirty-eight is far more interesting
+than anyone who was granted access. Most systems log only success.
 
 ## Related
 

@@ -57,8 +57,13 @@ REVOKE UPDATE, DELETE ON
 
 -- Audit tables: the app may INSERT and SELECT, never modify.
 REVOKE UPDATE, DELETE ON access_log FROM nhp_app;
--- break_glass allows UPDATE only through the review function (see §7).
-REVOKE DELETE ON break_glass FROM nhp_app;
+
+-- break_glass is evidence. Leaving UPDATE with the app role would let a
+-- clinician rewrite their own justification, or mark their own emergency
+-- access reviewed — defeating the point of routing review through the
+-- SECURITY DEFINER function in §7. Revoke both; nhp_review_break_glass()
+-- is the only way in.
+REVOKE UPDATE, DELETE ON break_glass FROM nhp_app;
 
 -- REFUSAL 9: DELETE on the audit log, by anyone but the owner
 GRANT INSERT ON access_log TO nhp_audit_writer;
@@ -98,7 +103,7 @@ $$ LANGUAGE plpgsql;
 DO $$
 DECLARE t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['encounter','condition','allergy','medication','access_log']
+  FOREACH t IN ARRAY ARRAY['encounter','condition','allergy','medication','access_log','break_glass']
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS %I ON %I', 'trg_append_only_' || t, t);
     EXECUTE format(
@@ -163,6 +168,11 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- break_glass is append-only (§5). Suspend the trigger for this one
+  -- statement, in this transaction only, so review can be recorded without
+  -- granting the app role UPDATE on the evidence.
+  SET LOCAL session_replication_role = replica;
+
   UPDATE break_glass
      SET review_status = p_status::"ReviewStatus",
          reviewed_by   = p_by,
@@ -171,6 +181,32 @@ BEGIN
    WHERE id = p_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Recording that the patient was told is not a review — it is done by the
+-- SMS worker, asynchronously, and must not require UPDATE on the evidence.
+CREATE OR REPLACE FUNCTION nhp_mark_break_glass_notified(
+  p_id      text,
+  p_channel text
+)
+RETURNS void AS $$
+BEGIN
+  IF p_channel NOT IN ('SMS','IN_APP','POSTAL') THEN
+    RAISE EXCEPTION 'NHP: invalid notification channel %', p_channel
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SET LOCAL session_replication_role = replica;
+
+  UPDATE break_glass
+     SET patient_notified_at   = now(),
+         notification_channel  = p_channel
+   WHERE id = p_id
+     AND patient_notified_at IS NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+REVOKE ALL ON FUNCTION nhp_mark_break_glass_notified(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION nhp_mark_break_glass_notified(text, text) TO nhp_app;
 
 DROP FUNCTION IF EXISTS nhp_review_break_glass(uuid, text, uuid, text);
 REVOKE ALL ON FUNCTION nhp_review_break_glass(text, text, text, text) FROM PUBLIC;
