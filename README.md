@@ -123,7 +123,8 @@ refuses.
 - [x] **Phase 5** — consent, tiered access, break-glass
 - [x] **Phase 6** — triage: symptom rules, facility recommendation
 - [x] **Phase 7** — Ministry analytics, suppression, surveillance
-- [ ] Phases 8–9 — referrals, hardening
+- [x] **Phase 8** — referrals and loop closure
+- [ ] Phase 9 — hardening: offline sync, merge, MFA, DPIA
 
 ## Phase 1 — identity
 
@@ -346,6 +347,41 @@ establishment list, care gaps (chronic patients lost to follow-up), and
 notifiable-disease signals raised automatically — manual reporting is
 under-complied with everywhere, which is why it cannot depend on a clinician
 remembering.
+
+## Phase 8 — referrals
+
+Issued → accepted → arrived → **outcome returned**. That last step is the
+counter-referral, the part every system forgets and the part clinicians
+complain about most: without it a referral is a one-way message, not care.
+
+A referral is refused if the destination cannot do the work — sending
+someone to a facility that cannot treat them is the exact time-wasting NHP
+exists to prevent. Declining requires a reason, because the referring
+clinician needs to know where else to send the patient. Open referrals
+(no destination named) can be picked up by any capable facility.
+
+Validity scales with urgency: an emergency referral lapses in a day, a
+routine one in ninety. An emergency still marked "issued" a week later did
+not succeed, and pretending otherwise hides the failure in the statistics.
+
+### Loop closure — the pitch number
+
+Reported as a **funnel**, not a single figure:
+
+```
+issued 5 · declined 1 · arrived 3 · completed 2
+arrival rate 60%  ·  closure rate 40%
+```
+
+"40% closure" alone hides whether patients never arrived or arrived and were
+never reported on — completely different problems with different fixes.
+`emergencyNonArrivals` surfaces the most serious case: someone sent urgently
+with no record they got there.
+
+Producing this at all requires linking a referral issued at one facility to
+an arrival at another and an outcome returned to the first. Aggregate
+reporting cannot do it; a longitudinal record can. That is why it is the
+strongest number in the Ministry pitch.
 
 ## Related
 

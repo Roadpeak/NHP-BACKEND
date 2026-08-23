@@ -18,6 +18,7 @@ import {
   workforceByCounty,
   careGaps,
   notifiableSignals,
+  referralClosureByCounty,
   provenance,
   ageBandOf,
   SUPPRESSION_THRESHOLD,
@@ -461,6 +462,12 @@ describe('the views that only a linked record can produce', () => {
 
     const signals = await notifiableSignals(prisma, window());
     expect(signals.find((s) => s.icd11Code === 'ME84.2')).toBeUndefined();
+  });
+});
+
+describe('referral closure', () => {
+  it('reports zero rows before any referral exists', async () => {
+    expect(await referralClosureByCounty(prisma, window())).toEqual([]);
   });
 });
 

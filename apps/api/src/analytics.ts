@@ -417,25 +417,56 @@ export async function burdenBySubcounty(
  * Issued → accepted → arrived → outcome returned. Nothing else in Kenya can
  * produce this, because it requires linking a referral issued at one
  * facility to an arrival at another and an outcome returned to the first.
+ * Aggregate reporting cannot do it; a longitudinal record can.
  *
- * Referrals land in Phase 8; this reads whatever exists so the metric is
- * ready the moment they do.
+ * Reported as a funnel by county, so a low figure can be read correctly:
+ * patients never arriving and patients arriving unreported are completely
+ * different problems with different fixes.
  */
-export async function referralClosure(db: Db, opts: { from: Date; to: Date }) {
-  const encounters = await db.encounter.count({
-    where: { recordedAt: { gte: opts.from, lt: opts.to }, disposition: 'REFERRED' },
+export async function referralClosureByCounty(db: Db, opts: { from: Date; to: Date }) {
+  const referrals = await db.referral.findMany({
+    where: { issuedAt: { gte: opts.from, lt: opts.to } },
+    select: {
+      status: true,
+      fromFacilityId: true,
+    },
   });
+  if (referrals.length === 0) return [];
 
-  return {
-    referralsIssued: encounters,
-    accepted: 0,
-    arrived: 0,
-    outcomeReturned: 0,
-    closureRatePercent: 0,
-    note:
-      'Referral lifecycle lands in Phase 8. Issued counts are derived from ' +
-      'encounter disposition until then.',
-  };
+  const facilities = await db.facility.findMany({
+    select: { id: true, countyId: true },
+  });
+  const countyOf = new Map(facilities.map((f) => [f.id, f.countyId]));
+
+  const byCounty = new Map<
+    string,
+    { issued: number; arrived: number; completed: number; declined: number }
+  >();
+
+  for (const r of referrals) {
+    const county = countyOf.get(r.fromFacilityId);
+    if (!county) continue;
+    const entry = byCounty.get(county) ?? {
+      issued: 0,
+      arrived: 0,
+      completed: 0,
+      declined: 0,
+    };
+    entry.issued += 1;
+    if (r.status === 'ARRIVED' || r.status === 'COMPLETED') entry.arrived += 1;
+    if (r.status === 'COMPLETED') entry.completed += 1;
+    if (r.status === 'DECLINED') entry.declined += 1;
+    byCounty.set(county, entry);
+  }
+
+  return [...byCounty.entries()]
+    .map(([countyId, v]) => ({
+      countyId,
+      ...v,
+      arrivalRatePercent: Math.round((v.arrived / v.issued) * 1000) / 10,
+      closureRatePercent: Math.round((v.completed / v.issued) * 1000) / 10,
+    }))
+    .sort((a, b) => a.closureRatePercent - b.closureRatePercent);
 }
 
 /**

@@ -1041,6 +1041,73 @@ model AllergyClassTerm {
   @@map("allergy_class_term")
 }
 
+// ------------------------------------------------------ referral (P8)
+
+enum Urgency {
+  EMERGENCY
+  URGENT_24H
+  SOON_7D
+  ROUTINE
+}
+
+enum RefStatus {
+  ISSUED
+  ACCEPTED
+  DECLINED
+  ARRIVED
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+model Referral {
+  id                   String    @id @default(uuid(7))
+  personId             String    @map("person_id")
+  fromFacilityId       String    @map("from_facility_id")
+  fromEncounterId      String    @map("from_encounter_id")
+  referredBy           String    @map("referred_by")
+  /// Null for an open referral — "any facility that can do this".
+  toFacilityId         String?   @map("to_facility_id")
+  toSpecialty          String?   @map("to_specialty")
+  urgency              Urgency
+  reason               String
+  requiredCapabilities String[]  @map("required_capabilities")
+  status               RefStatus @default(ISSUED)
+  issuedAt             DateTime  @default(now()) @map("issued_at")
+  expiresAt            DateTime  @map("expires_at")
+  respondedAt          DateTime? @map("responded_at")
+  respondedBy          String?   @map("responded_by")
+  declineReason        String?   @map("decline_reason")
+  arrivedAt            DateTime? @map("arrived_at")
+  arrivalEncounterId   String?   @map("arrival_encounter_id")
+  cancelledReason      String?   @map("cancelled_reason")
+
+  counterReferral CounterReferral?
+
+  @@index([personId, issuedAt])
+  @@index([toFacilityId, status])
+  @@index([fromFacilityId, issuedAt])
+  @@index([status, expiresAt])
+  @@map("referral")
+}
+
+/// The part every system forgets: telling the referring clinician what
+/// happened. Without it a referral is a one-way message, not care.
+model CounterReferral {
+  id            String   @id @default(uuid(7))
+  referralId    String   @unique @map("referral_id")
+  referral      Referral @relation(fields: [referralId], references: [id])
+  summary       String
+  outcomeCode   String?  @map("outcome_code")
+  followUpPlan  String?  @map("follow_up_plan")
+  returnedBy    String   @map("returned_by")
+  returnedAt    DateTime @default(now()) @map("returned_at")
+  facilityId    String   @map("facility_id")
+  licenceNumber String   @map("licence_number")
+
+  @@map("counter_referral")
+}
+
 // -------------------------------------------------------- triage (P6)
 
 model SymptomTerm {

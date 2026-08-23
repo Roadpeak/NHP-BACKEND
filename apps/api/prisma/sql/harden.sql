@@ -208,6 +208,35 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 REVOKE ALL ON FUNCTION nhp_mark_break_glass_notified(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION nhp_mark_break_glass_notified(text, text) TO nhp_app;
 
+-- Recording that an encounter ended in a referral is a lifecycle fact, not
+-- a clinical edit — but `encounter` is append-only, so it goes through a
+-- narrow function that may set ONLY these two columns.
+CREATE OR REPLACE FUNCTION nhp_set_encounter_disposition(
+  p_encounter_id text,
+  p_disposition  text,
+  p_referral_id  text DEFAULT NULL
+)
+RETURNS void AS $$
+BEGIN
+  IF p_disposition NOT IN ('DISCHARGED','ADMITTED','REFERRED','ABSCONDED',
+                           'DIED','LEFT_AGAINST_ADVICE') THEN
+    RAISE EXCEPTION 'NHP: invalid disposition %', p_disposition
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SET LOCAL session_replication_role = replica;
+
+  UPDATE encounter
+     SET disposition = p_disposition::"Disposition",
+         referral_id = COALESCE(p_referral_id, referral_id),
+         ended_at    = COALESCE(ended_at, now())
+   WHERE id = p_encounter_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+REVOKE ALL ON FUNCTION nhp_set_encounter_disposition(text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION nhp_set_encounter_disposition(text, text, text) TO nhp_app;
+
 DROP FUNCTION IF EXISTS nhp_review_break_glass(uuid, text, uuid, text);
 REVOKE ALL ON FUNCTION nhp_review_break_glass(text, text, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION nhp_review_break_glass(text, text, text, text) TO nhp_app;
