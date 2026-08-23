@@ -22,7 +22,34 @@ if (!url) {
   process.exit(1);
 }
 
-const sql = readFileSync(sqlPath, 'utf8');
+// Role passwords come from the environment so they are never committed.
+// harden.sql carries :'name' placeholders, substituted here.
+const rolePasswords: Record<string, string | undefined> = {
+  app_pw: process.env.APP_ROLE_PASSWORD,
+  audit_writer_pw: process.env.AUDIT_WRITER_ROLE_PASSWORD,
+  auditor_pw: process.env.AUDITOR_ROLE_PASSWORD,
+  analyst_pw: process.env.ANALYST_ROLE_PASSWORD,
+};
+
+const missing = Object.entries(rolePasswords)
+  .filter(([, v]) => !v)
+  .map(([k]) => k);
+if (missing.length) {
+  console.error(
+    `Missing role passwords in the environment: ${missing.join(', ')}\n` +
+      'Copy .env.example to .env, or set them in your secret manager.',
+  );
+  process.exit(1);
+}
+
+/** Escapes a value for safe interpolation as a SQL string literal. */
+const quote = (v: string) => `'${v.replace(/'/g, "''")}'`;
+
+let sql = readFileSync(sqlPath, 'utf8');
+for (const [key, value] of Object.entries(rolePasswords)) {
+  sql = sql.replaceAll(`:'${key}'`, quote(value!));
+}
+
 const client = new pg.Client({ connectionString: url });
 
 try {

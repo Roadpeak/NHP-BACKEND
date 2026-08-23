@@ -16,19 +16,21 @@
 -- nhp_auditor             SELECT on audit tables. No clinical access.
 -- nhp_analyst             SELECT on aggregates ONLY. No clinical grant at all.
 
+-- Passwords are injected by src/harden.ts from the environment, never
+-- committed. :'app_pw' etc. are placeholders substituted before execution.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nhp_app') THEN
-    CREATE ROLE nhp_app LOGIN PASSWORD 'nhp_app_dev_password';
+    EXECUTE format('CREATE ROLE nhp_app LOGIN PASSWORD %L', :'app_pw');
   END IF;
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nhp_audit_writer') THEN
-    CREATE ROLE nhp_audit_writer LOGIN PASSWORD 'nhp_audit_dev_password';
+    EXECUTE format('CREATE ROLE nhp_audit_writer LOGIN PASSWORD %L', :'audit_writer_pw');
   END IF;
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nhp_auditor') THEN
-    CREATE ROLE nhp_auditor LOGIN PASSWORD 'nhp_auditor_dev_password';
+    EXECUTE format('CREATE ROLE nhp_auditor LOGIN PASSWORD %L', :'auditor_pw');
   END IF;
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nhp_analyst') THEN
-    CREATE ROLE nhp_analyst LOGIN PASSWORD 'nhp_analyst_dev_password';
+    EXECUTE format('CREATE ROLE nhp_analyst LOGIN PASSWORD %L', :'analyst_pw');
   END IF;
 END
 $$;
