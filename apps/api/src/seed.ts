@@ -262,6 +262,89 @@ async function seedAllergyClasses() {
   return { allergyClasses: rows.length };
 }
 
+async function seedSymptoms() {
+  const path = join(SEED_DIR, 'symptoms.csv');
+  if (!existsSync(path)) {
+    console.warn('  symptoms.csv not found — skipping');
+    return { symptoms: 0, redFlags: 0 };
+  }
+
+  const rows = readCsv(path);
+  let redFlags = 0;
+
+  for (const r of rows) {
+    if (r.kind === 'RED_FLAG') redFlags++;
+    const data = {
+      labelEn: r.label_en,
+      labelSw: r.label_sw,
+      questionEn: r.question_en,
+      questionSw: r.question_sw,
+      bodySystem: r.body_system,
+      kind: r.kind,
+      severityMarker: r.severity_marker === 'true',
+      minAge: Number.parseFloat(r.min_age) || 0,
+      maxAge: Number.parseFloat(r.max_age) || 120,
+      sex: r.sex || 'ANY',
+      durationRelevant: r.duration_relevant === 'true',
+      reviewStatus: r.review_status,
+    };
+    await prisma.symptomTerm.upsert({
+      where: { code: r.code },
+      create: { code: r.code, ...data },
+      update: data,
+    });
+  }
+  return { symptoms: rows.length, redFlags };
+}
+
+async function seedTriageRules() {
+  const path = join(SEED_DIR, 'triage_rules.csv');
+  if (!existsSync(path)) {
+    console.warn('  triage_rules.csv not found — skipping');
+    return { rules: 0, redFlags: 0, unreviewedRedFlags: [] as string[] };
+  }
+
+  const rows = readCsv(path);
+  const unreviewedRedFlags: string[] = [];
+  let redFlags = 0;
+
+  for (const r of rows) {
+    const isRedFlag = r.red_flag === 'true';
+    const reviewed = r.reviewed_by && r.reviewed_by.toUpperCase() !== 'UNASSIGNED';
+
+    if (isRedFlag) {
+      redFlags++;
+      if (!reviewed) unreviewedRedFlags.push(r.rule_id);
+    }
+
+    const data = {
+      symptoms: multi(r.symptoms),
+      ageMin: Number.parseFloat(r.age_min) || 0,
+      ageMax: Number.parseFloat(r.age_max) || 120,
+      redFlag: isRedFlag,
+      urgency: r.urgency,
+      requiredCapabilities: multi(r.required_capabilities),
+      minKephLevel: Number.parseInt(r.min_keph_level, 10) || 2,
+      adviceEn: r.advice_en,
+      adviceSw: r.advice_sw,
+      reviewedBy: r.reviewed_by || 'UNASSIGNED',
+      reviewStatus: r.review_status,
+      // THE SAFETY GATE: a red-flag rule with no named clinical reviewer is
+      // loaded but INACTIVE. It sends people to emergency departments; it
+      // must not fire on a developer's say-so.
+      active: !(isRedFlag && !reviewed),
+    };
+
+    await prisma.triageRule.upsert({
+      where: { ruleId: r.rule_id },
+      create: { ruleId: r.rule_id, ...data },
+      update: data,
+    });
+  }
+
+  return { rules: rows.length, redFlags, unreviewedRedFlags };
+}
+
 async function main() {
   console.log('seeding reference data ...\n');
 
@@ -280,6 +363,27 @@ async function main() {
 
   const allergies = await seedAllergyClasses();
   console.log(`  allergy class ${allergies.allergyClasses}`);
+
+  const sx = await seedSymptoms();
+  console.log(`  symptoms      ${sx.symptoms}  (${sx.redFlags} red flags)`);
+
+  const rules = await seedTriageRules();
+  const activeRules = rules.rules - rules.unreviewedRedFlags.length;
+  console.log(
+    `  triage rules  ${rules.rules}  (${rules.redFlags} red flags, ` +
+      `${activeRules} active)`,
+  );
+
+  if (rules.unreviewedRedFlags.length > 0) {
+    console.warn(
+      `\n  ${rules.unreviewedRedFlags.length} RED-FLAG RULES ARE INACTIVE — no ` +
+        'named clinical reviewer:\n' +
+        `    ${rules.unreviewedRedFlags.join(', ')}\n` +
+        '  These route people to emergency departments. They stay inactive ' +
+        'until a\n  practising clinician signs them off in ' +
+        'nhp-seed/data/triage_rules.csv.',
+    );
+  }
 
   if (dx.unreviewed > 0) {
     console.warn(

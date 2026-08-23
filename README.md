@@ -121,7 +121,7 @@ refuses.
 - [x] **Phase 3** — clinicians: licences, affiliation, check-in
 - [x] **Phase 4** — clinical core: encounters, coded diagnoses, prescribing
 - [x] **Phase 5** — consent, tiered access, break-glass
-- [ ] Phase 6 — triage: symptom rules, facility recommendation
+- [x] **Phase 6** — triage: symptom rules, facility recommendation
 - [ ] Phases 7–9 — Ministry analytics, referrals, hardening
 
 ## Phase 1 — identity
@@ -280,6 +280,35 @@ their own record.
 `denialAnomalies` is the fraud signal from the blueprint: a clinician who
 searches forty IDs and is denied on thirty-eight is far more interesting
 than anyone who was granted access. Most systems log only success.
+
+## Phase 6 — triage
+
+Deterministic and explainable. Every recommendation traces to a named rule
+at a known version, so when one is questioned later you can reconstruct
+exactly what fired. No model sits in this decision path.
+
+**The safety gate carries all the way from CSV to runtime.** All 19
+red-flag rules ship with `reviewed_by=UNASSIGNED`, load into the database
+as `active=false`, and cannot fire. `pnpm seed` prints them by name. They
+stay inactive until a practising clinician signs them off — these rules
+route people to emergency departments and must not go live on a developer's
+say-so.
+
+When a gated rule *would* have matched, the result reports it in
+`inactiveRulesMatched` rather than swallowing the gap. A silently missing
+red flag is the dangerous failure mode.
+
+**A red flag bypasses ranking entirely.** Back pain reported alongside
+convulsions routes to an emergency department, not a physiotherapist — a
+test asserts exactly that. Rules require ALL their symptoms, so chest pain
+alone does not fire the chest-pain-plus-breathlessness rule.
+
+`orphanedRedFlags` reports red-flag symptoms with no active rule behind
+them — the same invariant that caught nine real safety holes when the seed
+data was built.
+
+Every recommendation carries a disclaimer in English and Swahili: guidance
+on where to seek care, not a diagnosis.
 
 ## Related
 

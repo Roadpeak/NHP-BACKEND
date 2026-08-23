@@ -1041,6 +1041,76 @@ model AllergyClassTerm {
   @@map("allergy_class_term")
 }
 
+// -------------------------------------------------------- triage (P6)
+
+model SymptomTerm {
+  id               String  @id @default(uuid(7))
+  code             String  @unique
+  labelEn          String  @map("label_en")
+  labelSw          String  @map("label_sw")
+  questionEn       String  @map("question_en")
+  questionSw       String  @map("question_sw")
+  bodySystem       String  @map("body_system")
+  /// SYMPTOM | RED_FLAG | HISTORY | CONTEXT
+  kind             String
+  severityMarker   Boolean @default(false) @map("severity_marker")
+  minAge           Float   @map("min_age")
+  maxAge           Float   @map("max_age")
+  sex              String  @default("ANY")
+  durationRelevant Boolean @default(false) @map("duration_relevant")
+  reviewStatus     String  @map("review_status")
+
+  @@index([bodySystem])
+  @@index([kind])
+  @@map("symptom_term")
+}
+
+model TriageRule {
+  id                   String   @id @default(uuid(7))
+  ruleId               String   @unique @map("rule_id")
+  /// All must be present for the rule to fire.
+  symptoms             String[]
+  ageMin               Float    @map("age_min")
+  ageMax               Float    @map("age_max")
+  redFlag              Boolean  @map("red_flag")
+  urgency              String
+  requiredCapabilities String[] @map("required_capabilities")
+  minKephLevel         Int      @map("min_keph_level")
+  adviceEn             String   @map("advice_en")
+  adviceSw             String   @map("advice_sw")
+  /// A safety control: no rule reaches production unreviewed.
+  reviewedBy           String   @map("reviewed_by")
+  reviewStatus         String   @map("review_status")
+  /// Rules are versioned so a recommendation can be reconstructed later.
+  version              Int      @default(1)
+  active               Boolean  @default(true)
+
+  @@index([redFlag, active])
+  @@map("triage_rule")
+}
+
+/// What we told a citizen, and why. The feedback signal for the engine.
+model Recommendation {
+  id                 String   @id @default(uuid(7))
+  personId           String?  @map("person_id")
+  symptoms           String[]
+  ageYears           Float    @map("age_years")
+  ruleVersion        Int      @map("rule_version")
+  rulesFired         String[] @map("rules_fired")
+  redFlagShown       Boolean  @map("red_flag_shown")
+  urgency            String?
+  facilitiesOffered  Json     @map("facilities_offered")
+  scope              String
+  fromLatitude       Float?   @map("from_latitude")
+  fromLongitude      Float?   @map("from_longitude")
+  issuedAt           DateTime @default(now()) @map("issued_at")
+  actedOnEncounterId String?  @map("acted_on_encounter_id")
+
+  @@index([personId, issuedAt])
+  @@index([issuedAt])
+  @@map("recommendation")
+}
+
 // ---------------------------------------------------- aggregates (P7)
 // Read by the ANALYST role, which holds NO grant on any clinical table.
 
