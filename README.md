@@ -116,7 +116,7 @@ refuses.
 - [x] **Phase 0** — foundation, schema, roles, triggers, refusal suite
 - [x] **Phase 1** — identity: registration, guardianship, promotion at 18
 - [x] **Phase 2** — facilities: registry, capabilities, KEPH levels
-- [ ] Phase 3 — clinicians: licences, affiliation, check-in API
+- [x] **Phase 3** — clinicians: licences, affiliation, check-in
 - [ ] Phase 4 — clinical core: encounters, coded diagnoses, prescribing
 - [ ] Phases 5–9 — consent, triage, Ministry, referrals, hardening
 
@@ -177,6 +177,42 @@ hospitals. A test proves a fresh distant claim beats a stale near one.
 `findWithWidening` escalates subcounty → county → national when nothing
 local qualifies, and reports how far it had to reach so the citizen can be
 told plainly why they are being sent further.
+
+## Phase 3 — clinicians
+
+Three layers, all required before a clinical write:
+
+**Affiliation** — a durable clinician↔facility link, never self-declared.
+Who may grant it is not a detail: public facilities are staffed by the
+Ministry, private facilities manage their own. A private admin adding staff
+to a public hospital would be a posting nobody authorised, so it is refused.
+
+**Check-in** — a 16-hour shift, one open session at a time. A clinician
+cannot be on duty at two facilities at once; allowing it would make
+attribution ambiguous.
+
+**Verification** — six Kenyan regulators (KMPDC, NCK, COC, PPB, KMLTTB,
+KNDI) behind a pluggable `VerificationProvider`. The mock models real failure
+modes — not found, expired, suspended, struck off, register unreachable —
+because code that has only seen success handles none of them. A regulator
+being down leaves the account `PENDING`; it never silently activates.
+
+Cadres without a statutory register (psychologists, community health
+workers) are not forced to invent a licence number.
+
+`canWriteClinical()` checks the same four conditions the Phase 0 trigger
+enforces, so the UI can explain the problem instead of surfacing a database
+error. A test asserts the two agree: when the gate says yes, the write
+actually succeeds.
+
+### The session ceiling
+
+Extensions are available only in the final hour, and clamp to 24 hours from
+check-in — the same bound `checkin_window_ck` enforces. Without the clamp,
+rolling extensions would turn a shift into a permanent session and "checked
+in" would stop meaning anything. The database caught this: my first
+implementation added 16 hours to an already-15-hour-old session and the
+constraint refused the write.
 
 ## Related
 
