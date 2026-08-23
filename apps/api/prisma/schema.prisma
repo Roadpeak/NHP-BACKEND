@@ -1041,6 +1041,44 @@ model AllergyClassTerm {
   @@map("allergy_class_term")
 }
 
+// ------------------------------------------------- offline sync (P9)
+
+enum SyncStatus {
+  QUEUED
+  APPLIED
+  CONFLICT
+  REJECTED
+}
+
+/// A write made while a facility was offline.
+///
+/// Connectivity in Level 2 and 3 facilities is genuinely unreliable. If NHP
+/// only works online, clinicians keep the paper register and enter data
+/// later or not at all — and the record becomes untrustworthy.
+model SyncEnvelope {
+  id             String     @id @default(uuid(7))
+  /// Client-generated. The same envelope replayed twice must apply once.
+  idempotencyKey String     @unique @map("idempotency_key")
+  deviceId       String     @map("device_id")
+  practitionerId String     @map("practitioner_id")
+  facilityId     String     @map("facility_id")
+  checkInId      String     @map("check_in_id")
+  operation      String
+  payload        Json
+  /// When the clinician actually did it, not when it reached the server.
+  occurredAt     DateTime   @map("occurred_at")
+  receivedAt     DateTime   @default(now()) @map("received_at")
+  status         SyncStatus @default(QUEUED)
+  appliedAt      DateTime?  @map("applied_at")
+  resultId       String?    @map("result_id")
+  rejectionCode  String?    @map("rejection_code")
+  rejectionNote  String?    @map("rejection_note")
+
+  @@index([status, receivedAt])
+  @@index([deviceId, occurredAt])
+  @@map("sync_envelope")
+}
+
 // ------------------------------------------------------ referral (P8)
 
 enum Urgency {

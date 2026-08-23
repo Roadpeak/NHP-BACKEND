@@ -2,8 +2,8 @@
 
 A longitudinal health record and care-routing system for Kenya.
 
-**Phase 0 complete.** The database refuses what it must refuse — proven by
-23 passing tests, not asserted in a document.
+**All ten phases complete.** 225 passing tests against a real PostgreSQL —
+the guarantees are proven, not asserted.
 
 ## Quick start
 
@@ -124,7 +124,7 @@ refuses.
 - [x] **Phase 6** — triage: symptom rules, facility recommendation
 - [x] **Phase 7** — Ministry analytics, suppression, surveillance
 - [x] **Phase 8** — referrals and loop closure
-- [ ] Phase 9 — hardening: offline sync, merge, MFA, DPIA
+- [x] **Phase 9** — hardening: offline sync, merge, rate limits, MFA
 
 ## Phase 1 — identity
 
@@ -382,6 +382,34 @@ Producing this at all requires linking a referral issued at one facility to
 an arrival at another and an outcome returned to the first. Aggregate
 reporting cannot do it; a longitudinal record can. That is why it is the
 strongest number in the Ministry pitch.
+
+## Phase 9 — hardening
+
+**Merge is the most dangerous operation in the system.** An incorrect one
+attaches a person's history to someone else and can kill them — a
+transfusion against the wrong blood group, a prescription against the wrong
+allergy. So it requires two *distinct* approvers, keeps a full reversal
+snapshot, and **never deletes anything**. Clinical rows keep their original
+`person_id`; a pointer resolves reads to the survivor, which is precisely
+what makes the whole operation reversible.
+
+Scoring is deliberately conservative. Sex *and* date of birth are
+disconfirmers that cap the score below review outright, whatever else
+agrees — sharing a name is common in Kenya, and a missed duplicate splits a
+history while a false merge shows a clinician someone else's allergies.
+
+**Offline sync** carries a client-generated idempotency key, so a flaky
+connection replaying its queue cannot create duplicate diagnoses.
+`occurredAt` records when the clinician actually worked, not when the packet
+arrived — otherwise a week offline appears to have happened on Tuesday. The
+check-in gate still applies: a late write outside its session is refused,
+not accepted because it arrived late.
+
+**Rate limiting** counts from the audit log rather than separate counters,
+so the limit and the evidence can never disagree.
+
+**MFA** is required server-side for clinical and Ministry accounts.
+`accountsMissingMfa` is the enforcement backlog.
 
 ## Related
 
