@@ -122,7 +122,8 @@ refuses.
 - [x] **Phase 4** — clinical core: encounters, coded diagnoses, prescribing
 - [x] **Phase 5** — consent, tiered access, break-glass
 - [x] **Phase 6** — triage: symptom rules, facility recommendation
-- [ ] Phases 7–9 — Ministry analytics, referrals, hardening
+- [x] **Phase 7** — Ministry analytics, suppression, surveillance
+- [ ] Phases 8–9 — referrals, hardening
 
 ## Phase 1 — identity
 
@@ -309,6 +310,42 @@ data was built.
 
 Every recommendation carries a disclaimer in English and Swahili: guidance
 on where to seek care, not a diagnosis.
+
+## Phase 7 — Ministry analytics
+
+The ANALYST role holds no grant on any clinical table — a test asserts
+`permission denied` on all seven. It reads only aggregates that never held a
+`person_id`.
+
+**Suppression is stored, not rendered.** A suppressed row carries
+`case_count = 0`, so no endpoint, export or raw SQL query can serve the true
+number by accident. A test connects as the analyst and confirms it.
+
+**Complementary suppression** is the part most implementations miss. Hiding
+one small cell is not enough when a published total lets anyone recover it
+by subtraction, so whenever a group has exactly one hidden cell, the
+smallest survivor is hidden too — purely as cover. Verified adversarially:
+
+```
+published total : 142
+visible cells   : a=100
+hidden cells    : 2  (COMPLEMENTARY, PRIMARY)
+residual        : 42 spread across 2 hidden cells
+SAFE: residual cannot be attributed to any single cell
+```
+
+Restricted conditions never aggregate below county level, enforced by a
+database CHECK as well as the rollup — small geography plus stigmatised
+condition is where re-identification actually happens.
+
+Completeness travels with every count: a rise in cases and a rise in
+*reporting* are indistinguishable without it.
+
+Also here: workforce derived from actual check-ins rather than an
+establishment list, care gaps (chronic patients lost to follow-up), and
+notifiable-disease signals raised automatically — manual reporting is
+under-complied with everywhere, which is why it cannot depend on a clinician
+remembering.
 
 ## Related
 
