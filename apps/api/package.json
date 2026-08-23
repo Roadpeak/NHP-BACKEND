@@ -14,7 +14,8 @@
     "studio": "prisma studio",
     "serve": "tsx watch src/server.ts",
     "seed:demo": "tsx src/seed-demo.ts",
-    "demo:reset": "tsx src/seed-demo.ts --reset"
+    "demo:reset": "tsx src/seed-demo.ts --reset",
+    "dev:code": "tsx src/dev-code.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

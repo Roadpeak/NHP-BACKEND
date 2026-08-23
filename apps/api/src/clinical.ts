@@ -571,6 +571,108 @@ export function frequencyPerDay(frequency: string): number {
   return map[frequency.toUpperCase()] ?? 1;
 }
 
+export async function recordObservation(
+  db: Db,
+  input: {
+    practitionerId: string;
+    personId: string;
+    encounterId?: string;
+    code: string;
+    label: string;
+    category: 'VITAL' | 'LAB' | 'ANTHROPOMETRIC' | 'IMAGING';
+    valueNum?: number;
+    valueText?: string;
+    unit?: string;
+    refLow?: number;
+    refHigh?: number;
+    observedAt?: Date;
+  },
+) {
+  const gate = await canWriteClinical(db, input.practitionerId);
+  if (!gate.allowed) throw new ClinicalError(gate.reason, gate.code);
+
+  // Flagged here rather than at render: a clinician scanning a list needs
+  // the abnormal ones to stand out without recomputing ranges by eye.
+  let abnormalFlag: 'LOW' | 'NORMAL' | 'HIGH' | null = null;
+  if (input.valueNum !== undefined && input.refLow !== undefined && input.refHigh !== undefined) {
+    abnormalFlag =
+      input.valueNum < input.refLow ? 'LOW' : input.valueNum > input.refHigh ? 'HIGH' : 'NORMAL';
+  }
+
+  return db.observation.create({
+    data: {
+      personId: input.personId,
+      checkInId: gate.checkInId,
+      recordedBy: input.practitionerId,
+      facilityId: gate.facilityId,
+      licenceNumber: gate.licenceNumber,
+      recordedAt: new Date(),
+      encounterId: input.encounterId ?? null,
+      code: input.code,
+      label: input.label,
+      category: input.category,
+      valueNum: input.valueNum ?? null,
+      valueText: input.valueText ?? null,
+      unit: input.unit ?? null,
+      refLow: input.refLow ?? null,
+      refHigh: input.refHigh ?? null,
+      abnormalFlag,
+      observedAt: input.observedAt ?? new Date(),
+    },
+  });
+}
+
+export async function recordProcedure(
+  db: Db,
+  input: {
+    practitionerId: string;
+    personId: string;
+    encounterId?: string;
+    code: string;
+    title: string;
+    performedOn: Date;
+    datePrecision?: 'EXACT' | 'MONTH' | 'YEAR' | 'ESTIMATED';
+    performedAtFacilityId?: string;
+    externalFacilityName?: string;
+    indication: string;
+    outcome?: string;
+    complications?: string;
+    isSelfReported?: boolean;
+  },
+) {
+  const gate = await canWriteClinical(db, input.practitionerId);
+  if (!gate.allowed) throw new ClinicalError(gate.reason, gate.code);
+
+  if (!input.indication?.trim()) {
+    throw new ClinicalError(
+      'A procedure needs an indication — what it was for',
+      'INDICATION_REQUIRED',
+    );
+  }
+
+  return db.procedure.create({
+    data: {
+      personId: input.personId,
+      checkInId: gate.checkInId,
+      recordedBy: input.practitionerId,
+      facilityId: gate.facilityId,
+      licenceNumber: gate.licenceNumber,
+      recordedAt: new Date(),
+      encounterId: input.encounterId ?? null,
+      code: input.code,
+      title: input.title,
+      performedOn: input.performedOn,
+      datePrecision: input.datePrecision ?? 'EXACT',
+      performedAtFacilityId: input.performedAtFacilityId ?? null,
+      externalFacilityName: input.externalFacilityName ?? null,
+      indication: input.indication.trim(),
+      outcome: input.outcome ?? null,
+      complications: input.complications ?? null,
+      isSelfReported: input.isSelfReported ?? false,
+    },
+  });
+}
+
 // ------------------------------------------------------------- corrections
 
 /**
@@ -721,13 +823,113 @@ export async function patientSummary(db: Db, personId: string) {
   };
 }
 
-/** Paginated timeline. Never load a whole life at once. */
+/**
+ * Key results, most recent first, with the series behind each.
+ *
+ * The wireframes are specific about this: a single HbA1c of 8.4% is a
+ * number, six readings trending upward is a clinical finding. Sparklines
+ * cost almost nothing and change what the clinician concludes, so the API
+ * returns the series rather than just the latest value.
+ */
+export async function keyResults(
+  db: Db,
+  personId: string,
+  opts: { codes?: string[]; perCode?: number } = {},
+) {
+  const observations = await db.observation.findMany({
+    where: {
+      personId,
+      supersededAt: null,
+      ...(opts.codes ? { code: { in: opts.codes } } : {}),
+    },
+    orderBy: { observedAt: 'desc' },
+    select: {
+      code: true,
+      label: true,
+      category: true,
+      valueNum: true,
+      valueText: true,
+      unit: true,
+      refLow: true,
+      refHigh: true,
+      abnormalFlag: true,
+      observedAt: true,
+    },
+  });
+
+  const byCode = new Map<string, typeof observations>();
+  for (const o of observations) {
+    const list = byCode.get(o.code) ?? [];
+    if (list.length < (opts.perCode ?? 8)) list.push(o);
+    byCode.set(o.code, list);
+  }
+
+  return [...byCode.entries()].map(([code, series]) => {
+    const latest = series[0];
+    return {
+      code,
+      label: latest.label,
+      category: latest.category,
+      unit: latest.unit,
+      latest: {
+        value: latest.valueNum !== null ? Number(latest.valueNum) : latest.valueText,
+        observedAt: latest.observedAt,
+        abnormalFlag: latest.abnormalFlag,
+      },
+      refLow: latest.refLow !== null ? Number(latest.refLow) : null,
+      refHigh: latest.refHigh !== null ? Number(latest.refHigh) : null,
+      // Oldest first, so a sparkline reads left to right.
+      series: [...series]
+        .reverse()
+        .map((o) => ({
+          value: o.valueNum !== null ? Number(o.valueNum) : null,
+          observedAt: o.observedAt,
+        }))
+        .filter((p) => p.value !== null),
+    };
+  });
+}
+
+/**
+ * Surgeries and procedures.
+ *
+ * `isSelfReported` and `externalFacilityName` matter here: NHP starts with
+ * fifty million people who already have histories, and a clinician must be
+ * able to tell documented history from remembered history at a glance.
+ */
+export async function procedureHistory(db: Db, personId: string) {
+  return db.procedure.findMany({
+    where: { personId, supersededAt: null },
+    orderBy: { performedOn: 'desc' },
+    select: {
+      code: true,
+      title: true,
+      performedOn: true,
+      datePrecision: true,
+      externalFacilityName: true,
+      performedAtFacilityId: true,
+      indication: true,
+      outcome: true,
+      complications: true,
+      isSelfReported: true,
+    },
+  });
+}
+
+/**
+ * Paginated timeline. Never load a whole life at once.
+ *
+ * Resolves the author and facility to names. The wireframes require every
+ * encounter to say who recorded it — "Nurse S. Adhiambo · NCK/44812" — both
+ * because it builds trust in the record and because a clinician needs to be
+ * able to call whoever saw the patient last. Raw ids do neither.
+ */
 export async function patientTimeline(
   db: Db,
   personId: string,
   opts: { limit?: number; before?: Date } = {},
 ) {
-  return db.encounter.findMany({
+  const encounters = await db.encounter.findMany({
     where: {
       personId,
       supersededAt: null,
@@ -748,6 +950,42 @@ export async function patientTimeline(
         where: { supersededAt: null },
         select: { icd11Code: true, icd11Title: true, clinicalStatus: true },
       },
+      medications: {
+        where: { supersededAt: null },
+        select: { genericName: true, doseAmount: true, doseUnit: true, frequency: true },
+      },
     },
+  });
+
+  if (encounters.length === 0) return [];
+
+  // Two lookups for the whole page rather than one per row.
+  const [facilities, practitioners] = await Promise.all([
+    db.facility.findMany({
+      where: { id: { in: [...new Set(encounters.map((e) => e.facilityId))] } },
+      select: { id: true, name: true, kephLevel: true },
+    }),
+    db.practitioner.findMany({
+      where: { id: { in: [...new Set(encounters.map((e) => e.recordedBy))] } },
+      select: { id: true, cadre: true, person: { select: { givenName: true, familyName: true } } },
+    }),
+  ]);
+
+  const facilityById = new Map(facilities.map((f) => [f.id, f]));
+  const practitionerById = new Map(practitioners.map((p) => [p.id, p]));
+
+  return encounters.map((e) => {
+    const facility = facilityById.get(e.facilityId);
+    const author = practitionerById.get(e.recordedBy);
+
+    return {
+      ...e,
+      facilityName: facility?.name ?? 'Unknown facility',
+      facilityKephLevel: facility?.kephLevel ?? null,
+      recordedByName: author
+        ? `${decryptField(author.person.givenName)} ${decryptField(author.person.familyName)}`
+        : 'Unknown clinician',
+      recordedByCadre: author?.cadre ?? null,
+    };
   });
 }

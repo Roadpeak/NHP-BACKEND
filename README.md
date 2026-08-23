@@ -95,6 +95,10 @@ not that the application declines to try.
 | 13 | UPDATE on break_glass | revoked grant + trigger |
 | 14 | DELETE on break_glass | revoked grant + trigger |
 
+`observation` and `procedure` are append-only on the same terms — revoked
+grants, the reject trigger, the check-in gate, and the attribution
+constraint all extend to them.
+
 Plus eleven positive-path tests proving the system still *works* — a
 legitimate write succeeds, a correction supersedes without editing, a
 superseded duplicate identifier is allowed, a two-approver merge passes.

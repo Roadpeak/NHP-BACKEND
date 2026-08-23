@@ -16,7 +16,14 @@ import 'dotenv/config';
 import { registerAdult } from './identity.js';
 import { registerFacility, approveFacility, claimCapability } from './facility.js';
 import { registerPractitioner, grantAffiliation, checkIn } from './practitioner.js';
-import { openEncounter, recordDiagnosis, recordAllergy, prescribe } from './clinical.js';
+import {
+  openEncounter,
+  recordDiagnosis,
+  recordAllergy,
+  prescribe,
+  recordObservation,
+  recordProcedure,
+} from './clinical.js';
 import { hashPassword, enrolSms, confirmSms } from './auth.js';
 import { ConsoleSmsProvider, setSmsProvider } from './notify.js';
 import { encryptField, blindIndex, normalisePhone } from './crypto.js';
@@ -192,6 +199,78 @@ async function main() {
     doseUnit: 'mg',
     frequency: 'OD',
     durationDays: 30,
+  });
+
+  // A trend, not a single value — six HbA1c readings rising over 18 months.
+  // The wireframes are specific: one number is a number, six are a finding.
+  const hba1c = [6.8, 7.1, 7.4, 7.9, 8.1, 8.4];
+  for (const [i, value] of hba1c.entries()) {
+    const monthsAgo = (hba1c.length - 1 - i) * 3;
+    await recordObservation(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      code: '4548-4',
+      label: 'HbA1c',
+      category: 'LAB',
+      valueNum: value,
+      unit: '%',
+      refLow: 4.0,
+      refHigh: 7.0,
+      observedAt: new Date(Date.now() - monthsAgo * 30 * 86_400_000),
+    });
+  }
+
+  for (const [i, systolic] of [138, 142, 145, 148].entries()) {
+    await recordObservation(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      code: '8480-6',
+      label: 'Systolic blood pressure',
+      category: 'VITAL',
+      valueNum: systolic,
+      unit: 'mmHg',
+      refLow: 90,
+      refHigh: 140,
+      observedAt: new Date(Date.now() - (3 - i) * 60 * 86_400_000),
+    });
+  }
+
+  await recordObservation(prisma, {
+    practitionerId: practitioner.id,
+    personId: patient.id,
+    code: '718-7',
+    label: 'Haemoglobin',
+    category: 'LAB',
+    valueNum: 11.2,
+    unit: 'g/dL',
+    refLow: 11.0,
+    refHigh: 15.0,
+    observedAt: new Date(Date.now() - 20 * 86_400_000),
+  });
+
+  // A documented surgery, and one the patient only remembers — the
+  // distinction a clinician must be able to see at a glance.
+  await recordProcedure(prisma, {
+    practitionerId: practitioner.id,
+    personId: patient.id,
+    code: 'JB40.0',
+    title: 'Caesarean section',
+    performedOn: new Date(Date.UTC(2022, 10, 9)),
+    performedAtFacilityId: facility.id,
+    indication: 'Failure to progress in labour',
+    outcome: 'Live birth, mother and baby well',
+  });
+
+  await recordProcedure(prisma, {
+    practitionerId: practitioner.id,
+    personId: patient.id,
+    code: 'JD10.0',
+    title: 'Appendicectomy',
+    performedOn: new Date(Date.UTC(2015, 0, 1)),
+    datePrecision: 'YEAR',
+    externalFacilityName: "St Mary's Mumias",
+    indication: 'Acute appendicitis',
+    isSelfReported: true,
   });
 
   await report();

@@ -517,6 +517,8 @@ model Person {
   conditions    Condition[]
   allergies     Allergy[]
   medications   Medication[]
+  observations  Observation[]
+  procedures    Procedure[]
   consents      ConsentGrant[]
 
   @@index([countyId, subcountyId])
@@ -736,6 +738,8 @@ model CheckIn {
   conditions   Condition[]
   allergies    Allergy[]
   medications  Medication[]
+  observations Observation[]
+  procedures   Procedure[]
 
   @@index([practitionerId, endedAt])
   @@index([facilityId, startedAt])
@@ -874,6 +878,81 @@ model Medication {
   @@index([personId, status])
   @@index([encounterId])
   @@map("medication")
+}
+
+/// Vitals, lab results and measurements.
+///
+/// APPEND-ONLY, like every clinical table.
+model Observation {
+  id              String    @id @default(uuid(7))
+  personId        String    @map("person_id")
+  person          Person    @relation(fields: [personId], references: [id])
+  checkInId       String    @map("check_in_id")
+  checkIn         CheckIn   @relation(fields: [checkInId], references: [id])
+  recordedBy      String    @map("recorded_by")
+  facilityId      String    @map("facility_id")
+  licenceNumber   String    @map("licence_number")
+  recordedAt      DateTime  @default(now()) @map("recorded_at")
+  sensitivity     Tier      @default(TIER_2_GENERAL)
+  supersedesId    String?   @map("supersedes_id")
+  supersededAt    DateTime? @map("superseded_at")
+  amendmentReason String?   @map("amendment_reason")
+
+  encounterId  String?  @map("encounter_id")
+  /// LOINC where available.
+  code         String
+  label        String
+  category     ObsCat
+  valueNum     Decimal? @map("value_num") @db.Decimal(12, 4)
+  valueText    String?  @map("value_text")
+  valueCode    String?  @map("value_code")
+  unit         String?
+  refLow       Decimal? @map("ref_low") @db.Decimal(12, 4)
+  refHigh      Decimal? @map("ref_high") @db.Decimal(12, 4)
+  abnormalFlag Flag?    @map("abnormal_flag")
+  observedAt   DateTime @map("observed_at")
+  specimenId   String?  @map("specimen_id")
+
+  @@index([personId, code, observedAt(sort: Desc)])
+  @@index([encounterId])
+  @@map("observation")
+}
+
+/// Surgeries and interventions, including historical ones.
+model Procedure {
+  id              String    @id @default(uuid(7))
+  personId        String    @map("person_id")
+  person          Person    @relation(fields: [personId], references: [id])
+  checkInId       String    @map("check_in_id")
+  checkIn         CheckIn   @relation(fields: [checkInId], references: [id])
+  recordedBy      String    @map("recorded_by")
+  facilityId      String    @map("facility_id")
+  licenceNumber   String    @map("licence_number")
+  recordedAt      DateTime  @default(now()) @map("recorded_at")
+  sensitivity     Tier      @default(TIER_2_GENERAL)
+  supersedesId    String?   @map("supersedes_id")
+  supersededAt    DateTime? @map("superseded_at")
+  amendmentReason String?   @map("amendment_reason")
+
+  encounterId String?    @map("encounter_id")
+  code        String
+  title       String
+  performedOn DateTime   @map("performed_on") @db.Date
+  /// "Sometime in 2019" is a real answer.
+  datePrecision Precision @default(EXACT) @map("date_precision")
+  performedAtFacilityId String? @map("performed_at_facility_id")
+  /// Free text for pre-NHP or foreign surgery — the registry cannot hold
+  /// every facility a fifty-million-person population has ever used.
+  externalFacilityName  String? @map("external_facility_name")
+  indication    String
+  outcome       String?
+  complications String?
+  /// Patient-recalled vs clinician-documented. A clinician must be able to
+  /// tell them apart at a glance.
+  isSelfReported Boolean @default(false) @map("is_self_reported")
+
+  @@index([personId, performedOn(sort: Desc)])
+  @@map("procedure")
 }
 
 // -------------------------------------------------------------- consent

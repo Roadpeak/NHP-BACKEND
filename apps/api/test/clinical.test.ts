@@ -21,6 +21,10 @@ import {
   amendDiagnosis,
   patientSummary,
   patientTimeline,
+  recordObservation,
+  recordProcedure,
+  keyResults,
+  procedureHistory,
   frequencyPerDay,
 } from '../src/clinical.js';
 import { registerAdult } from '../src/identity.js';
@@ -640,5 +644,161 @@ describe('medication search', () => {
     expect((await searchMedications(prisma, 'amox'))[0].kemlCode).toBe('KEML-AB-001');
     expect((await searchMedications(prisma, 'panadol'))[0].kemlCode).toBe('KEML-AN-001');
     expect((await searchMedications(prisma, 'AL'))[0].kemlCode).toBe('KEML-AM-001');
+  });
+});
+
+
+describe('the summary screen payload', () => {
+  it('names the author and facility on every encounter', async () => {
+    const { practitioner, facility } = await makeClinician();
+    const patient = await makePerson();
+
+    const e = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'fever',
+    });
+    await recordDiagnosis(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: e.id,
+      icd11Code: '1F41.0',
+    });
+
+    const timeline = await patientTimeline(prisma, patient.id);
+    // Raw ids build no trust and let nobody call whoever saw the patient
+    // last, which is half the point of showing attribution at all.
+    expect(timeline[0].facilityName).toBe('Kisumu County Referral');
+    expect(timeline[0].recordedByName).toMatch(/Amina/);
+    expect(timeline[0].recordedByCadre).toBe('DOCTOR');
+    expect(timeline[0].facilityId).toBe(facility.id);
+  });
+
+  it('THE TREND — returns a series, not just the latest value', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+
+    for (const [i, value] of [6.8, 7.4, 8.1, 8.4].entries()) {
+      await recordObservation(prisma, {
+        practitionerId: practitioner.id,
+        personId: patient.id,
+        code: '4548-4',
+        label: 'HbA1c',
+        category: 'LAB',
+        valueNum: value,
+        unit: '%',
+        refLow: 4,
+        refHigh: 7,
+        observedAt: new Date(Date.now() - (3 - i) * 90 * 86_400_000),
+      });
+    }
+
+    const results = await keyResults(prisma, patient.id);
+    const hba1c = results.find((r) => r.code === '4548-4');
+
+    // One reading is a number; four rising is a clinical finding.
+    expect(hba1c?.series).toHaveLength(4);
+    expect(hba1c?.series[0].value).toBe(6.8);
+    expect(hba1c?.series.at(-1)?.value).toBe(8.4);
+    expect(hba1c?.latest.value).toBe(8.4);
+    // Flagged at write time, so a clinician does not recompute ranges by eye.
+    expect(hba1c?.latest.abnormalFlag).toBe('HIGH');
+  });
+
+  it('flags a normal result as normal', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    await recordObservation(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      code: '718-7',
+      label: 'Haemoglobin',
+      category: 'LAB',
+      valueNum: 13.2,
+      unit: 'g/dL',
+      refLow: 11,
+      refHigh: 15,
+    });
+
+    const results = await keyResults(prisma, patient.id);
+    expect(results[0].latest.abnormalFlag).toBe('NORMAL');
+  });
+
+  it('THE PROVENANCE RULE — marks patient-recalled history as unverified', async () => {
+    const { practitioner, facility } = await makeClinician();
+    const patient = await makePerson();
+
+    await recordProcedure(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      code: 'JB40.0',
+      title: 'Caesarean section',
+      performedOn: new Date(Date.UTC(2022, 10, 9)),
+      performedAtFacilityId: facility.id,
+      indication: 'Failure to progress',
+    });
+
+    await recordProcedure(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      code: 'JD10.0',
+      title: 'Appendicectomy',
+      performedOn: new Date(Date.UTC(2015, 0, 1)),
+      datePrecision: 'YEAR',
+      externalFacilityName: "St Mary's Mumias",
+      indication: 'Acute appendicitis',
+      isSelfReported: true,
+    });
+
+    const history = await procedureHistory(prisma, patient.id);
+    const documented = history.find((p) => p.title === 'Caesarean section');
+    const recalled = history.find((p) => p.title === 'Appendicectomy');
+
+    // A clinician must tell documented history from remembered history at a
+    // glance — and the registry cannot hold every facility a fifty-million
+    // person population has ever used.
+    expect(documented?.isSelfReported).toBe(false);
+    expect(recalled?.isSelfReported).toBe(true);
+    expect(recalled?.externalFacilityName).toBe("St Mary's Mumias");
+    expect(recalled?.datePrecision).toBe('YEAR');
+  });
+
+  it('requires an indication on a procedure', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    await expect(
+      recordProcedure(prisma, {
+        practitionerId: practitioner.id,
+        personId: patient.id,
+        code: 'JD10.0',
+        title: 'Appendicectomy',
+        performedOn: new Date(),
+        indication: '   ',
+      }),
+    ).rejects.toThrow(/needs an indication/i);
+  });
+
+  it('refuses an observation without an open session', async () => {
+    const person = await makePerson('Unchecked');
+    seq++;
+    const { practitioner } = await registerPractitioner(prisma, {
+      personId: person.id,
+      cadre: 'DOCTOR',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      licenceNumber: `KMPDC/2026/OB${seq}`,
+    });
+    const patient = await makePerson();
+
+    await expect(
+      recordObservation(prisma, {
+        practitionerId: practitioner.id,
+        personId: patient.id,
+        code: '718-7',
+        label: 'Haemoglobin',
+        category: 'LAB',
+        valueNum: 12,
+      }),
+    ).rejects.toThrow(/check in to a facility/i);
   });
 });

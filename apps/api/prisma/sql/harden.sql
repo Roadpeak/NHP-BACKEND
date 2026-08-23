@@ -52,7 +52,7 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nhp_app;
 -- REFUSAL 2: DELETE on a clinical row
 
 REVOKE UPDATE, DELETE ON
-  encounter, condition, allergy, medication
+  encounter, condition, allergy, medication, observation, procedure
   FROM nhp_app;
 
 -- Audit tables: the app may INSERT and SELECT, never modify.
@@ -71,7 +71,8 @@ REVOKE UPDATE, DELETE ON access_log FROM nhp_audit_writer;
 GRANT SELECT ON access_log, break_glass TO nhp_auditor;
 
 -- The auditor sees the log, never the clinical content.
-REVOKE ALL ON encounter, condition, allergy, medication FROM nhp_auditor;
+REVOKE ALL ON encounter, condition, allergy, medication, observation, procedure
+  FROM nhp_auditor;
 
 -- =====================================================================
 -- 4. THE ANALYST SEPARATION
@@ -103,7 +104,7 @@ $$ LANGUAGE plpgsql;
 DO $$
 DECLARE t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['encounter','condition','allergy','medication','access_log','break_glass']
+  FOREACH t IN ARRAY ARRAY['encounter','condition','allergy','medication','observation','procedure','access_log','break_glass']
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS %I ON %I', 'trg_append_only_' || t, t);
     EXECUTE format(
@@ -131,7 +132,7 @@ CREATE OR REPLACE FUNCTION nhp_supersede(
 )
 RETURNS void AS $$
 BEGIN
-  IF p_table NOT IN ('encounter','condition','allergy','medication') THEN
+  IF p_table NOT IN ('encounter','condition','allergy','medication','observation','procedure') THEN
     RAISE EXCEPTION 'NHP: % is not a supersedable clinical table', p_table
       USING ERRCODE = 'restrict_violation';
   END IF;
@@ -251,7 +252,7 @@ GRANT EXECUTE ON FUNCTION nhp_review_break_glass(text, text, text, text) TO nhp_
 DO $$
 DECLARE t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['encounter','condition','allergy','medication']
+  FOREACH t IN ARRAY ARRAY['encounter','condition','allergy','medication','observation','procedure']
   LOOP
     EXECUTE format('ALTER TABLE %I DROP CONSTRAINT IF EXISTS %I', t, t || '_attribution_ck');
     EXECUTE format($f$
@@ -395,7 +396,7 @@ $$ LANGUAGE plpgsql;
 DO $$
 DECLARE t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['encounter','condition','allergy','medication']
+  FOREACH t IN ARRAY ARRAY['encounter','condition','allergy','medication','observation','procedure']
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS %I ON %I', 'trg_checkin_gate_' || t, t);
     EXECUTE format(

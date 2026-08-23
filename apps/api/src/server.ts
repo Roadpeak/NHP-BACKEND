@@ -26,6 +26,8 @@ import {
   recordDiagnosis,
   prescribe,
   checkPrescribing,
+  keyResults,
+  procedureHistory,
   ClinicalError,
 } from './clinical.js';
 import { filteredRecord, logAccess, accessHistory, ConsentError } from './consent.js';
@@ -427,6 +429,22 @@ app.get<{ Params: { nhpId: string }; Querystring: { limit?: string } }>(
     patientTimeline(prisma, req.params.nhpId, {
       limit: req.query.limit ? Number(req.query.limit) : 20,
     }),
+);
+
+app.get<{ Params: { nhpId: string } }>(
+  `${v1}/persons/:nhpId/results`,
+  async (req) => {
+    await practitionerFrom(req);
+    return keyResults(prisma, req.params.nhpId);
+  },
+);
+
+app.get<{ Params: { nhpId: string } }>(
+  `${v1}/persons/:nhpId/procedures`,
+  async (req) => {
+    await practitionerFrom(req);
+    return procedureHistory(prisma, req.params.nhpId);
+  },
 );
 
 app.get<{ Params: { nhpId: string } }>(
