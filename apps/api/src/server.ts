@@ -44,6 +44,9 @@ import {
   requireSelf,
   enrolTotp,
   confirmTotp,
+  enrolSms,
+  confirmSms,
+  resendMfaCode,
   issueOtp,
   hashPassword,
   assertCsrf,
@@ -302,6 +305,27 @@ app.post<{ Body: { code: string } }>(`${v1}/auth/mfa/confirm`, async (req) => {
   const ctx = await contextFrom(req);
   return confirmTotp(prisma, ctx.accountId, req.body.code);
 });
+
+/**
+ * SMS second factor.
+ *
+ * The primary channel for Kenya: authenticator apps assume a smartphone,
+ * and a clinical officer on a feature phone has none.
+ */
+app.post(`${v1}/auth/mfa/sms/enrol`, async (req) => {
+  const ctx = await contextFrom(req);
+  return enrolSms(prisma, ctx.accountId);
+});
+
+app.post<{ Body: { code: string } }>(`${v1}/auth/mfa/sms/confirm`, async (req) => {
+  const ctx = await contextFrom(req);
+  return confirmSms(prisma, ctx.accountId, req.body.code);
+});
+
+/** Resend a login code. No session yet, so the mfaToken is the credential. */
+app.post<{ Body: { mfaToken: string } }>(`${v1}/auth/mfa/resend`, async (req) =>
+  resendMfaCode(prisma, req.body.mfaToken),
+);
 
 app.get(`${v1}/check-ins/current`, async (req) => {
   const session = await currentSession(prisma, await practitionerFrom(req));

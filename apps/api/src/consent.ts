@@ -18,6 +18,8 @@
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { randomInt } from 'node:crypto';
+import { sendAsync, messages } from './notify.js';
+import { decryptField, normalisePhone } from './crypto.js';
 
 export type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -396,6 +398,30 @@ export async function breakGlass(db: Db, input: BreakGlassInput, now: Date = new
       requestId: `bg-${event.id}`,
     },
   });
+
+  // Tell the patient. Queued, never awaited: access was already granted
+  // above, and a clinician must not wait on a gateway to treat someone
+  // unconscious. An unsent notification is caught by unnotifiedBreakGlass().
+  const [account, facility] = await Promise.all([
+    db.account.findFirst({
+      where: { personId: input.personId },
+      select: { phone: true },
+    }),
+    db.facility.findUnique({
+      where: { id: input.facilityId },
+      select: { name: true },
+    }),
+  ]);
+
+  if (account?.phone && facility) {
+    sendAsync({
+      to: normalisePhone(decryptField(account.phone)),
+      // Names the facility and time so the patient can query it — but
+      // nothing about what was seen or why they were there.
+      body: messages.breakGlass(facility.name, now),
+      purpose: 'BREAK_GLASS',
+    });
+  }
 
   return event;
 }

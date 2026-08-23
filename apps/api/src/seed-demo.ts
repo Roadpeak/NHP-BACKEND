@@ -17,13 +17,17 @@ import { registerAdult } from './identity.js';
 import { registerFacility, approveFacility, claimCapability } from './facility.js';
 import { registerPractitioner, grantAffiliation, checkIn } from './practitioner.js';
 import { openEncounter, recordDiagnosis, recordAllergy, prescribe } from './clinical.js';
-import { hashPassword, enrolTotp, confirmTotp } from './auth.js';
+import { hashPassword, enrolSms, confirmSms } from './auth.js';
+import { ConsoleSmsProvider, setSmsProvider } from './notify.js';
 import { encryptField, blindIndex, normalisePhone } from './crypto.js';
-import { TOTP, Secret } from 'otpauth';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
 });
+
+/** Captures the enrolment code so the demo can confirm it automatically. */
+const smsBuffer = new ConsoleSmsProvider();
+setSmsProvider(smsBuffer);
 
 async function main() {
   const county = await prisma.county.findFirstOrThrow({ where: { code: '042' } });
@@ -99,12 +103,12 @@ async function main() {
     },
   });
 
-  const { secret: totpSecret } = await enrolTotp(prisma, clinicalAccount.id, 'Dr A. Wanjiru');
-  await confirmTotp(
-    prisma,
-    clinicalAccount.id,
-    new TOTP({ secret: Secret.fromBase32(totpSecret) }).generate(),
-  );
+  // SMS is the demo default: it is the primary channel for Kenya, and the
+  // console provider prints the code so the flow is testable end to end.
+  await enrolSms(prisma, clinicalAccount.id);
+  const enrolCode = smsBuffer.sent.at(-1)?.body.match(/\b(\d{6})\b/)?.[1];
+  if (!enrolCode) throw new Error('Enrolment code was not sent');
+  await confirmSms(prisma, clinicalAccount.id, enrolCode);
 
   await grantAffiliation(prisma, {
     practitionerId: practitioner.id,
@@ -213,19 +217,15 @@ async function report() {
   console.log('DEMO CREDENTIALS\n');
   console.log('  phone     0722111333');
   console.log('  password  demo-password-123');
-  console.log(
-    `  TOTP      ${clinical?.mfaSecret ? '(secret printed below)' : 'not enrolled'}\n`,
-  );
+  console.log(`  2FA       ${clinical?.mfaMode ?? 'NONE'}\n`);
   console.log(`  doctor    Dr Amina Wanjiru · ${practitioner?.licences[0]?.licenceNumber}`);
   console.log(`  facility  ${session?.facility.name}`);
   console.log(`  session   expires ${session?.expiresAt.toISOString()}`);
   console.log(`  patient   ${patient?.displayNumber} · National ID 39104882`);
-  if (clinical?.mfaSecret) {
-    const { decryptField } = await import('./crypto.js');
-    const secret = decryptField(clinical.mfaSecret);
-    console.log(`  TOTP secret  ${secret}`);
-    console.log(`  current code ${new TOTP({ secret: Secret.fromBase32(secret) }).generate()}`);
-  }
+  console.log(
+    `\n  Second factor is SMS. In development the code is printed by the\n` +
+      `  console provider — watch the \`pnpm serve\` output when you sign in.`,
+  );
 
   console.log('\nsign in:');
   console.log(

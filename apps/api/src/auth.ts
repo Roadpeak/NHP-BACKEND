@@ -19,6 +19,7 @@ import { TOTP, Secret } from 'otpauth';
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { blindIndex, encryptField, decryptField, normalisePhone } from './crypto.js';
+import { sendAsync, send, messages, maskPhone } from './notify.js';
 
 export type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -327,6 +328,8 @@ export interface LoginResult {
   /** Present when MFA is required — proves the password step passed. */
   mfaToken?: string;
   mfaMode?: 'SMS' | 'TOTP';
+  /** Masked destination, so the user knows which handset to check. */
+  sentTo?: string;
 }
 
 /**
@@ -403,10 +406,35 @@ export async function login(
       .setExpirationTime('5m')
       .sign(secret());
 
+    let sentTo: string | undefined;
+
+    // An SMS factor needs a code dispatched; TOTP is already on the device.
+    if (account.mfaMode === 'SMS') {
+      const phone = decryptField(account.phone);
+      const { code } = await issueOtp(db, {
+        phone,
+        purpose: 'LOGIN_MFA',
+        accountId: account.id,
+      });
+
+      // Not awaited: a gateway outage must not hold the login response
+      // open. The code is already valid, so a resend can follow.
+      sendAsync({
+        to: normalisePhone(phone),
+        body: messages.mfaCode(code, OTP_MINUTES),
+        purpose: 'MFA',
+      });
+
+      // Masked, so the clinician can confirm which handset to check without
+      // the response disclosing a full number.
+      sentTo = maskPhone(normalisePhone(phone));
+    }
+
     return {
       status: 'MFA_REQUIRED',
       mfaToken,
       mfaMode: account.mfaMode as 'SMS' | 'TOTP',
+      sentTo,
     };
   }
 
@@ -512,6 +540,104 @@ export async function confirmTotp(db: Db, accountId: string, code: string) {
 
   await db.account.update({ where: { id: accountId }, data: { mfaMode: 'TOTP' } });
   return { enrolled: true };
+}
+
+/**
+ * Enrols an SMS second factor.
+ *
+ * Requires confirming a code first, exactly like TOTP: enabling SMS MFA
+ * against a phone that cannot receive messages would lock the clinician out
+ * of their own account.
+ */
+export async function enrolSms(db: Db, accountId: string) {
+  const account = await db.account.findUnique({ where: { id: accountId } });
+  if (!account) throw new AuthError('Account not found', 'ACCOUNT_NOT_FOUND', 404);
+
+  const phone = decryptField(account.phone);
+  const { code } = await issueOtp(db, {
+    phone,
+    purpose: 'LOGIN_MFA',
+    accountId,
+  });
+
+  const result = await send({
+    to: normalisePhone(phone),
+    body: messages.mfaCode(code, OTP_MINUTES),
+    purpose: 'MFA',
+  });
+
+  // Awaited here, unlike login: if the gateway cannot reach this handset,
+  // the clinician must find out NOW rather than at their next sign-in.
+  if (!result.accepted) {
+    throw new AuthError(
+      `Could not send a code to ${maskPhone(normalisePhone(phone))}. ` +
+        'Check the number before enabling SMS as your second factor.',
+      'SMS_SEND_FAILED',
+      502,
+    );
+  }
+
+  return { sentTo: maskPhone(normalisePhone(phone)), expiresInMinutes: OTP_MINUTES };
+}
+
+export async function confirmSms(db: Db, accountId: string, code: string) {
+  const account = await db.account.findUnique({ where: { id: accountId } });
+  if (!account) throw new AuthError('Account not found', 'ACCOUNT_NOT_FOUND', 404);
+
+  await verifyOtp(db, {
+    phone: decryptField(account.phone),
+    code,
+    purpose: 'LOGIN_MFA',
+  });
+
+  await db.account.update({ where: { id: accountId }, data: { mfaMode: 'SMS' } });
+  return { enrolled: true, mfaMode: 'SMS' as const };
+}
+
+/**
+ * Resends a login code.
+ *
+ * Rate-limited by the OTP layer itself: issuing a new challenge consumes the
+ * previous one, so repeated resends do not widen the guessing window.
+ */
+export async function resendMfaCode(db: Db, mfaToken: string) {
+  let accountId: string;
+  try {
+    const { payload } = await jwtVerify(mfaToken, secret(), {
+      issuer: 'nhp',
+      audience: 'nhp-mfa',
+    });
+    if (payload.stage !== 'MFA') throw new Error('wrong stage');
+    accountId = payload.accountId as string;
+  } catch {
+    throw new AuthError('That sign-in attempt expired. Start again.', 'MFA_TOKEN_INVALID');
+  }
+
+  const account = await db.account.findUnique({ where: { id: accountId } });
+  if (!account) throw new AuthError('Invalid session', 'INVALID_TOKEN');
+
+  if (account.mfaMode !== 'SMS') {
+    throw new AuthError(
+      'This account uses an authenticator app; there is nothing to resend.',
+      'NOT_SMS_MFA',
+      400,
+    );
+  }
+
+  const phone = decryptField(account.phone);
+  const { code } = await issueOtp(db, {
+    phone,
+    purpose: 'LOGIN_MFA',
+    accountId,
+  });
+
+  sendAsync({
+    to: normalisePhone(phone),
+    body: messages.mfaCode(code, OTP_MINUTES),
+    purpose: 'MFA',
+  });
+
+  return { sentTo: maskPhone(normalisePhone(phone)), expiresInMinutes: OTP_MINUTES };
 }
 
 // ------------------------------------------------------------- CSRF

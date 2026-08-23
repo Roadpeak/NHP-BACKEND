@@ -180,6 +180,24 @@ cannot produce the header.
 A restored session is authenticated but **not** MFA-satisfied, so a
 clinician returning after a reload is asked for their second factor again.
 
+### SMS second factor
+
+**SMS is the primary channel, not a fallback.** Authenticator apps assume a
+smartphone and a working app store; a clinical officer at a Level 3 facility
+has neither, and a TOTP-only system excludes exactly the staff who most need
+including. Africa's Talking is the gateway, per the blueprint.
+
+| Rule | Why |
+|---|---|
+| No message carries health content | Phones are shared in Kenyan households; a lock-screen preview is a disclosure |
+| Login sending is never awaited | A gateway outage must not hold a sign-in open |
+| **Enrolment** sending IS awaited | If the handset is unreachable the clinician must find out now, not when they are locked out |
+| Break-glass sending is never awaited | A clinician treating an unconscious patient must not wait on an SMS gateway |
+| Console provider refuses to run in production | A code printed to a log is a code never sent |
+
+Break-glass now notifies the patient: it names the facility and time so they
+can query it, and says nothing about what was opened.
+
 ## Phase 1 — identity
 
 `person` holds no external identifier. National ID, birth certificate and
