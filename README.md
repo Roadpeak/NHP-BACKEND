@@ -115,7 +115,7 @@ refuses.
 
 - [x] **Phase 0** — foundation, schema, roles, triggers, refusal suite
 - [x] **Phase 1** — identity: registration, guardianship, promotion at 18
-- [ ] Phase 2 — facilities: registry, capabilities, KEPH levels
+- [x] **Phase 2** — facilities: registry, capabilities, KEPH levels
 - [ ] Phase 3 — clinicians: licences, affiliation, check-in API
 - [ ] Phase 4 — clinical core: encounters, coded diagnoses, prescribing
 - [ ] Phases 5–9 — consent, triage, Ministry, referrals, hardening
@@ -146,6 +146,37 @@ parent's ID surfaces the dependant. Promotion runs in two stages so care is
 never interrupted on a birthday: `flagDueForPromotion` marks the record
 `PENDING_PROMOTION` while leaving guardian access intact, and
 `finalisePromotions` closes that access only after a 90-day grace period.
+
+## Phase 2 — facilities
+
+Kenya's six-level KEPH tiering (2 dispensary … 6 national referral). Level 1
+is community units, which have no physical facility and cannot be registered.
+Facilities register as `PENDING`; only the Ministry can activate one, which
+is what makes the registry a registry rather than a directory.
+
+Capabilities come from a controlled vocabulary — 65 codes seeded from
+`../nhp-seed`, with Swahili labels and a `minKephLevel` sanity bound. A
+dispensary claiming an ICU is refused, because letting it through would send
+critically ill patients to a building with no oxygen.
+
+**The stale-claim problem is the real work here.** A facility ticks "CT
+scanner" at registration; eighteen months later it is broken and nobody
+updated the profile. So a claim has an age:
+
+| Age | Behaviour |
+|---|---|
+| < 90 days | `FRESH` — full confidence |
+| 90–365 days | `STALE` — still matches, flagged, downranked |
+| > 365 days | `EXPIRED` — stops matching entirely |
+
+`findFacilities` ranks by confidence first, then distance, then the *lowest*
+adequate KEPH level — deliberately not "biggest hospital first", since
+sending simple cases to Level 6 referrals is exactly what clogs Kenyan
+hospitals. A test proves a fresh distant claim beats a stale near one.
+
+`findWithWidening` escalates subcounty → county → national when nothing
+local qualifies, and reports how far it had to reach so the citizen can be
+told plainly why they are being sent further.
 
 ## Related
 

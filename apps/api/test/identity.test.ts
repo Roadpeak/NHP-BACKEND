@@ -57,7 +57,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await wipe();
   const county = await prisma.county.create({
-    data: { code: '042', name: 'Kisumu' },
+    // A code the facility suite does not use, so the suites cannot collide.
+    data: { code: '900', name: 'Kisumu (identity fixture)' },
   });
   const sub = await prisma.subCounty.create({
     data: { countyId: county.id, name: 'Kisumu Central', kind: 'HEALTH_ADMIN' },
