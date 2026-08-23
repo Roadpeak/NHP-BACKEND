@@ -11,6 +11,7 @@
  */
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
 import { PrismaClient } from '@prisma/client';
 import 'dotenv/config';
 
@@ -45,8 +46,15 @@ import {
   confirmTotp,
   issueOtp,
   hashPassword,
+  assertCsrf,
+  generateCsrfToken,
+  refreshCookieOptions,
+  csrfCookieOptions,
+  CSRF_COOKIE,
+  CSRF_HEADER,
   AuthError,
   type AuthContext,
+  type LoginResult,
 } from './auth.js';
 
 const prisma = new PrismaClient({
@@ -60,10 +68,41 @@ const app = Fastify({
   genReqId: () => `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
 });
 
+await app.register(cookie);
+
 await app.register(cors, {
   origin: process.env.CORS_ORIGIN?.split(',') ?? ['http://localhost:3100'],
+  // Required for the refresh cookie to travel at all.
   credentials: true,
+  exposedHeaders: ['x-csrf-token'],
 });
+
+/** Cookies are Secure everywhere except local development. */
+const SECURE_COOKIES = process.env.NODE_ENV === 'production';
+
+/**
+ * Splits a login result: the refresh token goes into an httpOnly cookie the
+ * page cannot read, and only the short-lived access token is returned in the
+ * body. A refresh token in JSON would end up in localStorage or a variable
+ * an injected script could reach.
+ */
+function sendSession(
+  reply: { setCookie: (n: string, v: string, o: object) => void },
+  result: LoginResult,
+) {
+  if (result.status !== 'AUTHENTICATED' || !result.refreshToken) return result;
+
+  const csrf = generateCsrfToken();
+  reply.setCookie('nhp_refresh', result.refreshToken, refreshCookieOptions(SECURE_COOKIES));
+  reply.setCookie(CSRF_COOKIE, csrf, csrfCookieOptions(SECURE_COOKIES));
+
+  return {
+    status: result.status,
+    accessToken: result.accessToken,
+    // Deliberately NOT the refresh token.
+    csrfToken: csrf,
+  };
+}
 
 /**
  * RFC 7807 problem+json, per the API spec.
@@ -179,35 +218,64 @@ async function practitionerFrom(req: { headers: Record<string, unknown> }): Prom
 
 // -------------------------------------------------------------------- auth
 
-app.post<{ Body: { phone: string; password: string } }>(`${v1}/auth/login`, async (req) =>
-  login(prisma, {
-    phone: req.body.phone,
-    password: req.body.password,
-    deviceHint: String(req.headers['user-agent'] ?? '').slice(0, 120),
-  }),
+app.post<{ Body: { phone: string; password: string } }>(
+  `${v1}/auth/login`,
+  async (req, reply) =>
+    sendSession(
+      reply,
+      await login(prisma, {
+        phone: req.body.phone,
+        password: req.body.password,
+        deviceHint: String(req.headers['user-agent'] ?? '').slice(0, 120),
+      }),
+    ),
 );
 
 app.post<{ Body: { mfaToken: string; code: string } }>(
   `${v1}/auth/mfa`,
-  async (req) =>
-    completeMfa(prisma, {
-      mfaToken: req.body.mfaToken,
-      code: req.body.code,
-      deviceHint: String(req.headers['user-agent'] ?? '').slice(0, 120),
-    }),
+  async (req, reply) =>
+    sendSession(
+      reply,
+      await completeMfa(prisma, {
+        mfaToken: req.body.mfaToken,
+        code: req.body.code,
+        deviceHint: String(req.headers['user-agent'] ?? '').slice(0, 120),
+      }),
+    ),
 );
 
-app.post<{ Body: { refreshToken: string } }>(`${v1}/auth/refresh`, async (req) =>
-  rotateRefreshToken(
+/**
+ * Refresh.
+ *
+ * Reads the token from the httpOnly cookie, never the body. CSRF is checked
+ * first because this endpoint is reachable by any origin that can make the
+ * browser send the cookie — SameSite blocks the common cases, but defence
+ * in depth is warranted for the one endpoint that mints sessions.
+ */
+app.post(`${v1}/auth/refresh`, async (req, reply) => {
+  assertCsrf(req.cookies[CSRF_COOKIE], req.headers[CSRF_HEADER] as string | undefined);
+
+  const token = req.cookies.nhp_refresh;
+  if (!token) throw new AuthError('No session to refresh', 'NO_REFRESH_COOKIE');
+
+  const rotated = await rotateRefreshToken(
     prisma,
-    req.body.refreshToken,
+    token,
     String(req.headers['user-agent'] ?? '').slice(0, 120),
-  ),
-);
+  );
 
-app.post(`${v1}/auth/logout`, async (req) => {
+  return sendSession(reply, { status: 'AUTHENTICATED', ...rotated });
+});
+
+app.post(`${v1}/auth/logout`, async (req, reply) => {
   const ctx = await contextFrom(req);
-  return revokeAllSessions(prisma, ctx.accountId, 'USER_LOGOUT');
+  const result = await revokeAllSessions(prisma, ctx.accountId, 'USER_LOGOUT');
+
+  // Clear both cookies, or the browser keeps presenting a dead token.
+  reply.clearCookie('nhp_refresh', refreshCookieOptions(SECURE_COOKIES));
+  reply.clearCookie(CSRF_COOKIE, csrfCookieOptions(SECURE_COOKIES));
+
+  return result;
 });
 
 app.get(`${v1}/auth/me`, async (req) => {

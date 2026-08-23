@@ -165,6 +165,21 @@ out is the only signal the real user gets that their session was stolen.
 **MFA state does not survive a refresh** for privileged accounts. A 30-day
 refresh token must not silently confer a second factor.
 
+### The refresh cookie
+
+The refresh token never appears in a response body. It is set as an
+**httpOnly, SameSite=Strict cookie scoped to `/api/v1/auth`**, so no script
+can read it and it is not attached to ordinary API calls.
+
+Because a cookie is sent automatically, the refresh endpoint also demands a
+**double-submit CSRF token**: a second, deliberately *readable* cookie that
+the page must echo in an `x-csrf-token` header. A cross-origin page can
+cause the refresh cookie to be sent; it cannot read the CSRF one, so it
+cannot produce the header.
+
+A restored session is authenticated but **not** MFA-satisfied, so a
+clinician returning after a reload is asked for their second factor again.
+
 ## Phase 1 — identity
 
 `person` holds no external identifier. National ID, birth certificate and

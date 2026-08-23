@@ -514,6 +514,65 @@ export async function confirmTotp(db: Db, accountId: string, code: string) {
   return { enrolled: true };
 }
 
+// ------------------------------------------------------------- CSRF
+
+/**
+ * Double-submit CSRF token.
+ *
+ * A refresh cookie is sent by the browser automatically, so any page on any
+ * origin could trigger a refresh and — if the response were readable —
+ * harvest a session. SameSite=Strict blocks the common cases, but it is one
+ * browser setting away from failing, so the refresh endpoint also demands a
+ * token that JavaScript must read from a readable cookie and echo in a
+ * header. A cross-origin page can cause the cookie to be SENT; it cannot
+ * READ it.
+ */
+export const CSRF_COOKIE = 'nhp_csrf';
+export const CSRF_HEADER = 'x-csrf-token';
+
+export function generateCsrfToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+export function assertCsrf(cookieValue?: string, headerValue?: string): void {
+  if (!cookieValue || !headerValue) {
+    throw new AuthError('Missing CSRF token', 'CSRF_MISSING', 403);
+  }
+  const a = Buffer.from(cookieValue);
+  const b = Buffer.from(headerValue);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    throw new AuthError('CSRF token mismatch', 'CSRF_INVALID', 403);
+  }
+}
+
+/**
+ * Cookie options for the refresh token.
+ *
+ * httpOnly so no script can read it, Strict so it is not sent from another
+ * origin at all, and Path-scoped to the refresh endpoint so it is not
+ * attached to every ordinary API call.
+ */
+export function refreshCookieOptions(secure: boolean) {
+  return {
+    httpOnly: true,
+    secure,
+    sameSite: 'strict' as const,
+    path: '/api/v1/auth',
+    maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60,
+  };
+}
+
+/** The CSRF cookie is deliberately readable — the page must echo it back. */
+export function csrfCookieOptions(secure: boolean) {
+  return {
+    httpOnly: false,
+    secure,
+    sameSite: 'strict' as const,
+    path: '/',
+    maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60,
+  };
+}
+
 // ------------------------------------------------------------------ guards
 
 export interface AuthContext {

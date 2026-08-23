@@ -31,6 +31,11 @@ import {
   verifyTotp,
   MAX_FAILED_LOGINS,
   MAX_OTP_ATTEMPTS,
+  assertCsrf,
+  generateCsrfToken,
+  refreshCookieOptions,
+  csrfCookieOptions,
+  REFRESH_TOKEN_DAYS,
 } from '../src/auth.js';
 import { registerAdult } from '../src/identity.js';
 import { registerFacility, approveFacility } from '../src/facility.js';
@@ -534,5 +539,54 @@ describe('the guards', () => {
     process.env.JWT_SECRET = 'a-completely-different-secret-value-here';
     await expect(verifyAccessToken(token)).rejects.toThrow(/invalid or expired/i);
     process.env.JWT_SECRET = original;
+  });
+});
+
+
+describe('CSRF and cookie policy', () => {
+  it('accepts a matching double-submit token', () => {
+    const token = generateCsrfToken();
+    expect(() => assertCsrf(token, token)).not.toThrow();
+  });
+
+  it('THE CSRF DEFENCE — refuses a mismatched or absent token', () => {
+    const token = generateCsrfToken();
+
+    // A cross-origin page can make the browser SEND the cookie; it cannot
+    // READ it, so it cannot produce the matching header.
+    expect(() => assertCsrf(token, generateCsrfToken())).toThrow(/mismatch/i);
+    expect(() => assertCsrf(token, undefined)).toThrow(/missing/i);
+    expect(() => assertCsrf(undefined, token)).toThrow(/missing/i);
+    expect(() => assertCsrf(undefined, undefined)).toThrow(/missing/i);
+  });
+
+  it('generates unguessable tokens', () => {
+    const tokens = new Set(Array.from({ length: 50 }, () => generateCsrfToken()));
+    expect(tokens.size).toBe(50);
+    // 32 bytes base64url.
+    expect(generateCsrfToken().length).toBeGreaterThanOrEqual(43);
+  });
+
+  it('makes the refresh cookie unreadable by script', () => {
+    const opts = refreshCookieOptions(true);
+    // The whole point: an injected script must not be able to read it.
+    expect(opts.httpOnly).toBe(true);
+    expect(opts.sameSite).toBe('strict');
+    expect(opts.secure).toBe(true);
+    // Scoped, so it is not attached to every ordinary API call.
+    expect(opts.path).toBe('/api/v1/auth');
+    expect(opts.maxAge).toBe(REFRESH_TOKEN_DAYS * 24 * 60 * 60);
+  });
+
+  it('makes the CSRF cookie readable, because the page must echo it', () => {
+    const opts = csrfCookieOptions(true);
+    expect(opts.httpOnly).toBe(false);
+    expect(opts.sameSite).toBe('strict');
+    expect(opts.path).toBe('/');
+  });
+
+  it('allows insecure cookies only in development', () => {
+    expect(refreshCookieOptions(false).secure).toBe(false);
+    expect(refreshCookieOptions(true).secure).toBe(true);
   });
 });
