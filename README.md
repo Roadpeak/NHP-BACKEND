@@ -114,11 +114,38 @@ refuses.
 ## Status
 
 - [x] **Phase 0** — foundation, schema, roles, triggers, refusal suite
-- [ ] Phase 1 — identity: registration, guardianship, promotion at 18
+- [x] **Phase 1** — identity: registration, guardianship, promotion at 18
 - [ ] Phase 2 — facilities: registry, capabilities, KEPH levels
 - [ ] Phase 3 — clinicians: licences, affiliation, check-in API
 - [ ] Phase 4 — clinical core: encounters, coded diagnoses, prescribing
 - [ ] Phases 5–9 — consent, triage, Ministry, referrals, hardening
+
+## Phase 1 — identity
+
+`person` holds no external identifier. National ID, birth certificate and
+phone live in `identifier` as attached rows keyed to an immutable internal
+id. That is what makes promotion at 18 an INSERT rather than a migration.
+
+Identifiers are encrypted (AES-256-GCM) with a blind index —
+`HMAC(pepper, normalise(value))` — so a facility can search by National ID
+without the plaintext sitting in a queryable column. Normalisation is
+security-critical: `39104882`, ` 39-104-882 ` and `+254712345678` vs
+`0712345678` must collapse to one index, or the same person registers twice
+and their history splits.
+
+19 tests, including the one that matters:
+
+**`THE CRITICAL TEST — clinical history survives promotion untouched`**
+registers a child, writes a real encounter and diagnosis through the Phase 0
+check-in gate, promotes them at 18, then asserts the person id is unchanged,
+both clinical rows still resolve, their new National ID finds the same
+record, and the guardian can no longer see it.
+
+Guardianship supports multiple guardians per child — searching either
+parent's ID surfaces the dependant. Promotion runs in two stages so care is
+never interrupted on a birthday: `flagDueForPromotion` marks the record
+`PENDING_PROMOTION` while leaving guardian access intact, and
+`finalisePromotions` closes that access only after a 90-day grace period.
 
 ## Related
 
