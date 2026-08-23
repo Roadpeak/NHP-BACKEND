@@ -143,6 +143,14 @@ async function main() {
     data: { bloodGroup: 'O_POS' },
   });
 
+  // A working citizen login, so the patient's own view is testable. No MFA:
+  // citizens may enrol but are not required to — requiring a second factor
+  // to read your own record would exclude the people it is meant to serve.
+  await prisma.account.update({
+    where: { personId: patient.id },
+    data: { passwordHash: await hashPassword('patient-password-123') },
+  });
+
   // The allergy that drives the contraindication interrupt.
   await recordAllergy(prisma, {
     practitionerId: practitioner.id,
@@ -301,6 +309,9 @@ async function report() {
   console.log(`  facility  ${session?.facility.name}`);
   console.log(`  session   expires ${session?.expiresAt.toISOString()}`);
   console.log(`  patient   ${patient?.displayNumber} · National ID 39104882`);
+  console.log('\n  CITIZEN LOGIN (their own view, at /me)');
+  console.log('    phone     0712345678');
+  console.log('    password  patient-password-123');
   console.log(
     `\n  Second factor is SMS. In development the code is printed by the\n` +
       `  console provider — watch the \`pnpm serve\` output when you sign in.`,

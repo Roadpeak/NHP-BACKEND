@@ -32,6 +32,14 @@ import {
 } from './clinical.js';
 import { filteredRecord, logAccess, accessHistory, ConsentError } from './consent.js';
 import { recommend, symptomPicker, TriageError } from './triage.js';
+import {
+  citizenSummary,
+  citizenTimeline,
+  raiseDispute,
+  uiStrings,
+  CitizenError,
+  type Lang,
+} from './citizen.js';
 import { findFacilities, FacilityError } from './facility.js';
 import { IdentityError } from './identity.js';
 import { PractitionerError } from './practitioner.js';
@@ -127,6 +135,7 @@ app.setErrorHandler((error, request, reply) => {
   }
 
   const known =
+    error instanceof CitizenError ||
     error instanceof ClinicalError ||
     error instanceof ConsentError ||
     error instanceof TriageError ||
@@ -450,6 +459,59 @@ app.get<{ Params: { nhpId: string } }>(
 app.get<{ Params: { nhpId: string } }>(
   `${v1}/persons/:nhpId/access-log`,
   async (req) => accessHistory(prisma, req.params.nhpId),
+);
+
+// ----------------------------------------------------------------- citizen
+// A citizen reads their OWN record. requireSelf compares in constant time,
+// because ids are guessable in shape and an attacker with many attempts
+// could otherwise probe for near-misses.
+
+app.get(`${v1}/persons/me/summary`, async (req) => {
+  const ctx = await contextFrom(req);
+  if (!ctx.personId) {
+    throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+  }
+  const lang = ((req.query as { lang?: string }).lang ?? 'en') as Lang;
+  return {
+    ...(await citizenSummary(prisma, ctx.personId, lang)),
+    ui: uiStrings(lang),
+  };
+});
+
+app.get(`${v1}/persons/me/visits`, async (req) => {
+  const ctx = await contextFrom(req);
+  if (!ctx.personId) {
+    throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+  }
+  const { lang = 'en', limit } = req.query as { lang?: Lang; limit?: string };
+  return citizenTimeline(prisma, ctx.personId, {
+    lang,
+    limit: limit ? Number(limit) : 20,
+  });
+});
+
+app.get(`${v1}/persons/me/access-log`, async (req) => {
+  const ctx = await contextFrom(req);
+  if (!ctx.personId) {
+    throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+  }
+  return accessHistory(prisma, ctx.personId);
+});
+
+app.post<{ Body: { encounterId: string; note: string } }>(
+  `${v1}/persons/me/disputes`,
+  async (req) => {
+    const ctx = await contextFrom(req);
+    if (!ctx.personId) {
+      throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+    }
+    // A dispute opens a review; it never writes to the clinical row.
+    return raiseDispute(prisma, {
+      personId: requireSelf(ctx, ctx.personId),
+      encounterId: req.body.encounterId,
+      note: req.body.note,
+    });
+  },
 );
 
 // ---------------------------------------------------------------- clinical

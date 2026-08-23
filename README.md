@@ -487,6 +487,31 @@ so the limit and the evidence can never disagree.
 **MFA** is required server-side for clinical and Ministry accounts.
 `accountsMissingMfa` is the enforcement backlog.
 
+## The citizen's own view
+
+The same rows the clinician sees, for a reader with no clinical training.
+`/persons/me/*` — a citizen reads only their own record, and the comparison
+is constant-time because ids are guessable in shape.
+
+**Plain language leads; the clinical term sits below it.** "You had malaria"
+is the heading, "Plasmodium falciparum malaria · 1F41.0" is underneath — a
+patient carrying their record to a private specialist needs the real term,
+so we simplify the presentation and never the record. Both come from the
+three labels per code in `../nhp-seed`.
+
+**Serious diagnoses are sequenced, not hidden.** A neoplasm or HIV diagnosis
+is withheld from the citizen view for 48 hours with "your clinician will
+contact you about this visit", so the conversation happens before the
+patient reads it cold on a phone. After the window it appears regardless —
+indefinite withholding would be worse than the harm it prevents.
+
+**Disputes raise a review; they never write to the record.** The evidential
+value of the whole system depends on a patient being unable to edit a
+clinical row, and the screen says so plainly.
+
+Citizens are not required to enrol MFA. Requiring a second factor to read
+your own record would exclude the people it is meant to serve.
+
 ## Related
 
 Seed vocabularies live at `../nhp-seed` — 50 diagnoses, 65 capabilities,
