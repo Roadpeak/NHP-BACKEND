@@ -117,7 +117,7 @@ refuses.
 - [x] **Phase 1** — identity: registration, guardianship, promotion at 18
 - [x] **Phase 2** — facilities: registry, capabilities, KEPH levels
 - [x] **Phase 3** — clinicians: licences, affiliation, check-in
-- [ ] Phase 4 — clinical core: encounters, coded diagnoses, prescribing
+- [x] **Phase 4** — clinical core: encounters, coded diagnoses, prescribing
 - [ ] Phases 5–9 — consent, triage, Ministry, referrals, hardening
 
 ## Phase 1 — identity
@@ -213,6 +213,43 @@ rolling extensions would turn a shift into a permanent session and "checked
 in" would stop meaning anything. The database caught this: my first
 implementation added 16 hours to an already-15-hour-old session and the
 constraint refused the write.
+
+## Phase 4 — clinical core
+
+The full loop works: open an encounter, record an ICD-11 coded diagnosis,
+prescribe against the KEML formulary, see it on the patient timeline —
+every row stamped with who wrote it, where, during which shift, citing
+which licence.
+
+Vocabularies load from `../nhp-seed`: 50 diagnoses, 64 medicines, 22 allergy
+classes. Diagnosis search matches the wireframe spec — `mal` returns
+falciparum malaria first, `pressure` returns hypertension, `kisukari`
+returns diabetes, and typing a code directly works for clinicians who know
+them.
+
+**Free text is refused.** `recordDiagnosis` rejects anything not in the
+vocabulary, because "malaria", "Malaria" and "susp. malaria" as free text
+would become three diseases and the national analytics would be worthless.
+`icd11Title` is frozen at write time, since ICD-11 is revised and a record
+must show what the clinician actually selected.
+
+### The contraindication interrupt
+
+Fires at drug selection, not on submit. Catches same-class allergies *and*
+cross-reactions — a penicillin-allergic patient is blocked from ceftriaxone,
+not just amoxicillin. Every suggested alternative is re-checked against the
+same patient, so nothing unsafe is offered on the second hop.
+
+Override is always available, because blocking a clinician outright is how
+people learn to route around a system. It costs a typed reason, and it is
+recorded against the prescriber.
+
+### Corrections
+
+`amendDiagnosis` inserts a new version pointing at its predecessor, then
+marks the original superseded through `nhp_supersede()` — the only permitted
+UPDATE path. Both versions survive; the timeline shows the current one; an
+auditor sees who changed what and why.
 
 ## Related
 

@@ -974,6 +974,73 @@ model MergeRequest {
   @@map("merge_request")
 }
 
+// ----------------------------------------------------- vocabularies (P4)
+// Loaded from ../nhp-seed, which carries its own validators. Three labels
+// per concept: clinical for the clinician, plain_en/plain_sw for the citizen.
+
+model DiagnosisTerm {
+  id            String  @id @default(uuid(7))
+  icd11Code     String  @unique @map("icd11_code")
+  clinicalTitle String  @map("clinical_title")
+  plainEn       String  @map("plain_en")
+  plainSw       String  @map("plain_sw")
+  /// Pipe-delimited in the CSV; stored as an array for search.
+  synonyms      String[]
+  abbreviations String[]
+  bodySystem    String  @map("body_system")
+  isNotifiable  Boolean @default(false) @map("is_notifiable")
+  sensitivity   Tier    @default(TIER_2_GENERAL)
+  icd11Chapter  String  @map("icd11_chapter")
+  reviewStatus  String  @map("review_status")
+
+  @@index([bodySystem])
+  @@index([isNotifiable])
+  @@map("diagnosis_term")
+}
+
+model MedicationTerm {
+  id                String   @id @default(uuid(7))
+  kemlCode          String   @unique @map("keml_code")
+  genericName       String   @map("generic_name")
+  plainEn           String   @map("plain_en")
+  plainSw           String   @map("plain_sw")
+  form              String
+  strength          String
+  route             Route
+  therapeuticClass  String   @map("therapeutic_class")
+  minKephLevel      Int      @map("min_keph_level")
+  adultDose         String   @map("adult_dose")
+  adultFreq         String   @map("adult_freq")
+  adultDurationDays Int?     @map("adult_duration_days")
+  paedDoseMgPerKg   Decimal? @map("paed_dose_mg_per_kg") @db.Decimal(10, 3)
+  paedDosingMode    String   @map("paed_dosing_mode")
+  maxDailyMg        Decimal? @map("max_daily_mg") @db.Decimal(10, 2)
+  allergyClass      String?  @map("allergy_class")
+  pregnancyCategory String   @map("pregnancy_category")
+  renalCaution      Boolean  @default(false) @map("renal_caution")
+  controlled        Boolean  @default(false)
+  synonyms          String[]
+  reviewStatus      String   @map("review_status")
+
+  @@index([therapeuticClass])
+  @@index([allergyClass])
+  @@map("medication_term")
+}
+
+model AllergyClassTerm {
+  id               String   @id @default(uuid(7))
+  allergyClass     String   @unique @map("allergy_class")
+  labelEn          String   @map("label_en")
+  labelSw          String   @map("label_sw")
+  crossReactsWith  String[] @map("cross_reacts_with")
+  severityDefault  Severity @map("severity_default")
+  alternatives     String[]
+  clinicalNote     String?  @map("clinical_note")
+  reviewStatus     String   @map("review_status")
+
+  @@map("allergy_class_term")
+}
+
 // ---------------------------------------------------- aggregates (P7)
 // Read by the ANALYST role, which holds NO grant on any clinical table.
 
