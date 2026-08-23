@@ -1,0 +1,1001 @@
+// NHP — National Health Portal
+// Phase 0 schema. Structure only; the guarantees live in prisma/sql/*.sql,
+// which is applied by `pnpm harden` after migration.
+//
+// Reading notes:
+//   - Clinical models carry the "clinical stamp": personId, checkInId,
+//     recordedBy, facilityId, licenceNumber, recordedAt. None nullable.
+//   - Clinical + audit models are APPEND-ONLY. The app role holds no
+//     UPDATE/DELETE grant on them. See harden.sql.
+//   - Identifiers are encrypted at rest with a blind index for lookup.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgcrypto]
+}
+
+// ---------------------------------------------------------------- enums
+
+enum Sex {
+  MALE
+  FEMALE
+  INTERSEX
+}
+
+enum Precision {
+  EXACT
+  MONTH
+  YEAR
+  ESTIMATED
+}
+
+enum LifeStatus {
+  ALIVE
+  DECEASED
+  INACTIVE
+  EMIGRATED
+}
+
+enum Maturity {
+  DEPENDANT
+  PENDING_PROMOTION
+  ADULT
+}
+
+enum RegRoute {
+  SELF
+  FACILITY_BIRTH
+  GUARDIAN
+  MINISTRY
+}
+
+enum VerState {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum BloodGroup {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
+}
+
+enum IdType {
+  NATIONAL_ID
+  BIRTH_CERT
+  PASSPORT
+  ALIEN_ID
+  UNHCR
+  HUDUMA
+  MILITARY
+  PROVISIONAL
+}
+
+enum IdStatus {
+  ACTIVE
+  SUPERSEDED
+  DISPUTED
+  REVOKED
+}
+
+enum Relation {
+  MOTHER
+  FATHER
+  LEGAL_GUARDIAN
+  GRANDPARENT
+  SIBLING
+  FOSTER
+  INSTITUTION
+  OTHER
+}
+
+enum Evidence {
+  BIRTH_RECORD
+  BIRTH_CERT
+  COURT_ORDER
+  FACILITY_ATTESTED
+  SELF_DECLARED
+}
+
+enum GuardStatus {
+  ACTIVE
+  ENDED
+  DISPUTED
+  REVOKED
+}
+
+enum AcctStatus {
+  ACTIVE
+  LOCKED
+  SUSPENDED
+  CLOSED
+}
+
+enum MfaMode {
+  NONE
+  SMS
+  TOTP
+}
+
+enum SubKind {
+  HEALTH_ADMIN
+  CONSTITUENCY
+  BOTH
+}
+
+enum Ownership {
+  PUBLIC_MOH
+  PUBLIC_OTHER
+  PRIVATE_FOR_PROFIT
+  FAITH_BASED
+  NGO
+}
+
+enum FacStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum CapDomain {
+  SERVICE
+  DIAGNOSTIC
+  EQUIPMENT
+  SPECIALTY
+}
+
+enum Avail {
+  ROUTINE
+  BUSINESS_HOURS
+  ON_CALL
+  REFERRAL_ONLY
+}
+
+enum CapStatus {
+  CLAIMED
+  VERIFIED
+  SUSPENDED
+}
+
+enum Cadre {
+  DOCTOR
+  DENTIST
+  CLINICAL_OFFICER
+  NURSE
+  MIDWIFE
+  PHARMACIST
+  LAB_TECH
+  RADIOGRAPHER
+  NUTRITIONIST
+  PSYCHOLOGIST
+  CHW
+}
+
+enum Regulator {
+  KMPDC
+  NCK
+  COC
+  PPB
+  KMLTTB
+  KNDI
+}
+
+enum PracStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  RETIRED
+  REVOKED
+}
+
+enum LicStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  REVOKED
+}
+
+enum FacRole {
+  ATTENDING
+  RESIDENT
+  VISITING
+  LOCUM
+  FACILITY_ADMIN
+}
+
+enum GrantKind {
+  FACILITY
+  MINISTRY
+}
+
+enum AffStatus {
+  ACTIVE
+  SUSPENDED
+  ENDED
+}
+
+enum EndReason {
+  MANUAL
+  EXPIRED
+  REVOKED
+  FACILITY_CLOSED
+}
+
+enum CheckMethod {
+  SELF_SELECT
+  FACILITY_CODE
+  GEOFENCE
+}
+
+enum Tier {
+  TIER_1_EMERGENCY
+  TIER_2_GENERAL
+  TIER_3_RESTRICTED
+}
+
+enum EncKind {
+  OUTPATIENT
+  INPATIENT
+  EMERGENCY
+  MATERNITY
+  IMMUNISATION
+  SCREENING
+  FOLLOW_UP
+  TELEHEALTH
+}
+
+enum Band {
+  RED
+  ORANGE
+  YELLOW
+  GREEN
+}
+
+enum Disposition {
+  DISCHARGED
+  ADMITTED
+  REFERRED
+  ABSCONDED
+  DIED
+  LEFT_AGAINST_ADVICE
+}
+
+enum CondStatus {
+  SUSPECTED
+  CONFIRMED
+  ACTIVE
+  RESOLVED
+  RECURRENCE
+  IN_REMISSION
+  REFUTED
+}
+
+enum SubstanceKind {
+  DRUG
+  FOOD
+  ENVIRONMENT
+  OTHER
+}
+
+enum Severity {
+  MILD
+  MODERATE
+  SEVERE
+  ANAPHYLAXIS
+}
+
+enum Certainty {
+  SUSPECTED
+  CONFIRMED
+}
+
+enum Route {
+  ORAL
+  IV
+  IM
+  SC
+  TOPICAL
+  INHALED
+  RECTAL
+}
+
+enum MedStatus {
+  PRESCRIBED
+  DISPENSED
+  ACTIVE
+  COMPLETED
+  STOPPED_EARLY
+  NOT_DISPENSED
+}
+
+enum ObsCat {
+  VITAL
+  LAB
+  ANTHROPOMETRIC
+  IMAGING
+}
+
+enum Flag {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum SensCat {
+  HIV
+  MENTAL_HEALTH
+  REPRODUCTIVE
+  SUBSTANCE_USE
+  GBV
+  GENETIC
+}
+
+enum Scope {
+  ALL_TIER_3
+  CATEGORY
+  SINGLE_RECORD
+}
+
+enum GrantBy {
+  PATIENT
+  GUARDIAN
+  COURT_ORDER
+}
+
+enum GrantMethod {
+  IN_PERSON_OTP
+  PORTAL
+  VERBAL_ATTESTED
+}
+
+enum ActorKind {
+  PRACTITIONER
+  FACILITY_ADMIN
+  MINISTRY
+  PATIENT
+  GUARDIAN
+  SYSTEM
+}
+
+enum Action {
+  SEARCH
+  VIEW_SUMMARY
+  VIEW_RECORD
+  WRITE
+  EXPORT
+  PRINT
+  BREAK_GLASS
+}
+
+enum AccessReason {
+  ACTIVE_CONSULTATION
+  FOLLOW_UP
+  EMERGENCY
+  REFERRAL_REVIEW
+  ADMIN
+  PATIENT_REQUEST
+}
+
+enum Outcome {
+  GRANTED
+  DENIED_NO_CONSENT
+  DENIED_NO_CHECKIN
+  DENIED_LICENCE
+  DENIED_RATE_LIMIT
+  DENIED_SELF_ACCESS
+}
+
+enum BgReason {
+  UNCONSCIOUS
+  LIFE_THREATENING
+  PATIENT_UNABLE
+  GUARDIAN_UNREACHABLE
+  MASS_CASUALTY
+}
+
+enum ReviewStatus {
+  PENDING
+  REVIEWED_OK
+  FLAGGED
+  ESCALATED
+}
+
+enum MinRole {
+  ANALYST
+  REGISTRAR
+  SURVEILLANCE
+  AUDITOR
+}
+
+enum GeoScope {
+  NATIONAL
+  COUNTY
+  SUBCOUNTY
+}
+
+enum MergeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVERSED
+}
+
+enum DetectMode {
+  AUTOMATIC
+  FACILITY_REPORT
+  CITIZEN_REPORT
+}
+
+// ------------------------------------------------------------ geography
+
+model County {
+  id       String      @id @default(uuid(7))
+  code     String      @unique
+  name     String
+  subs     SubCounty[]
+  persons  Person[]
+  facils   Facility[]
+
+  @@map("county")
+}
+
+model SubCounty {
+  id       String     @id @default(uuid(7))
+  countyId String     @map("county_id")
+  county   County     @relation(fields: [countyId], references: [id])
+  name     String
+  kind     SubKind    @default(HEALTH_ADMIN)
+  wards    Ward[]
+  persons  Person[]
+  facils   Facility[]
+
+  @@index([countyId])
+  @@map("subcounty")
+}
+
+model Ward {
+  id          String    @id @default(uuid(7))
+  subcountyId String    @map("subcounty_id")
+  subcounty   SubCounty @relation(fields: [subcountyId], references: [id])
+  name        String
+
+  @@index([subcountyId])
+  @@map("ward")
+}
+
+// ------------------------------------------------------------- identity
+
+model Person {
+  id                String     @id @default(uuid(7))
+  displayNumber     String     @unique @map("display_number")
+  givenName         String     @map("given_name")
+  middleName        String?    @map("middle_name")
+  familyName        String     @map("family_name")
+  sexAtBirth        Sex        @map("sex_at_birth")
+  dateOfBirth       DateTime   @map("date_of_birth") @db.Date
+  dobPrecision      Precision  @default(EXACT) @map("dob_precision")
+  bloodGroup        BloodGroup? @map("blood_group")
+  lifeStatus        LifeStatus @default(ALIVE) @map("life_status")
+  deceasedAt        DateTime?  @map("deceased_at")
+  countyId          String     @map("county_id")
+  county            County     @relation(fields: [countyId], references: [id])
+  subcountyId       String     @map("subcounty_id")
+  subcounty         SubCounty  @relation(fields: [subcountyId], references: [id])
+  wardId            String?    @map("ward_id")
+  residenceNote     String?    @map("residence_note")
+  maturity          Maturity   @default(ADULT)
+  registeredBy      String     @map("registered_by")
+  registrationRoute RegRoute   @map("registration_route")
+  verificationState VerState   @default(UNVERIFIED) @map("verification_state")
+  mergedIntoId      String?    @map("merged_into_id")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  identifiers   Identifier[]
+  account       Account?
+  asDependant   Guardianship[] @relation("dependant")
+  asGuardian    Guardianship[] @relation("guardian")
+  practitioner  Practitioner?
+  ministryUser  MinistryUser?
+  encounters    Encounter[]
+  conditions    Condition[]
+  allergies     Allergy[]
+  medications   Medication[]
+  consents      ConsentGrant[]
+
+  @@index([countyId, subcountyId])
+  @@index([maturity, dateOfBirth])
+  @@map("person")
+}
+
+model Identifier {
+  id          String   @id @default(uuid(7))
+  personId    String   @map("person_id")
+  person      Person   @relation(fields: [personId], references: [id])
+  type        IdType
+  value       String
+  valueIndex  String   @map("value_index")
+  issuedOn    DateTime? @map("issued_on") @db.Date
+  verifiedAt  DateTime? @map("verified_at")
+  verifiedVia String?   @map("verified_via")
+  status      IdStatus  @default(ACTIVE)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([personId, type])
+  @@index([valueIndex])
+  @@map("identifier")
+}
+
+model Guardianship {
+  id            String      @id @default(uuid(7))
+  dependantId   String      @map("dependant_id")
+  dependant     Person      @relation("dependant", fields: [dependantId], references: [id])
+  guardianId    String      @map("guardian_id")
+  guardian      Person      @relation("guardian", fields: [guardianId], references: [id])
+  relationship  Relation
+  isPrimary     Boolean     @default(false) @map("is_primary")
+  establishedBy String      @map("established_by")
+  evidence      Evidence
+  status        GuardStatus @default(ACTIVE)
+  startedAt     DateTime    @default(now()) @map("started_at")
+  endedAt       DateTime?   @map("ended_at")
+  endReason     String?     @map("end_reason")
+
+  @@index([guardianId, status])
+  @@index([dependantId, status])
+  @@map("guardianship")
+}
+
+model Account {
+  id              String     @id @default(uuid(7))
+  personId        String?    @unique @map("person_id")
+  person          Person?    @relation(fields: [personId], references: [id])
+  practitionerId  String?    @unique @map("practitioner_id")
+  ministryUserId  String?    @unique @map("ministry_user_id")
+  phone           String
+  phoneIndex      String     @unique @map("phone_index")
+  phoneVerifiedAt DateTime?  @map("phone_verified_at")
+  email           String?
+  emailIndex      String?    @map("email_index")
+  passwordHash    String     @map("password_hash")
+  passwordSetAt   DateTime   @default(now()) @map("password_set_at")
+  mfaMode         MfaMode    @default(NONE) @map("mfa_mode")
+  mfaSecret       String?    @map("mfa_secret")
+  status          AcctStatus @default(ACTIVE)
+  failedAttempts  Int        @default(0) @map("failed_attempts")
+  lockedUntil     DateTime?  @map("locked_until")
+  lastLoginAt     DateTime?  @map("last_login_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  @@index([emailIndex])
+  @@map("account")
+}
+
+// ------------------------------------------------------------ facility
+
+model Facility {
+  id                 String    @id @default(uuid(7))
+  mflCode            String?   @unique @map("mfl_code")
+  name               String
+  kephLevel          Int       @map("keph_level")
+  ownership          Ownership
+  countyId           String    @map("county_id")
+  county             County    @relation(fields: [countyId], references: [id])
+  subcountyId        String    @map("subcounty_id")
+  subcounty          SubCounty @relation(fields: [subcountyId], references: [id])
+  wardId             String?   @map("ward_id")
+  locality           String
+  latitude           Float
+  longitude          Float
+  operatingHours     Json?     @map("operating_hours")
+  is24Hour           Boolean   @default(false) @map("is_24_hour")
+  bedCapacity        Int?      @map("bed_capacity")
+  icuBeds            Int?      @map("icu_beds")
+  maternityBeds      Int?      @map("maternity_beds")
+  phone              String?
+  registrationStatus FacStatus @default(PENDING) @map("registration_status")
+  licensedUntil      DateTime? @map("licensed_until") @db.Date
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  capabilities FacilityCapability[]
+  affiliations Affiliation[]
+  checkIns     CheckIn[]
+
+  @@index([countyId, kephLevel, registrationStatus])
+  @@index([name])
+  @@map("facility")
+}
+
+model Capability {
+  id           String    @id @default(uuid(7))
+  code         String    @unique
+  labelEn      String    @map("label_en")
+  labelSw      String    @map("label_sw")
+  domain       CapDomain
+  minKephLevel Int?      @map("min_keph_level")
+
+  facilities FacilityCapability[]
+
+  @@map("capability")
+}
+
+model FacilityCapability {
+  id              String     @id @default(uuid(7))
+  facilityId      String     @map("facility_id")
+  facility        Facility   @relation(fields: [facilityId], references: [id])
+  capabilityId    String     @map("capability_id")
+  capability      Capability @relation(fields: [capabilityId], references: [id])
+  availability    Avail      @default(ROUTINE)
+  status          CapStatus  @default(CLAIMED)
+  verifiedBy      String?    @map("verified_by")
+  verifiedAt      DateTime?  @map("verified_at")
+  lastConfirmedAt DateTime   @default(now()) @map("last_confirmed_at")
+
+  @@unique([facilityId, capabilityId])
+  @@index([capabilityId])
+  @@map("facility_capability")
+}
+
+// -------------------------------------------------------- practitioner
+
+model Practitioner {
+  id          String     @id @default(uuid(7))
+  personId    String     @unique @map("person_id")
+  person      Person     @relation(fields: [personId], references: [id])
+  cadre       Cadre
+  countyId    String     @map("county_id")
+  subcountyId String     @map("subcounty_id")
+  status      PracStatus @default(PENDING)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  licences     Licence[]
+  affiliations Affiliation[]
+  checkIns     CheckIn[]
+
+  @@map("practitioner")
+}
+
+model Licence {
+  id             String       @id @default(uuid(7))
+  practitionerId String       @map("practitioner_id")
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
+  regulator      Regulator
+  licenceNumber  String       @map("licence_number")
+  issuedOn       DateTime     @map("issued_on") @db.Date
+  expiresOn      DateTime     @map("expires_on") @db.Date
+  scope          String?
+  verifiedAt     DateTime?    @map("verified_at")
+  verifiedVia    String?      @map("verified_via")
+  status         LicStatus    @default(PENDING)
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@unique([regulator, licenceNumber])
+  @@index([practitionerId])
+  @@index([expiresOn])
+  @@map("licence")
+}
+
+model Affiliation {
+  id             String       @id @default(uuid(7))
+  practitionerId String       @map("practitioner_id")
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
+  facilityId     String       @map("facility_id")
+  facility       Facility     @relation(fields: [facilityId], references: [id])
+  role           FacRole      @default(ATTENDING)
+  grantedBy      String       @map("granted_by")
+  grantedByKind  GrantKind    @map("granted_by_kind")
+  status         AffStatus    @default(ACTIVE)
+  startedAt      DateTime     @default(now()) @map("started_at")
+  endedAt        DateTime?    @map("ended_at")
+
+  checkIns CheckIn[]
+
+  @@index([practitionerId, status])
+  @@index([facilityId, status])
+  @@map("affiliation")
+}
+
+model CheckIn {
+  id             String       @id @default(uuid(7))
+  practitionerId String       @map("practitioner_id")
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
+  facilityId     String       @map("facility_id")
+  facility       Facility     @relation(fields: [facilityId], references: [id])
+  affiliationId  String       @map("affiliation_id")
+  affiliation    Affiliation  @relation(fields: [affiliationId], references: [id])
+  startedAt      DateTime     @default(now()) @map("started_at")
+  expiresAt      DateTime     @map("expires_at")
+  endedAt        DateTime?    @map("ended_at")
+  endReason      EndReason?   @map("end_reason")
+  method         CheckMethod  @default(SELF_SELECT)
+  deviceHint     String?      @map("device_hint")
+  ipHash         String?      @map("ip_hash")
+
+  encounters   Encounter[]
+  conditions   Condition[]
+  allergies    Allergy[]
+  medications  Medication[]
+
+  @@index([practitionerId, endedAt])
+  @@index([facilityId, startedAt])
+  @@map("check_in")
+}
+
+// ------------------------------------------------------- clinical core
+// Every model below is APPEND-ONLY. See prisma/sql/harden.sql.
+
+model Encounter {
+  id              String       @id @default(uuid(7))
+  personId        String       @map("person_id")
+  person          Person       @relation(fields: [personId], references: [id])
+  checkInId       String       @map("check_in_id")
+  checkIn         CheckIn      @relation(fields: [checkInId], references: [id])
+  recordedBy      String       @map("recorded_by")
+  facilityId      String       @map("facility_id")
+  licenceNumber   String       @map("licence_number")
+  recordedAt      DateTime     @default(now()) @map("recorded_at")
+  sensitivity     Tier         @default(TIER_2_GENERAL)
+  supersedesId    String?      @map("supersedes_id")
+  supersededAt    DateTime?    @map("superseded_at")
+  amendmentReason String?      @map("amendment_reason")
+
+  kind           EncKind
+  startedAt      DateTime     @map("started_at")
+  endedAt        DateTime?    @map("ended_at")
+  chiefComplaint String       @map("chief_complaint")
+  presentation   Json?
+  triageBand     Band?        @map("triage_band")
+  disposition    Disposition?
+  referralId     String?      @map("referral_id")
+
+  conditions  Condition[]
+  medications Medication[]
+
+  @@index([personId, startedAt(sort: Desc)])
+  @@index([facilityId, startedAt])
+  @@index([checkInId])
+  @@map("encounter")
+}
+
+model Condition {
+  id              String     @id @default(uuid(7))
+  personId        String     @map("person_id")
+  person          Person     @relation(fields: [personId], references: [id])
+  checkInId       String     @map("check_in_id")
+  checkIn         CheckIn    @relation(fields: [checkInId], references: [id])
+  recordedBy      String     @map("recorded_by")
+  facilityId      String     @map("facility_id")
+  licenceNumber   String     @map("licence_number")
+  recordedAt      DateTime   @default(now()) @map("recorded_at")
+  sensitivity     Tier       @default(TIER_2_GENERAL)
+  supersedesId    String?    @map("supersedes_id")
+  supersededAt    DateTime?  @map("superseded_at")
+  amendmentReason String?    @map("amendment_reason")
+
+  encounterId    String?    @map("encounter_id")
+  encounter      Encounter? @relation(fields: [encounterId], references: [id])
+  icd11Code      String     @map("icd11_code")
+  icd11Title     String     @map("icd11_title")
+  icd11Chapter   String     @map("icd11_chapter")
+  clinicalStatus CondStatus @map("clinical_status")
+  onsetDate      DateTime?  @map("onset_date") @db.Date
+  onsetPrecision Precision? @map("onset_precision")
+  resolvedDate   DateTime?  @map("resolved_date") @db.Date
+  isChronic      Boolean    @default(false) @map("is_chronic")
+  isFirstEver    Boolean    @default(true) @map("is_first_ever")
+  kephLevel      Int        @map("keph_level")
+  notes          String?
+
+  @@index([icd11Code, recordedAt])
+  @@index([personId, isChronic, clinicalStatus])
+  @@index([encounterId])
+  @@map("condition")
+}
+
+model Allergy {
+  id              String        @id @default(uuid(7))
+  personId        String        @map("person_id")
+  person          Person        @relation(fields: [personId], references: [id])
+  checkInId       String        @map("check_in_id")
+  checkIn         CheckIn       @relation(fields: [checkInId], references: [id])
+  recordedBy      String        @map("recorded_by")
+  facilityId      String        @map("facility_id")
+  licenceNumber   String        @map("licence_number")
+  recordedAt      DateTime      @default(now()) @map("recorded_at")
+  sensitivity     Tier          @default(TIER_1_EMERGENCY)
+  supersedesId    String?       @map("supersedes_id")
+  supersededAt    DateTime?     @map("superseded_at")
+  amendmentReason String?       @map("amendment_reason")
+
+  substanceKind  SubstanceKind @map("substance_kind")
+  substanceCode  String?       @map("substance_code")
+  substanceLabel String        @map("substance_label")
+  allergyClass   String?       @map("allergy_class")
+  reaction       String
+  severity       Severity
+  certainty      Certainty
+  firstObserved  DateTime?     @map("first_observed") @db.Date
+
+  @@index([personId])
+  @@map("allergy")
+}
+
+model Medication {
+  id              String     @id @default(uuid(7))
+  personId        String     @map("person_id")
+  person          Person     @relation(fields: [personId], references: [id])
+  checkInId       String     @map("check_in_id")
+  checkIn         CheckIn    @relation(fields: [checkInId], references: [id])
+  recordedBy      String     @map("recorded_by")
+  facilityId      String     @map("facility_id")
+  licenceNumber   String     @map("licence_number")
+  recordedAt      DateTime   @default(now()) @map("recorded_at")
+  sensitivity     Tier       @default(TIER_2_GENERAL)
+  supersedesId    String?    @map("supersedes_id")
+  supersededAt    DateTime?  @map("superseded_at")
+  amendmentReason String?    @map("amendment_reason")
+
+  encounterId    String     @map("encounter_id")
+  encounter      Encounter  @relation(fields: [encounterId], references: [id])
+  kemlCode       String     @map("keml_code")
+  genericName    String     @map("generic_name")
+  brandName      String?    @map("brand_name")
+  doseAmount     Decimal    @map("dose_amount") @db.Decimal(10, 3)
+  doseUnit       String     @map("dose_unit")
+  route          Route
+  frequency      String
+  durationDays   Int?       @map("duration_days")
+  quantity       Decimal?   @db.Decimal(10, 2)
+  indicationCode String?    @map("indication_code")
+  status         MedStatus  @default(PRESCRIBED)
+  stoppedReason  String?    @map("stopped_reason")
+
+  @@index([personId, status])
+  @@index([encounterId])
+  @@map("medication")
+}
+
+// -------------------------------------------------------------- consent
+
+model ConsentGrant {
+  id             String       @id @default(uuid(7))
+  personId       String       @map("person_id")
+  person         Person       @relation(fields: [personId], references: [id])
+  facilityId     String?      @map("facility_id")
+  practitionerId String?      @map("practitioner_id")
+  scope          Scope
+  category       SensCat?
+  grantedBy      GrantBy      @map("granted_by")
+  method         GrantMethod
+  grantedAt      DateTime     @default(now()) @map("granted_at")
+  expiresAt      DateTime     @map("expires_at")
+  revokedAt      DateTime?    @map("revoked_at")
+
+  @@index([personId, facilityId, expiresAt])
+  @@map("consent_grant")
+}
+
+// APPEND-ONLY, INSERT-only role. Deliberately no relations — the audit log
+// must survive anything happening to the rows it describes.
+model AccessLog {
+  id          String       @id @default(uuid(7))
+  personId    String       @map("person_id")
+  actorKind   ActorKind    @map("actor_kind")
+  actorId     String       @map("actor_id")
+  checkInId   String?      @map("check_in_id")
+  facilityId  String?      @map("facility_id")
+  action      Action
+  tierReached Tier         @map("tier_reached")
+  targetTable String?      @map("target_table")
+  targetId    String?      @map("target_id")
+  reason      AccessReason
+  outcome     Outcome
+  occurredAt  DateTime     @default(now()) @map("occurred_at")
+  ipHash      String?      @map("ip_hash")
+  requestId   String       @map("request_id")
+
+  @@index([personId, occurredAt(sort: Desc)])
+  @@index([actorId, occurredAt(sort: Desc)])
+  @@map("access_log")
+}
+
+model BreakGlass {
+  id                  String       @id @default(uuid(7))
+  personId            String       @map("person_id")
+  practitionerId      String       @map("practitioner_id")
+  checkInId           String       @map("check_in_id")
+  facilityId          String       @map("facility_id")
+  reasonCode          BgReason     @map("reason_code")
+  justification       String
+  categories          SensCat[]
+  openedAt            DateTime     @default(now()) @map("opened_at")
+  expiresAt           DateTime     @map("expires_at")
+  patientNotifiedAt   DateTime?    @map("patient_notified_at")
+  notificationChannel String?      @map("notification_channel")
+  reviewStatus        ReviewStatus @default(PENDING) @map("review_status")
+  reviewedBy          String?      @map("reviewed_by")
+  reviewedAt          DateTime?    @map("reviewed_at")
+  reviewNote          String?      @map("review_note")
+
+  @@index([facilityId, openedAt])
+  @@index([reviewStatus, openedAt])
+  @@map("break_glass")
+}
+
+// ------------------------------------------------------------- ministry
+
+model MinistryUser {
+  id          String   @id @default(uuid(7))
+  personId    String   @unique @map("person_id")
+  person      Person   @relation(fields: [personId], references: [id])
+  role        MinRole
+  geoScope    GeoScope @default(NATIONAL) @map("geo_scope")
+  countyId    String?  @map("county_id")
+  status      String   @default("ACTIVE")
+  mfaRequired Boolean  @default(true) @map("mfa_required")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("ministry_user")
+}
+
+model MergeRequest {
+  id                String      @id @default(uuid(7))
+  survivingPersonId String      @map("surviving_person_id")
+  mergedPersonId    String      @map("merged_person_id")
+  detectedBy        DetectMode  @map("detected_by")
+  matchScore        Decimal?    @map("match_score") @db.Decimal(5, 4)
+  matchEvidence     Json?       @map("match_evidence")
+  status            MergeStatus @default(PENDING)
+  approvedBy        String?     @map("approved_by")
+  secondApprover    String?     @map("second_approver")
+  executedAt        DateTime?   @map("executed_at")
+  reversalSnapshot  Json?       @map("reversal_snapshot")
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  @@map("merge_request")
+}
+
+// ---------------------------------------------------- aggregates (P7)
+// Read by the ANALYST role, which holds NO grant on any clinical table.
+
+model AggConditionDaily {
+  id                  String   @id @default(uuid(7))
+  date                DateTime @db.Date
+  countyId            String   @map("county_id")
+  subcountyId         String?  @map("subcounty_id")
+  icd11Code           String   @map("icd11_code")
+  icd11Chapter        String   @map("icd11_chapter")
+  ageBand             String   @map("age_band")
+  sex                 Sex
+  kephLevel           Int      @map("keph_level")
+  caseCount           Int      @map("case_count")
+  newCaseCount        Int      @map("new_case_count")
+  suppressed          Boolean  @default(false)
+  suppressionReason   String?  @map("suppression_reason")
+  facilitiesReporting Int      @map("facilities_reporting")
+  facilitiesExpected  Int      @map("facilities_expected")
+
+  @@unique([date, countyId, subcountyId, icd11Code, ageBand, sex, kephLevel], name: "agg_condition_grain")
+  @@index([date, countyId])
+  @@index([icd11Code, date])
+  @@map("agg_condition_daily")
+}

@@ -1,0 +1,24 @@
+{
+  "name": "nhp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "National Health Portal — Kenya",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:logs": "docker compose -f infra/docker-compose.yml logs -f postgres",
+    "db:reset": "docker compose -f infra/docker-compose.yml down -v && pnpm db:up",
+    "migrate": "pnpm --filter @nhp/api migrate",
+    "harden": "pnpm --filter @nhp/api harden",
+    "seed": "pnpm --filter @nhp/api seed",
+    "test": "pnpm --filter @nhp/api test",
+    "setup": "pnpm db:up && sleep 5 && pnpm migrate && pnpm harden && pnpm seed && pnpm test"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@10.33.2"
+}

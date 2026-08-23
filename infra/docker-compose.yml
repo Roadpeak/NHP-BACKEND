@@ -1,0 +1,25 @@
+name: nhp
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: nhp-postgres
+    restart: unless-stopped
+    environment:
+      # Superuser — used ONLY for migrations and hardening, never by the app.
+      POSTGRES_USER: nhp_owner
+      POSTGRES_PASSWORD: nhp_dev_password
+      POSTGRES_DB: nhp
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5434:5432"
+    volumes:
+      - nhp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nhp_owner -d nhp"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  nhp_pgdata:
