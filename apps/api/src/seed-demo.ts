@@ -17,6 +17,9 @@ import { registerAdult } from './identity.js';
 import { registerFacility, approveFacility, claimCapability } from './facility.js';
 import { registerPractitioner, grantAffiliation, checkIn } from './practitioner.js';
 import { openEncounter, recordDiagnosis, recordAllergy, prescribe } from './clinical.js';
+import { hashPassword, enrolTotp, confirmTotp } from './auth.js';
+import { encryptField, blindIndex, normalisePhone } from './crypto.js';
+import { TOTP, Secret } from 'otpauth';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -79,6 +82,29 @@ async function main() {
     licenceNumber: 'KMPDC/12345',
     familyName: 'Wanjiru',
   });
+
+  // A clinical account with its own credentials and a second factor. The
+  // person-scoped account created at registration is the doctor's CITIZEN
+  // login; this is their clinical one, and the two must stay separate — a
+  // doctor must not reach their own medical record through a clinical
+  // session.
+  const doctorPhone = '0722111333';
+  const clinicalAccount = await prisma.account.create({
+    data: {
+      practitionerId: practitioner.id,
+      phone: encryptField(doctorPhone),
+      phoneIndex: blindIndex(doctorPhone, normalisePhone),
+      passwordHash: await hashPassword('demo-password-123'),
+      status: 'ACTIVE',
+    },
+  });
+
+  const { secret: totpSecret } = await enrolTotp(prisma, clinicalAccount.id, 'Dr A. Wanjiru');
+  await confirmTotp(
+    prisma,
+    clinicalAccount.id,
+    new TOTP({ secret: Secret.fromBase32(totpSecret) }).generate(),
+  );
 
   await grantAffiliation(prisma, {
     practitionerId: practitioner.id,
@@ -180,16 +206,32 @@ async function report() {
     include: { facility: true },
   });
 
-  console.log('DEMO CONTEXT — pass this header to the API:\n');
-  console.log(`  X-Practitioner-Id: ${practitioner?.id}\n`);
+  const clinical = await prisma.account.findFirst({
+    where: { practitionerId: { not: null } },
+  });
+
+  console.log('DEMO CREDENTIALS\n');
+  console.log('  phone     0722111333');
+  console.log('  password  demo-password-123');
+  console.log(
+    `  TOTP      ${clinical?.mfaSecret ? '(secret printed below)' : 'not enrolled'}\n`,
+  );
   console.log(`  doctor    Dr Amina Wanjiru · ${practitioner?.licences[0]?.licenceNumber}`);
   console.log(`  facility  ${session?.facility.name}`);
   console.log(`  session   expires ${session?.expiresAt.toISOString()}`);
   console.log(`  patient   ${patient?.displayNumber} · National ID 39104882`);
-  console.log('\ntry:');
+  if (clinical?.mfaSecret) {
+    const { decryptField } = await import('./crypto.js');
+    const secret = decryptField(clinical.mfaSecret);
+    console.log(`  TOTP secret  ${secret}`);
+    console.log(`  current code ${new TOTP({ secret: Secret.fromBase32(secret) }).generate()}`);
+  }
+
+  console.log('\nsign in:');
   console.log(
-    `  curl -s -H "X-Practitioner-Id: ${practitioner?.id}" \\\n` +
-      `    "http://localhost:4000/api/v1/persons/search?identifier=39104882" | jq`,
+    '  curl -sX POST localhost:4400/api/v1/auth/login \\\n' +
+      '    -H "Content-Type: application/json" \\\n' +
+      '    -d \'{"phone":"0722111333","password":"demo-password-123"}\'',
   );
 }
 

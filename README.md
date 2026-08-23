@@ -25,14 +25,11 @@ pnpm seed:demo      # one facility, one checked-in doctor, one patient
 pnpm serve          # http://localhost:4400/api/v1
 ```
 
-`seed:demo` prints an `X-Practitioner-Id`. Auth is not built yet, so the API
-identifies the clinician from that header — a **development shortcut** any
-client could forge, which is why the server refuses to start in production
-without an explicit override.
+`seed:demo` prints working credentials and a TOTP secret. Sign in with
+`POST /api/v1/auth/login`, complete the second factor, and use the returned
+bearer token.
 
-Note the id changes on every reseed, and `pnpm test` wipes the demo data.
-Re-run `pnpm seed:demo` afterwards and update the frontend's
-`NEXT_PUBLIC_DEMO_PRACTITIONER_ID`.
+`pnpm test` wipes the demo data — re-run `pnpm seed:demo` afterwards.
 
 Port 4400 is deliberate — 4000 is taken by another project on this machine.
 
@@ -144,6 +141,29 @@ refuses.
 - [x] **Phase 7** — Ministry analytics, suppression, surveillance
 - [x] **Phase 8** — referrals and loop closure
 - [x] **Phase 9** — hardening: offline sync, merge, rate limits, MFA
+
+## Authentication
+
+Argon2id passwords, 15-minute access tokens, rotating refresh tokens, and
+TOTP second factors. What the tests pin down:
+
+**Enumeration** — an unknown phone number and a wrong password return the
+same error with the same wording and comparable timing, so login cannot be
+used to discover who holds an account.
+
+**MFA is enforced server-side.** A clinical account with no second factor
+*cannot sign in at all* — `MFA_ENROLMENT_REQUIRED`. A client that "forgets"
+to prompt simply never receives a token. And a clinical token whose factor
+was never presented is refused by `requirePractitioner`, so holding a
+clinical identity is not sufficient on its own.
+
+**Refresh-token theft is detectable.** Tokens rotate on every use and are
+stored hashed. Replaying an already-used token revokes the entire family —
+logging out the thief *and* the real user, which is correct: being logged
+out is the only signal the real user gets that their session was stolen.
+
+**MFA state does not survive a refresh** for privileged accounts. A 30-day
+refresh token must not silently confer a second factor.
 
 ## Phase 1 — identity
 

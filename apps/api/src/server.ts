@@ -32,6 +32,22 @@ import { recommend, symptomPicker, TriageError } from './triage.js';
 import { findFacilities, FacilityError } from './facility.js';
 import { IdentityError } from './identity.js';
 import { PractitionerError } from './practitioner.js';
+import {
+  login,
+  completeMfa,
+  rotateRefreshToken,
+  revokeAllSessions,
+  verifyAccessToken,
+  contextFromClaims,
+  requirePractitioner,
+  requireSelf,
+  enrolTotp,
+  confirmTotp,
+  issueOtp,
+  hashPassword,
+  AuthError,
+  type AuthContext,
+} from './auth.js';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL } },
@@ -56,6 +72,16 @@ await app.register(cors, {
  * ID the caller may not see return the same shape.
  */
 app.setErrorHandler((error, request, reply) => {
+  if (error instanceof AuthError) {
+    return reply.status(error.status).send({
+      type: `https://nhp.health.go.ke/problems/${error.code.toLowerCase().replace(/_/g, '-')}`,
+      title: 'AuthError',
+      detail: error.message,
+      code: error.code,
+      instance: request.id,
+    });
+  }
+
   const known =
     error instanceof ClinicalError ||
     error instanceof ConsentError ||
@@ -133,25 +159,84 @@ app.get(`${v1}/vocab/symptoms`, async (req) => {
 // ---------------------------------------------------------------- sessions
 
 /**
- * Who is checked in.
+ * Resolves the caller from a bearer token.
  *
- * Auth is not built yet, so the practitioner comes from a header. This is a
- * DEVELOPMENT SHORTCUT and the server refuses to start with it outside
- * development — see the guard at the bottom of this file.
+ * Replaces the X-Practitioner-Id header this server started with. Anything
+ * that needs a clinical identity goes through requirePractitioner(), which
+ * also refuses a privileged token whose second factor was never presented.
  */
-function practitionerIdFrom(req: { headers: Record<string, unknown> }): string {
-  const id = req.headers['x-practitioner-id'];
-  if (typeof id !== 'string' || !id) {
-    throw new PractitionerError(
-      'No practitioner context. Send X-Practitioner-Id until auth lands.',
-      'NO_PRACTITIONER_CONTEXT',
-    );
+async function contextFrom(req: { headers: Record<string, unknown> }): Promise<AuthContext> {
+  const header = req.headers.authorization;
+  if (typeof header !== 'string' || !header.startsWith('Bearer ')) {
+    throw new AuthError('Sign in to continue', 'NO_SESSION');
   }
-  return id;
+  return contextFromClaims(await verifyAccessToken(header.slice(7)));
 }
 
+async function practitionerFrom(req: { headers: Record<string, unknown> }): Promise<string> {
+  return requirePractitioner(await contextFrom(req));
+}
+
+// -------------------------------------------------------------------- auth
+
+app.post<{ Body: { phone: string; password: string } }>(`${v1}/auth/login`, async (req) =>
+  login(prisma, {
+    phone: req.body.phone,
+    password: req.body.password,
+    deviceHint: String(req.headers['user-agent'] ?? '').slice(0, 120),
+  }),
+);
+
+app.post<{ Body: { mfaToken: string; code: string } }>(
+  `${v1}/auth/mfa`,
+  async (req) =>
+    completeMfa(prisma, {
+      mfaToken: req.body.mfaToken,
+      code: req.body.code,
+      deviceHint: String(req.headers['user-agent'] ?? '').slice(0, 120),
+    }),
+);
+
+app.post<{ Body: { refreshToken: string } }>(`${v1}/auth/refresh`, async (req) =>
+  rotateRefreshToken(
+    prisma,
+    req.body.refreshToken,
+    String(req.headers['user-agent'] ?? '').slice(0, 120),
+  ),
+);
+
+app.post(`${v1}/auth/logout`, async (req) => {
+  const ctx = await contextFrom(req);
+  return revokeAllSessions(prisma, ctx.accountId, 'USER_LOGOUT');
+});
+
+app.get(`${v1}/auth/me`, async (req) => {
+  const ctx = await contextFrom(req);
+  const session = ctx.practitionerId
+    ? await currentSession(prisma, ctx.practitionerId)
+    : null;
+  return {
+    accountId: ctx.accountId,
+    practitionerId: ctx.practitionerId ?? null,
+    ministryUserId: ctx.ministryUserId ?? null,
+    personId: ctx.personId ?? null,
+    mfaSatisfied: ctx.mfa,
+    checkedInAt: session?.facility.name ?? null,
+  };
+});
+
+app.post<{ Body: { label?: string } }>(`${v1}/auth/mfa/enrol`, async (req) => {
+  const ctx = await contextFrom(req);
+  return enrolTotp(prisma, ctx.accountId, req.body?.label ?? 'NHP account');
+});
+
+app.post<{ Body: { code: string } }>(`${v1}/auth/mfa/confirm`, async (req) => {
+  const ctx = await contextFrom(req);
+  return confirmTotp(prisma, ctx.accountId, req.body.code);
+});
+
 app.get(`${v1}/check-ins/current`, async (req) => {
-  const session = await currentSession(prisma, practitionerIdFrom(req));
+  const session = await currentSession(prisma, await practitionerFrom(req));
   if (!session) return null;
   return {
     id: session.id,
@@ -165,7 +250,7 @@ app.get(`${v1}/check-ins/current`, async (req) => {
 });
 
 app.get(`${v1}/check-ins/can-write`, async (req) =>
-  canWriteClinical(prisma, practitionerIdFrom(req)),
+  canWriteClinical(prisma, await practitionerFrom(req)),
 );
 
 // ----------------------------------------------------------------- persons
@@ -184,7 +269,7 @@ app.get<{ Querystring: { identifier?: string } }>(
       });
     }
 
-    const practitionerId = practitionerIdFrom(req);
+    const practitionerId = await practitionerFrom(req);
     const result = await searchByIdentifier(prisma, identifier);
 
     // Every search is logged, found or not. Denials are the fraud signal.
@@ -207,7 +292,7 @@ app.get<{ Querystring: { identifier?: string } }>(
 app.get<{ Params: { nhpId: string } }>(
   `${v1}/persons/:nhpId/summary`,
   async (req) => {
-    const practitionerId = practitionerIdFrom(req);
+    const practitionerId = await practitionerFrom(req);
     const gate = await canWriteClinical(prisma, practitionerId);
 
     const summary = await patientSummary(prisma, req.params.nhpId);
@@ -267,7 +352,7 @@ app.post<{
   };
 }>(`${v1}/encounters`, async (req) =>
   openEncounter(prisma, {
-    practitionerId: practitionerIdFrom(req),
+    practitionerId: await practitionerFrom(req),
     personId: req.body.personId,
     kind: req.body.kind,
     chiefComplaint: req.body.chiefComplaint,
@@ -279,7 +364,7 @@ app.post<{
   Body: { icd11Code: string; clinicalStatus?: 'SUSPECTED' | 'CONFIRMED'; isChronic?: boolean };
 }>(`${v1}/encounters/:id/conditions`, async (req) =>
   recordDiagnosis(prisma, {
-    practitionerId: practitionerIdFrom(req),
+    practitionerId: await practitionerFrom(req),
     encounterId: req.params.id,
     icd11Code: req.body.icd11Code,
     clinicalStatus: req.body.clinicalStatus,
@@ -301,7 +386,7 @@ app.post<{
   };
 }>(`${v1}/encounters/:id/medications`, async (req) =>
   prescribe(prisma, {
-    practitionerId: practitionerIdFrom(req),
+    practitionerId: await practitionerFrom(req),
     encounterId: req.params.id,
     ...req.body,
   }),
@@ -344,13 +429,11 @@ app.get(`${v1}/facilities`, async (req) => {
 
 const PORT = Number(process.env.PORT ?? 4000);
 
-// The header shortcut above trusts whatever the client claims. That is fine
-// for local development and a catastrophe anywhere else, so refuse to start.
-if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_HEADER_AUTH) {
+// JWT_SECRET is validated on first use, but failing at startup is far
+// better than failing on a clinician's first login.
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error(
-    'REFUSING TO START: this server identifies practitioners from an ' +
-      'X-Practitioner-Id header, which any client can forge. Build real auth ' +
-      'before deploying.',
+    'REFUSING TO START: JWT_SECRET is missing or shorter than 32 characters.',
   );
   process.exit(1);
 }

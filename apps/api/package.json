@@ -18,8 +18,11 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
+    "@node-rs/argon2": "^2.1.0",
     "@prisma/client": "^6.2.1",
-    "fastify": "^5.12.1"
+    "fastify": "^5.12.1",
+    "jose": "^6.2.10",
+    "otpauth": "^9.5.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
