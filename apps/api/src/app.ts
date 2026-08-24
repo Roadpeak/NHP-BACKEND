@@ -81,7 +81,7 @@ import {
 import { IdentityError, registerAdult } from './identity.js';
 import { PractitionerError } from './practitioner.js';
 import { assertTestHooksEnabled, readLastSmsCode } from './testhooks.js';
-import { decryptField } from './crypto.js';
+import { decryptField, encryptField, blindIndex, normalisePhone } from './crypto.js';
 import {
   login,
   completeMfa,
@@ -435,16 +435,46 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         familyName: b.familyName,
       });
 
+      // The CLINICAL account.
+      //
+      // `registerAdult` above created this person's own CITIZEN account on
+      // the same phone. `account_one_owner_ck` allows exactly one owner per
+      // account, so a clinician who is also a patient holds two — and
+      // without this one they could sign in only as a patient and would
+      // never reach the encounter screen at all.
+      //
+      // It is keyed on a derived identifier rather than the phone, because
+      // the phone already belongs to the citizen account. The clinician
+      // signs in with their LICENCE NUMBER, which is what they carry to
+      // work and what their facility knows them by.
+      const clinicalLogin = `${b.licenceNumber.trim().toUpperCase()}`;
+      await prisma.account.create({
+        data: {
+          practitionerId: practitioner.id,
+          phone: encryptField(clinicalLogin),
+          phoneIndex: blindIndex(clinicalLogin, normalisePhone),
+          passwordHash: await hashPassword(b.password),
+          status: 'ACTIVE',
+        },
+      });
+
       return {
         nhpId: person.displayNumber,
         practitionerId: practitioner.id,
         licenceNumber: licence?.licenceNumber ?? null,
+        // What they sign in with as a clinician. Said explicitly, because
+        // it is NOT the phone number they just typed — that one belongs to
+        // their own patient record.
+        clinicalLogin,
         verification,
         // Says plainly what they still cannot do, so the UI never implies
         // a registered clinician can open a record.
         message:
           'Registration received. You cannot record clinical data until a ' +
           'facility affiliation is granted.',
+        loginNote:
+          'Sign in to the health workers portal with your LICENCE NUMBER, ' +
+          'not your phone. Your phone signs you in to your own patient record.',
       };
     },
   );

@@ -1844,3 +1844,133 @@ describe('the admin registers', () => {
     });
   });
 });
+
+describe('a registered clinician can actually sign in as one', () => {
+  /**
+   * THE REGRESSION. `/auth/register/practitioner` created the person, their
+   * CITIZEN account and the practitioner record — and no clinical account
+   * at all. So a nurse who registered could sign in only as a patient, land
+   * on the citizen screen, and never reach the encounter screen.
+   *
+   * The existing tests missed it because they asserted registration grants
+   * NOTHING, which was true, and never asked whether the clinician could
+   * sign in as a clinician.
+   */
+  const post = (url: string, payload: Record<string, unknown>) =>
+    app.inject({ method: 'POST', url: `/api/v1${url}`, payload });
+
+  it('creates a clinical account, separate from the citizen one', async () => {
+    seq++;
+    const licenceNumber = `NCK/2026/L${String(seq).padStart(4, '0')}`;
+    const body = {
+      nationalId: `830000${String(seq).padStart(2, '0')}`,
+      phone: `07200000${String(seq).padStart(2, '0')}`,
+      givenName: 'Joseph',
+      familyName: 'Mwangi',
+      sexAtBirth: 'MALE',
+      dateOfBirth: '1988-02-19',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      password: 'a-long-enough-password',
+      cadre: 'NURSE',
+      licenceNumber,
+    };
+
+    const res = await post('/auth/register/practitioner', body);
+    expect(res.statusCode).toBe(200);
+
+    const practitionerId = res.json().practitionerId;
+    const account = await prisma.account.findFirst({
+      where: { practitionerId },
+      select: { id: true, personId: true, ministryUserId: true },
+    });
+
+    // Two accounts, one human being: `account_one_owner_ck` allows exactly
+    // one owner each, so the clinical account carries only practitionerId.
+    expect(account).toBeTruthy();
+    expect(account!.personId).toBeNull();
+    expect(account!.ministryUserId).toBeNull();
+  });
+
+  it('THE SIGN-IN — the clinical account authenticates on the licence number', async () => {
+    seq++;
+    const licenceNumber = `NCK/2026/M${String(seq).padStart(4, '0')}`;
+    const phone = `07210000${String(seq).padStart(2, '0')}`;
+    const password = 'a-long-enough-password';
+
+    await post('/auth/register/practitioner', {
+      nationalId: `840000${String(seq).padStart(2, '0')}`,
+      phone,
+      givenName: 'Joseph',
+      familyName: 'Mwangi',
+      sexAtBirth: 'MALE',
+      dateOfBirth: '1988-02-19',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      password,
+      cadre: 'NURSE',
+      licenceNumber,
+    });
+
+    const login = await post('/auth/login', { phone: licenceNumber, password });
+    // A privileged account must enrol a second factor before it can sign
+    // in — reaching THAT refusal proves the account exists and is clinical.
+    expect(login.statusCode).toBe(403);
+    expect(login.json().code).toBe('MFA_ENROLMENT_REQUIRED');
+  });
+
+  it('the phone still signs them in to their OWN patient record', async () => {
+    seq++;
+    const phone = `07220000${String(seq).padStart(2, '0')}`;
+    const password = 'a-long-enough-password';
+
+    await post('/auth/register/practitioner', {
+      nationalId: `850000${String(seq).padStart(2, '0')}`,
+      phone,
+      givenName: 'Joseph',
+      familyName: 'Mwangi',
+      sexAtBirth: 'MALE',
+      dateOfBirth: '1988-02-19',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      password,
+      cadre: 'NURSE',
+      licenceNumber: `NCK/2026/N${String(seq).padStart(4, '0')}`,
+    });
+
+    const login = await post('/auth/login', { phone, password });
+    expect(login.json().status).toBe('AUTHENTICATED');
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${login.json().accessToken}` },
+    });
+    // Their citizen account: a personId and NO practitionerId. A clinician
+    // is a person too, and this is the record they would be treated under.
+    expect(me.json().personId).toBeTruthy();
+    expect(me.json().practitionerId).toBeNull();
+  });
+
+  it('tells them what to sign in with, since it is not the phone', async () => {
+    seq++;
+    const res = await post('/auth/register/practitioner', {
+      nationalId: `860000${String(seq).padStart(2, '0')}`,
+      phone: `07230000${String(seq).padStart(2, '0')}`,
+      givenName: 'Joseph',
+      familyName: 'Mwangi',
+      sexAtBirth: 'MALE',
+      dateOfBirth: '1988-02-19',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      password: 'a-long-enough-password',
+      cadre: 'NURSE',
+      licenceNumber: `NCK/2026/P${String(seq).padStart(4, '0')}`,
+    });
+
+    // Silence here sends a clinician to the worker portal with a phone that
+    // signs them in as a patient — the exact confusion this caused.
+    expect(res.json().clinicalLogin).toBeTruthy();
+    expect(res.json().loginNote).toMatch(/licence number/i);
+  });
+});
