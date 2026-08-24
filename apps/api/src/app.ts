@@ -82,6 +82,7 @@ import { IdentityError, registerAdult } from './identity.js';
 import { PractitionerError } from './practitioner.js';
 import { assertTestHooksEnabled, readLastSmsCode } from './testhooks.js';
 import { decryptField, encryptField, blindIndex, normalisePhone } from './crypto.js';
+import { encryptPhoto, decryptPhoto, PhotoError } from './photo.js';
 import {
   login,
   completeMfa,
@@ -213,6 +214,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       error instanceof TriageError ||
       error instanceof FacilityError ||
       error instanceof IdentityError ||
+      error instanceof PhotoError ||
       error instanceof PractitionerError;
 
     if (known) {
@@ -310,6 +312,11 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     countyId: { type: 'string', minLength: 1 },
     subcountyId: { type: 'string', minLength: 1 },
     password: { type: 'string', minLength: PASSWORD_MIN },
+    // Optional at registration: a passport photo helps a clinician confirm
+    // they have the right patient, but refusing to register someone who has
+    // no way to take one would exclude exactly the people who most need a
+    // health record.
+    photo: { type: 'string', maxLength: 400_000 },
   };
 
   const personRequired = [
@@ -336,6 +343,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     countyId: string;
     subcountyId: string;
     password: string;
+    photo?: string;
   }
 
   /** Parses a date the form supplies, refusing anything unusable. */
@@ -373,6 +381,16 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         // Hashed here and never stored or logged in the clear.
         passwordHash: await hashPassword(b.password),
       });
+
+      if (b.photo) {
+        // Validated then encrypted. `encryptPhoto` refuses anything whose
+        // bytes are not really an image, so a data URL claiming to be a
+        // JPEG cannot smuggle in a document.
+        await prisma.person.update({
+          where: { id: person.id },
+          data: { photo: encryptPhoto(b.photo) },
+        });
+      }
 
       // Deliberately no session: the client signs in through the normal
       // path, so there is exactly one way to obtain a token.
@@ -424,6 +442,13 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         subcountyId: b.subcountyId,
         passwordHash: await hashPassword(b.password),
       });
+
+      if (b.photo) {
+        await prisma.person.update({
+          where: { id: person.id },
+          data: { photo: encryptPhoto(b.photo) },
+        });
+      }
 
       const { practitioner, licence, verification } = await registerPractitioner(prisma, {
         personId: person.id,
@@ -541,6 +566,66 @@ export async function buildApp(prismaOverride?: PrismaClient) {
           'Facility registered and awaiting Ministry approval. Staff cannot ' +
           'be affiliated until it is approved.',
       };
+    },
+  );
+
+  /**
+   * A person's photo.
+   *
+   * Behind the same authorisation as the record it belongs to: a clinician
+   * with an open check-in, or the citizen themselves. Never a public URL —
+   * a face plus a name outside every guard the system has is precisely what
+   * the encryption exists to prevent.
+   */
+  app.get<{ Params: { nhpId: string } }>(`${v1}/persons/:nhpId/photo`, async (req) => {
+    await practitionerFrom(req);
+    const personId = await resolvePersonId(prisma, req.params.nhpId);
+    const person = await prisma.person.findUnique({
+      where: { id: personId },
+      select: { photo: true },
+    });
+    return { photo: decryptPhoto(person?.photo ?? null) };
+  });
+
+  app.get(`${v1}/persons/me/photo`, async (req) => {
+    const ctx = await contextFrom(req);
+    // `requireSelf(ctx, ctx.personId)` would compare a value to itself and
+    // pass for anyone — including a practitioner whose personId is absent,
+    // where empty equals empty. The account KIND is what to check here.
+    if (!ctx.personId) {
+      throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+    }
+    const person = await prisma.person.findUnique({
+      where: { id: ctx.personId },
+      select: { photo: true },
+    });
+    return { photo: decryptPhoto(person?.photo ?? null) };
+  });
+
+  /** A citizen replacing their own photo. */
+  app.post<{ Body: { photo: string } }>(
+    `${v1}/persons/me/photo`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['photo'],
+          properties: { photo: { type: 'string', maxLength: 400_000 } },
+        },
+      },
+    },
+    async (req) => {
+      const ctx = await contextFrom(req);
+      if (!ctx.personId) {
+        throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+      }
+      // Their own record only: the id comes from the token, never the body,
+      // so there is no parameter to tamper with.
+      await prisma.person.update({
+        where: { id: ctx.personId },
+        data: { photo: encryptPhoto(req.body.photo) },
+      });
+      return { updated: true };
     },
   );
 

@@ -1974,3 +1974,183 @@ describe('a registered clinician can actually sign in as one', () => {
     expect(res.json().loginNote).toMatch(/licence number/i);
   });
 });
+
+describe('passport photos', () => {
+  /**
+   * A face is biometric data under the Data Protection Act. It gets the same
+   * AES-256-GCM treatment as a National ID, is served only behind the
+   * authorisation of the record it belongs to, and never has a public URL.
+   *
+   * The tests that matter are the ones that stop something which is not an
+   * image being stored as one — a data URL's MIME type is a claim by the
+   * caller, not a fact.
+   */
+  const JPEG = `data:image/jpeg;base64,${Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
+  ]).toString('base64')}`;
+  const PNG = `data:image/png;base64,${Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]).toString('base64')}`;
+
+  const post = (url: string, payload: Record<string, unknown>) =>
+    app.inject({ method: 'POST', url: `/api/v1${url}`, payload });
+
+  const citizenBody = (over: Record<string, unknown> = {}) => {
+    seq++;
+    return {
+      nationalId: `870000${String(seq).padStart(2, '0')}`,
+      phone: `07240000${String(seq).padStart(2, '0')}`,
+      givenName: 'Grace',
+      familyName: 'Achieng',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: '1993-11-08',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      password: 'a-long-enough-password',
+      ...over,
+    };
+  };
+
+  it('stores a photo supplied at registration', async () => {
+    const body = citizenBody({ photo: JPEG });
+    const res = await post('/auth/register/citizen', body);
+    expect(res.statusCode).toBe(200);
+
+    const person = await prisma.person.findFirst({
+      where: { displayNumber: res.json().nhpId },
+      select: { photo: true },
+    });
+    expect(person!.photo).toBeTruthy();
+    // Encrypted at rest: the stored column must not be the data URL.
+    expect(person!.photo).not.toBe(JPEG);
+    expect(person!.photo).not.toContain('data:image');
+  });
+
+  it('registers happily with no photo at all', async () => {
+    // Refusing someone with no way to take a photo would exclude exactly
+    // the people who most need a health record.
+    const res = await post('/auth/register/citizen', citizenBody());
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('accepts PNG as well as JPEG', async () => {
+    expect((await post('/auth/register/citizen', citizenBody({ photo: PNG }))).statusCode).toBe(200);
+  });
+
+  it('THE FORGERY GUARD — refuses a file whose bytes are not an image', async () => {
+    // `data:image/jpeg;base64,<an HTML page>` stored and later served with
+    // an image content type is how a stored XSS gets into a system that
+    // believed it only held pictures.
+    const html = `data:image/jpeg;base64,${Buffer.from(
+      '<html><script>alert(1)</script></html>',
+    ).toString('base64')}`;
+
+    const res = await post('/auth/register/citizen', citizenBody({ photo: html }));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PHOTO_NOT_AN_IMAGE');
+  });
+
+  it('refuses a format a browser cannot display', async () => {
+    const svg = `data:image/svg+xml;base64,${Buffer.from('<svg/>').toString('base64')}`;
+    // SVG is an executable document, not a photograph.
+    const res = await post('/auth/register/citizen', citizenBody({ photo: svg }));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PHOTO_WRONG_FORMAT');
+  });
+
+  it('refuses a photo that was never resized', async () => {
+    const huge = `data:image/jpeg;base64,${Buffer.concat([
+      Buffer.from([0xff, 0xd8, 0xff]),
+      Buffer.alloc(210 * 1024, 0x41),
+    ]).toString('base64')}`;
+
+    const res = await post('/auth/register/citizen', citizenBody({ photo: huge }));
+    expect(res.statusCode).toBe(400);
+    expect(['PHOTO_TOO_LARGE', 'MALFORMED_REQUEST']).toContain(res.json().code);
+  });
+
+  it('refuses something that is not a data URL', async () => {
+    const res = await post(
+      '/auth/register/citizen',
+      citizenBody({ photo: 'https://example.com/face.jpg' }),
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PHOTO_MALFORMED');
+  });
+
+  it('serves a photo to a clinician, and refuses an unauthenticated caller', async () => {
+    const doctor = await clinician();
+    const body = citizenBody({ photo: JPEG });
+    const created = await post('/auth/register/citizen', body);
+    const nhpId = created.json().nhpId;
+
+    const asDoctor = await app.inject({
+      method: 'GET',
+      url: `/api/v1/persons/${nhpId}/photo`,
+      headers: { authorization: `Bearer ${doctor.accessToken}` },
+    });
+    expect(asDoctor.statusCode).toBe(200);
+    expect(asDoctor.json().photo).toBe(JPEG);
+
+    // A face plus a name outside every guard is what the encryption exists
+    // to prevent.
+    const anon = await app.inject({ method: 'GET', url: `/api/v1/persons/${nhpId}/photo` });
+    expect(anon.statusCode).toBe(401);
+  });
+
+  it('refuses a Ministry analyst the photo', async () => {
+    const { accessToken } = await ministryUserAs('ANALYST');
+    const created = await post('/auth/register/citizen', citizenBody({ photo: JPEG }));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/persons/${created.json().nhpId}/photo`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('lets a citizen read and replace their own photo', async () => {
+    const body = citizenBody();
+    await post('/auth/register/citizen', body);
+
+    const login = await post('/auth/login', { phone: body.phone, password: body.password });
+    const token = login.json().accessToken;
+
+    const before = await app.inject({
+      method: 'GET',
+      url: '/api/v1/persons/me/photo',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(before.json().photo).toBeNull();
+
+    const set = await app.inject({
+      method: 'POST',
+      url: '/api/v1/persons/me/photo',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { photo: PNG },
+    });
+    expect(set.statusCode).toBe(200);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/v1/persons/me/photo',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(after.json().photo).toBe(PNG);
+  });
+
+  it('THE OWNERSHIP RULE — a practitioner cannot use the citizen photo route', async () => {
+    const doctor = await clinician();
+    // `requireSelf(ctx, ctx.personId)` would compare a value to itself and
+    // pass for anyone, including an account with no personId at all.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/persons/me/photo',
+      headers: { authorization: `Bearer ${doctor.accessToken}` },
+      payload: { photo: JPEG },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('NOT_A_CITIZEN');
+  });
+});

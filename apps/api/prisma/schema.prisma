@@ -497,6 +497,14 @@ model Person {
   dateOfBirth       DateTime   @map("date_of_birth") @db.Date
   dobPrecision      Precision  @default(EXACT) @map("dob_precision")
   bloodGroup        BloodGroup? @map("blood_group")
+  /**
+   * Passport photo, encrypted at rest like every other identifier.
+   *
+   * A face is biometric data under the Data Protection Act, so it gets the
+   * same AES-256-GCM treatment as a National ID rather than a public URL —
+   * there is no object store to leak from and nothing a CDN can cache.
+   */
+  photo             String?     @map("photo_enc")
   lifeStatus        LifeStatus @default(ALIVE) @map("life_status")
   deceasedAt        DateTime?  @map("deceased_at")
   countyId          String     @map("county_id")
