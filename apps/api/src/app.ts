@@ -81,6 +81,7 @@ import {
 import { IdentityError, registerAdult } from './identity.js';
 import { PractitionerError } from './practitioner.js';
 import { assertTestHooksEnabled, readLastSmsCode } from './testhooks.js';
+import { decryptField } from './crypto.js';
 import {
   login,
   completeMfa,
@@ -1143,6 +1144,287 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     const { days } = req.query as { days?: string };
     return licencesExpiringSoon(prisma, days ? Number(days) : 30);
   });
+
+  /**
+   * The facility register, with the analytics a registrar reads it for.
+   *
+   * Counts by status, KEPH level and ownership — the three things that
+   * decide what a facility may do. Ownership is not a curiosity here: it
+   * decides who may staff every facility in the count.
+   */
+  app.get(`${v1}/admin/facilities/stats`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['REGISTRAR']);
+
+    const [byStatus, byLevel, byOwnership, byCounty, withCapabilities, total] =
+      await Promise.all([
+        prisma.facility.groupBy({ by: ['registrationStatus'], _count: { _all: true } }),
+        prisma.facility.groupBy({
+          by: ['kephLevel'],
+          where: { registrationStatus: 'ACTIVE' },
+          _count: { _all: true },
+        }),
+        prisma.facility.groupBy({
+          by: ['ownership'],
+          where: { registrationStatus: 'ACTIVE' },
+          _count: { _all: true },
+        }),
+        prisma.facility.groupBy({
+          by: ['countyId'],
+          where: { registrationStatus: 'ACTIVE' },
+          _count: { _all: true },
+        }),
+        prisma.facility.count({
+          where: { registrationStatus: 'ACTIVE', capabilities: { some: {} } },
+        }),
+        prisma.facility.count(),
+      ]);
+
+    const active = byStatus.find((s) => s.registrationStatus === 'ACTIVE')?._count._all ?? 0;
+
+    return {
+      total,
+      byStatus: byStatus.map((r) => ({ status: r.registrationStatus, count: r._count._all })),
+      byKephLevel: byLevel
+        .map((r) => ({ kephLevel: r.kephLevel, count: r._count._all }))
+        .sort((a, b) => a.kephLevel - b.kephLevel),
+      byOwnership: byOwnership
+        .map((r) => ({ ownership: r.ownership, count: r._count._all }))
+        .sort((a, b) => b.count - a.count),
+      byCounty: byCounty
+        .map((r) => ({ countyId: r.countyId, count: r._count._all }))
+        .sort((a, b) => b.count - a.count),
+      // A facility with no declared capabilities cannot be recommended to a
+      // patient, so it is registered but invisible to care routing.
+      activeWithoutCapabilities: active - withCapabilities,
+    };
+  });
+
+  /**
+   * The workforce register.
+   *
+   * Counts by cadre, by licence status and by affiliation, because an
+   * unaffiliated clinician is registered but cannot treat anyone — a number
+   * that looks like workforce and is not.
+   */
+  app.get(`${v1}/admin/practitioners/stats`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['REGISTRAR']);
+
+    const [byCadre, byStatus, byCounty, total, affiliated, licensed] = await Promise.all([
+      prisma.practitioner.groupBy({ by: ['cadre'], _count: { _all: true } }),
+      prisma.practitioner.groupBy({ by: ['status'], _count: { _all: true } }),
+      prisma.practitioner.groupBy({ by: ['countyId'], _count: { _all: true } }),
+      prisma.practitioner.count(),
+      prisma.practitioner.count({ where: { affiliations: { some: { status: 'ACTIVE' } } } }),
+      prisma.practitioner.count({
+        where: { licences: { some: { status: 'ACTIVE', expiresOn: { gte: new Date() } } } },
+      }),
+    ]);
+
+    return {
+      total,
+      byCadre: byCadre
+        .map((r) => ({ cadre: r.cadre, count: r._count._all }))
+        .sort((a, b) => b.count - a.count),
+      byStatus: byStatus.map((r) => ({ status: r.status, count: r._count._all })),
+      byCounty: byCounty
+        .map((r) => ({ countyId: r.countyId, count: r._count._all }))
+        .sort((a, b) => b.count - a.count),
+      // The two numbers that separate "registered" from "able to work".
+      withActiveLicence: licensed,
+      withActiveAffiliation: affiliated,
+      unaffiliated: total - affiliated,
+    };
+  });
+
+  /** The workforce list itself, paged. Administrative fields only. */
+  app.get<{ Querystring: { cadre?: string; countyId?: string; skip?: string } }>(
+    `${v1}/admin/practitioners`,
+    async (req) => {
+      const ctx = await contextFrom(req);
+      requireMinistry(ctx, ['REGISTRAR']);
+      const { cadre, countyId, skip } = req.query;
+
+      const where = {
+        ...(cadre ? { cadre: cadre as never } : {}),
+        ...(countyId ? { countyId } : {}),
+      };
+
+      const [rows, total] = await Promise.all([
+        prisma.practitioner.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: skip ? Number(skip) : 0,
+          take: 50,
+          select: {
+            id: true,
+            cadre: true,
+            status: true,
+            countyId: true,
+            createdAt: true,
+            licences: {
+              select: { regulator: true, licenceNumber: true, status: true, expiresOn: true },
+              orderBy: { expiresOn: 'desc' },
+              take: 1,
+            },
+            affiliations: {
+              where: { status: 'ACTIVE' },
+              select: { facility: { select: { name: true } } },
+            },
+          },
+        }),
+        prisma.practitioner.count({ where }),
+      ]);
+
+      return {
+        total,
+        rows: rows.map((p) => ({
+          practitionerId: p.id,
+          cadre: p.cadre,
+          status: p.status,
+          countyId: p.countyId,
+          registeredAt: p.createdAt,
+          licence: p.licences[0] ?? null,
+          facilities: p.affiliations.map((a) => a.facility.name),
+        })),
+      };
+    },
+  );
+
+  /**
+   * The population register.
+   *
+   * Counts only. There is deliberately NO endpoint that lists citizens:
+   * `nhp_analyst` has every table grant revoked but aggregates, and a
+   * browsable register of every citizen in Kenya would be the single
+   * highest-value target in the country. An administrator running the
+   * programme needs distributions, not names.
+   */
+  app.get(`${v1}/admin/citizens/stats`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['REGISTRAR']);
+
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+    const [total, byCounty, byMaturity, byVerification, bySex, thisMonth, deceased] =
+      await Promise.all([
+        prisma.person.count(),
+        prisma.person.groupBy({ by: ['countyId'], _count: { _all: true } }),
+        prisma.person.groupBy({ by: ['maturity'], _count: { _all: true } }),
+        prisma.person.groupBy({ by: ['verificationState'], _count: { _all: true } }),
+        prisma.person.groupBy({ by: ['sexAtBirth'], _count: { _all: true } }),
+        prisma.person.count({ where: { createdAt: { gte: monthStart } } }),
+        prisma.person.count({ where: { lifeStatus: { not: 'ALIVE' } } }),
+      ]);
+
+    return {
+      total,
+      registeredThisMonth: thisMonth,
+      byCounty: byCounty
+        .map((r) => ({ countyId: r.countyId, count: r._count._all }))
+        .sort((a, b) => b.count - a.count),
+      byMaturity: byMaturity.map((r) => ({ maturity: r.maturity, count: r._count._all })),
+      // The gap an administrator is actually trying to close: a person whose
+      // identity is unverified still has a record, but a facility cannot
+      // trust the ID they present.
+      byVerification: byVerification.map((r) => ({
+        state: r.verificationState,
+        count: r._count._all,
+      })),
+      bySex: bySex.map((r) => ({ sex: r.sexAtBirth, count: r._count._all })),
+      notAlive: deceased,
+    };
+  });
+
+  /**
+   * Looking up ONE citizen, for a support case.
+   *
+   * Deliberately a lookup and not a list: an exact National ID or NHP
+   * number returns one person or none. There is no way to page through the
+   * register, so a leaked Ministry account cannot be used to exfiltrate it.
+   *
+   * Returns registration details ONLY — never clinical data, which lives
+   * behind the practitioner check-in gate and is not a Ministry capability
+   * at any role.
+   *
+   * Every lookup is written to the citizen's own access log and appears on
+   * their access screen, exactly like a clinician opening their record. An
+   * administrative power that the subject cannot see is the one that gets
+   * abused.
+   */
+  app.get<{ Querystring: { identifier?: string } }>(
+    `${v1}/admin/citizens/lookup`,
+    async (req) => {
+      const ctx = await contextFrom(req);
+      const ministryUserId = requireMinistry(ctx, ['REGISTRAR']);
+
+      const identifier = (req.query.identifier ?? '').trim();
+      if (identifier.length < 4) {
+        throw new IdentityError(
+          'Enter a full National ID or NHP number',
+          'MISSING_IDENTIFIER',
+        );
+      }
+
+      const found = await searchByIdentifier(prisma, identifier);
+      const match =
+        found.match ??
+        (await prisma.person
+          .findUnique({
+            where: { displayNumber: identifier.toUpperCase() },
+            select: {
+              id: true,
+              displayNumber: true,
+              givenName: true,
+              familyName: true,
+              dateOfBirth: true,
+              maturity: true,
+              sexAtBirth: true,
+              verificationState: true,
+              countyId: true,
+              lifeStatus: true,
+              createdAt: true,
+            },
+          })
+          .then((p) =>
+            p
+              ? {
+                  ...p,
+                  givenName: decryptField(p.givenName),
+                  familyName: decryptField(p.familyName),
+                }
+              : null,
+          ));
+
+      if (match) {
+        // Logged BEFORE returning, and as MINISTRY — logging a registrar as
+        // a practitioner would put a clinician who never opened the record
+        // on that citizen's own access screen.
+        await logAccess(prisma, {
+          personId: match.id,
+          practitionerId: ministryUserId,
+          actorKind: 'MINISTRY',
+          action: 'SEARCH',
+          tierReached: 'TIER_1_EMERGENCY',
+          reason: 'ADMIN',
+          outcome: 'GRANTED',
+          requestId: req.id,
+          targetTable: 'person',
+          targetId: match.id,
+        });
+      }
+
+      req.log.warn(
+        { ministryUserId, found: Boolean(match) },
+        'ministry citizen lookup',
+      );
+
+      // No dependants, no clinical content, no listing — one person or none.
+      return { match: match ?? null };
+    },
+  );
 
   /** Break-glass events awaiting review. The AUDITOR's queue. */
   app.get(`${v1}/admin/break-glass/pending`, async (req) => {

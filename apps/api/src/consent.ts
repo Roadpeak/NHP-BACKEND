@@ -387,6 +387,7 @@ export async function breakGlass(db: Db, input: BreakGlassInput, now: Date = new
   await db.accessLog.create({
     data: {
       personId: input.personId,
+      // Always a practitioner: break-glass is a clinician at a bedside.
       actorKind: 'PRACTITIONER',
       actorId: input.practitionerId,
       checkInId: input.checkInId,
@@ -583,6 +584,13 @@ export async function logAccess(
   input: {
     personId: string;
     practitionerId: string;
+    /**
+     * Who is acting. Defaults to PRACTITIONER because that is almost every
+     * caller, but a Ministry registrar looking up a registration is NOT a
+     * practitioner — logging them as one would put a clinician who never
+     * opened the record on that citizen's own access screen.
+     */
+    actorKind?: 'PRACTITIONER' | 'FACILITY_ADMIN' | 'MINISTRY' | 'PATIENT' | 'GUARDIAN' | 'SYSTEM';
     checkInId?: string;
     facilityId?: string;
     action: 'SEARCH' | 'VIEW_SUMMARY' | 'VIEW_RECORD' | 'WRITE' | 'EXPORT' | 'PRINT';
@@ -608,7 +616,7 @@ export async function logAccess(
   return db.accessLog.create({
     data: {
       personId: input.personId,
-      actorKind: 'PRACTITIONER',
+      actorKind: input.actorKind ?? 'PRACTITIONER',
       actorId: input.practitionerId,
       checkInId: input.checkInId ?? null,
       facilityId: input.facilityId ?? null,

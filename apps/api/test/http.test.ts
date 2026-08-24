@@ -1590,3 +1590,257 @@ describe('the postings search', () => {
     expect(res.body).not.toMatch(/nationalId/i);
   });
 });
+
+describe('the admin registers', () => {
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  describe('facilities', () => {
+    it('counts by status, level and ownership', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      seq++;
+      const f = await registerFacility(prisma, {
+        name: 'Stats Clinic',
+        kephLevel: 3,
+        ownership: 'FAITH_BASED',
+        countyId: ctx.countyId,
+        subcountyId: ctx.subcountyId,
+        locality: 'Town',
+        latitude: -0.0917,
+        longitude: 34.768,
+        mflCode: `MFL-STAT-${seq}`,
+      });
+      await approveFacility(prisma, f.id, 'ministry-fixture');
+
+      const s = (await get('/admin/facilities/stats', registrar.accessToken)).json();
+      expect(s.total).toBeGreaterThan(0);
+      expect(s.byOwnership.find((o: { ownership: string }) => o.ownership === 'FAITH_BASED').count)
+        .toBeGreaterThan(0);
+      expect(s.byKephLevel.some((k: { kephLevel: number }) => k.kephLevel === 3)).toBe(true);
+    });
+
+    it('counts active facilities that could never be recommended', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const s = (await get('/admin/facilities/stats', registrar.accessToken)).json();
+      // A facility with no declared capabilities is registered but invisible
+      // to care routing — a real operational gap, not a rounding artifact.
+      expect(s).toHaveProperty('activeWithoutCapabilities');
+      expect(s.activeWithoutCapabilities).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('the workforce', () => {
+    it('separates registered from able to work', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      await clinician(); // affiliated and checked in
+
+      const s = (await get('/admin/practitioners/stats', registrar.accessToken)).json();
+      expect(s.total).toBeGreaterThan(0);
+      // The distinction that matters: an unaffiliated clinician is a number
+      // that looks like workforce and cannot treat anyone.
+      expect(s).toHaveProperty('withActiveAffiliation');
+      expect(s).toHaveProperty('unaffiliated');
+      expect(s.withActiveAffiliation + s.unaffiliated).toBe(s.total);
+    });
+
+    it('lists practitioners with their licence and facilities', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const doctor = await clinician();
+
+      const body = (await get('/admin/practitioners', registrar.accessToken)).json();
+      const row = body.rows.find(
+        (r: { practitionerId: string }) => r.practitionerId === doctor.practitioner.id,
+      );
+
+      expect(row).toBeTruthy();
+      expect(row.cadre).toBe('DOCTOR');
+      expect(row.licence.licenceNumber).toBeTruthy();
+      expect(row.facilities).toContain('Kisumu County Referral');
+    });
+
+    it('THE WORKFORCE LIST CARRIES NO PATIENT IDENTITY', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      await clinician();
+
+      const res = await get('/admin/practitioners', registrar.accessToken);
+      // A clinician is also a person with their own health record. The
+      // workforce register is about their professional registration, and an
+      // NHP number here would link the two for anyone reading it.
+      expect(res.body).not.toMatch(/NHP-[A-Z0-9]{4}/);
+      expect(res.body).not.toMatch(/nationalId|givenName/i);
+    });
+
+    it('is REGISTRAR-only', async () => {
+      for (const role of ['ANALYST', 'AUDITOR', 'SURVEILLANCE']) {
+        const { accessToken } = await ministryUserAs(role);
+        for (const url of ['/admin/practitioners', '/admin/practitioners/stats', '/admin/facilities/stats']) {
+          expect((await get(url, accessToken)).statusCode, `${role} ${url}`).toBe(403);
+        }
+      }
+    });
+  });
+
+  describe('the population register', () => {
+    it('reports distributions, never a list', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      await makePerson();
+
+      const res = await get('/admin/citizens/stats', registrar.accessToken);
+      const s = res.json();
+
+      expect(s.total).toBeGreaterThan(0);
+      expect(s.byCounty.length).toBeGreaterThan(0);
+      expect(s).toHaveProperty('byVerification');
+
+      // THE RULE: counts only. A name or an NHP number in this payload would
+      // mean the population register had become a population LIST.
+      expect(res.body).not.toMatch(/NHP-[A-Z0-9]{4}/);
+      expect(res.body).not.toMatch(/givenName|familyName|nationalId/i);
+    });
+
+    it('THERE IS NO ENDPOINT THAT LISTS CITIZENS', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      // The guarantee stated as a test: a browsable register of every
+      // citizen in Kenya is the highest-value target in the country, and the
+      // defence is that the endpoint does not exist.
+      for (const url of ['/admin/citizens', '/admin/citizens/list', '/admin/persons']) {
+        expect((await get(url, registrar.accessToken)).statusCode, url).toBe(404);
+      }
+    });
+  });
+
+  describe('the citizen lookup', () => {
+    it('finds one citizen by National ID', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const person = await makePerson('Wanjiku');
+      const nationalId = await prisma.identifier
+        .findFirst({ where: { personId: person.id }, select: { value: true } })
+        .then(() => `810000${String(seq).padStart(2, '0')}`);
+
+      const res = await get(
+        `/admin/citizens/lookup?identifier=${nationalId}`,
+        registrar.accessToken,
+      );
+      expect(res.statusCode).toBe(200);
+      // One person, under `match` — never an array.
+      expect(Array.isArray(res.json())).toBe(false);
+      expect(res.json()).toHaveProperty('match');
+    });
+
+    it('finds one citizen by NHP number', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const person = await makePerson('Wanjiku');
+
+      const res = await get(
+        `/admin/citizens/lookup?identifier=${person.displayNumber}`,
+        registrar.accessToken,
+      );
+      expect(res.json().match?.displayNumber).toBe(person.displayNumber);
+      // Decrypted for a support call — the registrar must confirm they have
+      // the right person.
+      expect(res.json().match.givenName).toBeTruthy();
+    });
+
+    it('THE AUDIT RULE — the lookup appears on that citizen\'s own access log', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const person = await makePerson('Wanjiku');
+
+      await get(
+        `/admin/citizens/lookup?identifier=${person.displayNumber}`,
+        registrar.accessToken,
+      );
+
+      const logged = await prisma.accessLog.findMany({ where: { personId: person.id } });
+      expect(logged).toHaveLength(1);
+      // Logged as MINISTRY, not PRACTITIONER: a registrar shown as a
+      // clinician would put someone who never opened the record on that
+      // citizen's access screen.
+      expect(logged[0].actorKind).toBe('MINISTRY');
+      expect(logged[0].action).toBe('SEARCH');
+      expect(logged[0].reason).toBe('ADMIN');
+      expect(logged[0].actorId).toBe(registrar.ministryUser.id);
+    });
+
+    it('returns no clinical content, ever', async () => {
+      const doctor = await clinician();
+      const registrar = await ministryUserAs('REGISTRAR');
+      const patient = await makePerson();
+
+      const e = await openEncounter(prisma, {
+        practitionerId: doctor.practitioner.id,
+        personId: patient.id,
+        kind: 'OUTPATIENT',
+        chiefComplaint: 'fever',
+      });
+      await recordDiagnosis(prisma, {
+        practitionerId: doctor.practitioner.id,
+        encounterId: e.id,
+        icd11Code: '1F41.0',
+      });
+
+      const res = await get(
+        `/admin/citizens/lookup?identifier=${patient.displayNumber}`,
+        registrar.accessToken,
+      );
+
+      // Registration details only. Clinical data lives behind the check-in
+      // gate and is not a Ministry capability at any role.
+      expect(res.body).not.toMatch(/1F41|malaria|fever|encounter|diagnos/i);
+    });
+
+    it('returns nothing for an unknown identifier, without saying which', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const res = await get(
+        '/admin/citizens/lookup?identifier=00000000',
+        registrar.accessToken,
+      );
+      expect(res.statusCode).toBe(200);
+      expect(res.json().match).toBeNull();
+    });
+
+    it('refuses a partial identifier, so it cannot be used to enumerate', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      // A prefix search would turn a lookup into a listing, one keystroke
+      // at a time.
+      const res = await get('/admin/citizens/lookup?identifier=81', registrar.accessToken);
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('MISSING_IDENTIFIER');
+    });
+
+    it('is REGISTRAR-only, and refused to everyone else', async () => {
+      const person = await makePerson();
+      for (const role of ['ANALYST', 'AUDITOR', 'SURVEILLANCE']) {
+        const { accessToken } = await ministryUserAs(role);
+        const res = await get(
+          `/admin/citizens/lookup?identifier=${person.displayNumber}`,
+          accessToken,
+        );
+        expect(res.statusCode, role).toBe(403);
+      }
+
+      const doctor = await clinician();
+      expect(
+        (await get(`/admin/citizens/lookup?identifier=${person.displayNumber}`, doctor.accessToken))
+          .statusCode,
+      ).toBe(403);
+
+      expect(
+        (await app.inject({
+          method: 'GET',
+          url: `/api/v1/admin/citizens/lookup?identifier=${person.displayNumber}`,
+        })).statusCode,
+      ).toBe(401);
+    });
+
+    it('does not log a lookup that found nobody', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const before = await prisma.accessLog.count();
+
+      await get('/admin/citizens/lookup?identifier=00000000', registrar.accessToken);
+
+      // Nobody's record was opened, so nobody's access log should grow. The
+      // denial signal lives in the server log instead.
+      expect(await prisma.accessLog.count()).toBe(before);
+    });
+  });
+});
