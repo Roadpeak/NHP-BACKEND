@@ -2606,3 +2606,59 @@ describe('a hospital visit, end to end', () => {
     expect(allergies[0].title).toMatch(/penicillin/i);
   });
 });
+
+describe('CORS', () => {
+  /**
+   * `app.inject()` bypasses CORS entirely, so no other test in this file
+   * can see a preflight failure. That is how PATCH shipped blocked: every
+   * server test passed while the browser refused the request with an
+   * opaque "Failed to fetch", and the citizen profile could not be saved.
+   */
+  it('THE PREFLIGHT — allows every method the client actually uses', async () => {
+    const res = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/persons/me/profile',
+      headers: {
+        origin: 'http://localhost:3100',
+        'access-control-request-method': 'PATCH',
+      },
+    });
+
+    const allowed = String(res.headers['access-control-allow-methods'] ?? '');
+    // Fastify's default is GET, HEAD and POST. Anything the client sends
+    // beyond those must be listed or the browser blocks it.
+    for (const method of ['GET', 'POST', 'PATCH']) {
+      expect(allowed, method).toContain(method);
+    }
+  });
+
+  it('allows the headers the client sends', async () => {
+    const res = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/persons/me/profile',
+      headers: {
+        origin: 'http://localhost:3100',
+        'access-control-request-method': 'PATCH',
+        'access-control-request-headers': 'authorization,x-csrf-token',
+      },
+    });
+
+    const allowed = String(res.headers['access-control-allow-headers'] ?? '').toLowerCase();
+    // Without these the bearer token and the CSRF token never arrive, and
+    // every authenticated write fails at the preflight.
+    expect(allowed).toContain('authorization');
+    expect(allowed).toContain('x-csrf-token');
+  });
+
+  it('still sends credentials, so the refresh cookie travels', async () => {
+    const res = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/auth/refresh',
+      headers: {
+        origin: 'http://localhost:3100',
+        'access-control-request-method': 'POST',
+      },
+    });
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+  });
+});

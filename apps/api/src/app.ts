@@ -152,6 +152,17 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     // Required for the refresh cookie to travel at all.
     credentials: true,
     exposedHeaders: ['x-csrf-token'],
+    // Stated explicitly. The default is GET, HEAD and POST, so a PATCH from
+    // a browser fails preflight with an opaque "Failed to fetch" — and
+    // `app.inject()` bypasses CORS entirely, so no server test can see it.
+    methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-csrf-token',
+      'Idempotency-Key',
+      'x-test-hook-secret',
+    ],
   });
 
   /** Cookies are Secure everywhere except local development. */
