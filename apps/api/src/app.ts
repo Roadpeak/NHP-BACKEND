@@ -819,7 +819,35 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     const session = ctx.practitionerId
       ? await currentSession(prisma, ctx.practitionerId)
       : null;
+
+    /*
+     * Who this clinician IS, for the attribution line on the encounter
+     * screen. A footer that names the wrong person — or a fixed demo name —
+     * signs a record to somebody who never saw the patient.
+     */
+    const practitioner = ctx.practitionerId
+      ? await prisma.practitioner.findUnique({
+          where: { id: ctx.practitionerId },
+          select: {
+            cadre: true,
+            person: { select: { givenName: true, familyName: true } },
+            licences: {
+              where: { status: 'ACTIVE' },
+              select: { licenceNumber: true },
+              orderBy: { expiresOn: 'desc' },
+              take: 1,
+            },
+          },
+        })
+      : null;
+
     return {
+      displayName: practitioner
+        ? `${decryptField(practitioner.person.givenName)} ` +
+          `${decryptField(practitioner.person.familyName)}`
+        : null,
+      cadre: practitioner?.cadre ?? null,
+      licenceNumber: practitioner?.licences[0]?.licenceNumber ?? null,
       accountId: ctx.accountId,
       practitionerId: ctx.practitionerId ?? null,
       ministryUserId: ctx.ministryUserId ?? null,

@@ -2929,3 +2929,82 @@ describe('where a clinician\'s security codes go', () => {
     expect(login.json().sentTo).toContain(phone.slice(-3));
   });
 });
+
+describe('who the encounter screen says is signed in', () => {
+  /**
+   * THE ATTRIBUTION BUG. The encounter footer stated "Dr Amina Wanjiru ·
+   * KMPDC/12345 · Checked in · Kisumu County Referral" as fixed text. A
+   * clinician who had just registered — no affiliation, no check-in — was
+   * shown someone else's name and told they were checked in somewhere they
+   * had never been.
+   *
+   * A record signed to somebody who never saw the patient is the failure
+   * the whole attribution design exists to prevent, so the footer has to
+   * read from the live session.
+   */
+  it('names the clinician who is actually signed in', async () => {
+    const doctor = await clinician();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${doctor.accessToken}` },
+    });
+
+    // Decrypted, so a footer can print it.
+    expect(res.json().displayName).toMatch(/Amina/);
+    expect(res.json().cadre).toBe('DOCTOR');
+    expect(res.json().licenceNumber).toBeTruthy();
+  });
+
+  it('reports no check-in for a clinician who has not checked in', async () => {
+    seq++;
+    const person = await makePerson('Peter');
+    const { practitioner } = await registerPractitioner(prisma, {
+      personId: person.id,
+      cadre: 'DOCTOR',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      licenceNumber: `KMPDC/2026/F${String(seq).padStart(3, '0')}`,
+    });
+
+    const phone = await makeAccount({ practitionerId: practitioner.id });
+    const session = await signIn(phone, ROLE_PASSWORD);
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    // The gate: registered, signed in, and NOT able to write. A screen that
+    // said "Checked in" here would be telling them otherwise.
+    expect(me.json().displayName).toMatch(/Peter/);
+    expect(me.json().checkedInAt).toBeNull();
+
+    const current = await app.inject({
+      method: 'GET',
+      url: '/api/v1/check-ins/current',
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(current.json()).toBeNull();
+  });
+
+  it('returns no clinician identity for a citizen', async () => {
+    const person = await makePerson();
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { phone: person.phone, password: CITIZEN_PASSWORD },
+    });
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${login.json().accessToken}` },
+    });
+
+    // A citizen has no professional identity to attribute anything to.
+    expect(me.json().displayName).toBeNull();
+    expect(me.json().licenceNumber).toBeNull();
+  });
+});
