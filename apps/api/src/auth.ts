@@ -426,7 +426,7 @@ export async function login(
 
     // An SMS factor needs a code dispatched; TOTP is already on the device.
     if (account.mfaMode === 'SMS') {
-      const phone = decryptField(account.phone);
+      const phone = smsDestination(account);
       const { code } = await issueOtp(db, {
         phone,
         purpose: 'LOGIN_MFA',
@@ -479,7 +479,7 @@ export async function login(
       enrolToken,
       // The number a code would go to, masked — so the clinician can
       // confirm which handset before choosing SMS.
-      sentTo: maskPhone(normalisePhone(decryptField(account.phone))),
+      sentTo: maskPhone(normalisePhone(smsDestination(account))),
     };
   }
 
@@ -553,6 +553,18 @@ export async function accountFromEnrolToken(token: string): Promise<string> {
   }
 }
 
+/**
+ * Where an account's security codes go.
+ *
+ * `phone` doubles as the sign-in identifier, and for a clinician that is a
+ * licence number — texting a code to a number derived from "NCK/2026/4455"
+ * sends it nowhere. `smsPhone` carries the real destination when the two
+ * differ; for a citizen they are the same and it is null.
+ */
+export function smsDestination(account: { phone: string; smsPhone?: string | null }): string {
+  return decryptField(account.smsPhone ?? account.phone);
+}
+
 /** Completes login for an account that requires a second factor. */
 export async function completeMfa(
   db: Db,
@@ -578,7 +590,7 @@ export async function completeMfa(
     ok = verifyTotp(decryptField(account.mfaSecret), input.code);
   } else if (account.mfaMode === 'SMS') {
     ok = await verifyOtp(db, {
-      phone: decryptField(account.phone),
+      phone: smsDestination(account),
       code: input.code,
       purpose: 'LOGIN_MFA',
     })
@@ -630,7 +642,7 @@ export async function enrolSms(db: Db, accountId: string) {
   const account = await db.account.findUnique({ where: { id: accountId } });
   if (!account) throw new AuthError('Account not found', 'ACCOUNT_NOT_FOUND', 404);
 
-  const phone = decryptField(account.phone);
+  const phone = smsDestination(account);
   const { code } = await issueOtp(db, {
     phone,
     purpose: 'LOGIN_MFA',
@@ -662,7 +674,7 @@ export async function confirmSms(db: Db, accountId: string, code: string) {
   if (!account) throw new AuthError('Account not found', 'ACCOUNT_NOT_FOUND', 404);
 
   await verifyOtp(db, {
-    phone: decryptField(account.phone),
+    phone: smsDestination(account),
     code,
     purpose: 'LOGIN_MFA',
   });
@@ -701,7 +713,7 @@ export async function resendMfaCode(db: Db, mfaToken: string) {
     );
   }
 
-  const phone = decryptField(account.phone);
+  const phone = smsDestination(account);
   const { code } = await issueOtp(db, {
     phone,
     purpose: 'LOGIN_MFA',

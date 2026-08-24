@@ -495,6 +495,10 @@ export async function buildApp(prismaOverride?: PrismaClient) {
           practitionerId: practitioner.id,
           phone: encryptField(clinicalLogin),
           phoneIndex: blindIndex(clinicalLogin, normalisePhone),
+          // Their REAL number. Without this, `phone` doubles as the SMS
+          // destination and a code goes to a number derived from the
+          // licence — one nobody owns, so the clinician never receives it.
+          smsPhone: encryptField(b.phone),
           passwordHash: await hashPassword(b.password),
           status: 'ACTIVE',
         },

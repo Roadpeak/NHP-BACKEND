@@ -584,8 +584,22 @@ model Account {
   person          Person?    @relation(fields: [personId], references: [id])
   practitionerId  String?    @unique @map("practitioner_id")
   ministryUserId  String?    @unique @map("ministry_user_id")
+  /**
+   * What this account signs in WITH. For a citizen that is their phone; for
+   * a clinician it is their licence number, because the phone already
+   * belongs to their own citizen account and one number cannot key two.
+   */
   phone           String
   phoneIndex      String     @unique @map("phone_index")
+  /**
+   * Where security codes are SENT.
+   *
+   * Separate from `phone` because that column doubles as the sign-in
+   * identifier: a clinician keyed on a licence number would otherwise have
+   * codes texted to a number derived from that licence — one nobody owns.
+   * Null means "use `phone`", which is correct for every citizen.
+   */
+  smsPhone        String?    @map("sms_phone")
   phoneVerifiedAt DateTime?  @map("phone_verified_at")
   email           String?
   emailIndex      String?    @map("email_index")

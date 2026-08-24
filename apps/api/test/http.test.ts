@@ -2833,3 +2833,99 @@ describe('MFA enrolment for an account that cannot yet sign in', () => {
     expect(res.json().status).toBe('AUTHENTICATED');
   });
 });
+
+describe('where a clinician\'s security codes go', () => {
+  /**
+   * THE BUG. `account.phone` doubles as the sign-in identifier, and a
+   * clinician signs in with their LICENCE NUMBER — so the SMS went to a
+   * number derived from "NCK/2026/4455", which nobody owns. Enrolment
+   * appeared to succeed, sign-in reached the MFA step, and the code never
+   * arrived. Every server test passed because the console provider accepts
+   * any destination.
+   */
+  const post = (url: string, payload: Record<string, unknown>) =>
+    app.inject({ method: 'POST', url: `/api/v1${url}`, payload });
+
+  it('THE DESTINATION RULE — codes go to the real phone, not the licence', async () => {
+    seq++;
+    const phone = `07340000${String(seq).padStart(2, '0')}`;
+    const licenceNumber = `NCK/2026/S${String(seq).padStart(4, '0')}`;
+
+    await post('/auth/register/practitioner', {
+      nationalId: `880000${String(seq).padStart(2, '0')}`,
+      phone,
+      givenName: 'Faith',
+      familyName: 'Muthoni',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: '1990-03-14',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      password: 'a-long-enough-password',
+      cadre: 'NURSE',
+      licenceNumber,
+    });
+
+    sms.sent.length = 0;
+
+    const login = await post('/auth/login', {
+      phone: licenceNumber,
+      password: 'a-long-enough-password',
+    });
+    const { enrolToken } = login.json();
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/sms/enrol',
+      payload: { enrolToken },
+    });
+
+    const sentTo = sms.sent.at(-1)?.to;
+    expect(sentTo).toBeTruthy();
+
+    // The real number, normalised — NOT a number built out of the licence.
+    expect(sentTo).toBe(`+254${phone.slice(1)}`);
+    expect(sentTo).not.toMatch(/2026/);
+  });
+
+  it('a citizen still receives codes on their own number', async () => {
+    const person = await makePerson();
+    const account = await prisma.account.findFirst({
+      where: { personId: person.id },
+      select: { smsPhone: true },
+    });
+
+    // Null means "use `phone`", which for a citizen is the same number.
+    // Only a clinician needs the two to differ.
+    expect(account!.smsPhone).toBeNull();
+  });
+
+  it('masks the destination it reports back', async () => {
+    seq++;
+    const phone = `07350000${String(seq).padStart(2, '0')}`;
+    const licenceNumber = `NCK/2026/T${String(seq).padStart(4, '0')}`;
+
+    await post('/auth/register/practitioner', {
+      nationalId: `890000${String(seq).padStart(2, '0')}`,
+      phone,
+      givenName: 'Faith',
+      familyName: 'Muthoni',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: '1990-03-14',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      password: 'a-long-enough-password',
+      cadre: 'NURSE',
+      licenceNumber,
+    });
+
+    const login = await post('/auth/login', {
+      phone: licenceNumber,
+      password: 'a-long-enough-password',
+    });
+
+    // Masked, and derived from the real number so the clinician recognises
+    // which handset to check.
+    expect(login.json().sentTo).toMatch(/\*/);
+    expect(login.json().sentTo).toContain(phone.slice(-3));
+  });
+});
