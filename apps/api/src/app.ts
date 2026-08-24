@@ -58,6 +58,7 @@ import {
 } from './analytics.js';
 import { IdentityError } from './identity.js';
 import { PractitionerError } from './practitioner.js';
+import { assertTestHooksEnabled, readLastSmsCode } from './testhooks.js';
 import {
   login,
   completeMfa,
@@ -230,6 +231,35 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     await prisma.$queryRaw`SELECT 1`;
     return { status: 'ok', service: 'nhp-api' };
   });
+
+  // ------------------------------------------------------------ test hooks
+  //
+  // Lets a contract test complete a real MFA login by reading the code the
+  // console provider already printed. See testhooks.ts for why this is not
+  // an MFA bypass and what it refuses.
+  //
+  // The route is not merely guarded but not REGISTERED in production, so a
+  // misconfigured secret cannot expose an endpoint that does not exist.
+  if (process.env.NODE_ENV !== 'production') {
+    app.get<{ Querystring: { phone?: string } }>(
+      `${v1}/test-hooks/last-sms-code`,
+      async (req) => {
+        assertTestHooksEnabled(req.headers['x-test-hook-secret'] as string | undefined);
+
+        const phone = req.query.phone;
+        if (!phone) {
+          throw new AuthError('phone is required', 'MALFORMED_REQUEST', 400);
+        }
+
+        // Logged at warn so its use is never invisible in a shared
+        // environment — an endpoint that hands out sign-in codes should be
+        // noisy about every call.
+        req.log.warn({ phone }, 'test hook: revealing last SMS code');
+
+        return { code: readLastSmsCode(phone) };
+      },
+    );
+  }
 
   // ------------------------------------------------------------- vocabulary
   // Public: these are reference data, not patient data.
