@@ -3008,3 +3008,202 @@ describe('who the encounter screen says is signed in', () => {
     expect(me.json().licenceNumber).toBeNull();
   });
 });
+
+describe('checking in and out of a facility', () => {
+  /**
+   * The check-in is what makes a clinical write attributable to a PLACE as
+   * well as a person. `checkIn` refuses without an active affiliation and
+   * licence — and until now nothing could call it over HTTP, so a
+   * registered clinician could never begin work at all.
+   */
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  const post = (url: string, token: string, payload?: Record<string, unknown>) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1${url}`,
+      headers: { authorization: `Bearer ${token}` },
+      ...(payload ? { payload } : {}),
+    });
+
+  /** A clinician with a licence but NO affiliation anywhere. */
+  async function unaffiliated() {
+    const person = await makePerson('Peter');
+    seq++;
+    const { practitioner } = await registerPractitioner(prisma, {
+      personId: person.id,
+      cadre: 'DOCTOR',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      licenceNumber: `KMPDC/2026/G${String(seq).padStart(3, '0')}`,
+    });
+    const phone = await makeAccount({ practitionerId: practitioner.id });
+    const session = await signIn(phone, ROLE_PASSWORD);
+    return { practitioner, ...session };
+  }
+
+  it('offers the facilities a clinician is affiliated to', async () => {
+    const doctor = await clinician();
+    const res = await get('/check-ins/facilities', doctor.accessToken);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveLength(1);
+    expect(res.json()[0].name).toBe('Kisumu County Referral');
+    // Named, so the portal can offer a choice rather than asking a
+    // clinician to type an id they have never seen. `mflCode` is nullable
+    // in the schema, so the NAME is what the screen must always have.
+    expect(res.json()[0].facilityId).toBeTruthy();
+    expect(res.json()[0].kephLevel).toBeGreaterThan(0);
+  });
+
+  it('THE AFFILIATION GATE — offers nothing to a clinician with no posting', async () => {
+    const doctor = await unaffiliated();
+
+    // A real, approved facility that this clinician has NO posting to.
+    // Without one the assertion is vacuous: with a single facility in the
+    // database, "every facility" and "my facilities" are the same list.
+    seq++;
+    const elsewhere = await registerFacility(prisma, {
+      name: 'A Facility They Do Not Work At',
+      kephLevel: 4,
+      ownership: 'PUBLIC_MOH',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      locality: 'Town',
+      latitude: -0.0917,
+      longitude: 34.768,
+      mflCode: `MFL-ELSE-${seq}`,
+    });
+    await approveFacility(prisma, elsewhere.id, 'ministry-fixture');
+
+    const res = await get('/check-ins/facilities', doctor.accessToken);
+
+    // An empty list is the honest answer: they are registered and cannot
+    // work anywhere until someone posts them.
+    expect(res.json()).toEqual([]);
+  });
+
+  it('never offers a facility another clinician is posted to', async () => {
+    const doctor = await clinician(); // affiliated to Kisumu County Referral
+
+    // A SECOND clinician, posted somewhere else. Filtering on affiliation
+    // rows rather than facilities is what this catches: with only one
+    // clinician in the database, "all affiliations" and "mine" coincide and
+    // the assertion proves nothing.
+    const other = await clinician();
+    const otherFacilities = (await get('/check-ins/facilities', other.accessToken)).json();
+    expect(otherFacilities.length).toBeGreaterThan(0);
+
+    const mine = (await get('/check-ins/facilities', doctor.accessToken)).json();
+
+    // Exactly one — their own posting, not the other clinician's.
+    expect(mine).toHaveLength(1);
+    expect(mine[0].facilityId).not.toBe(otherFacilities[0].facilityId);
+  });
+
+  it('refuses a check-in where there is no affiliation', async () => {
+    const doctor = await unaffiliated();
+    seq++;
+    const facility = await registerFacility(prisma, {
+      name: 'Somewhere They Do Not Work',
+      kephLevel: 4,
+      ownership: 'PUBLIC_MOH',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      locality: 'Town',
+      latitude: -0.0917,
+      longitude: 34.768,
+      mflCode: `MFL-NOAFF-${seq}`,
+    });
+    await approveFacility(prisma, facility.id, 'ministry-fixture');
+
+    const res = await post('/check-ins', doctor.accessToken, { facilityId: facility.id });
+    // The gate the whole clinical layer rests on: a clinician cannot start
+    // a shift somewhere nobody authorised them to work.
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
+  it('checks in, and the session then reports the facility', async () => {
+    const person = await makePerson('Amina');
+    seq++;
+    const { practitioner } = await registerPractitioner(prisma, {
+      personId: person.id,
+      cadre: 'DOCTOR',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      licenceNumber: `KMPDC/2026/H${String(seq).padStart(3, '0')}`,
+    });
+    seq++;
+    const facility = await registerFacility(prisma, {
+      name: 'Migosi Health Centre',
+      kephLevel: 3,
+      ownership: 'PUBLIC_MOH',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      locality: 'Migosi',
+      latitude: -0.0917,
+      longitude: 34.768,
+      mflCode: `MFL-CI-${seq}`,
+    });
+    await approveFacility(prisma, facility.id, 'ministry-fixture');
+    await grantAffiliation(prisma, {
+      practitionerId: practitioner.id,
+      facilityId: facility.id,
+      grantedBy: 'ministry-1',
+      grantedByKind: 'MINISTRY',
+    });
+
+    const phone = await makeAccount({ practitionerId: practitioner.id });
+    const session = await signIn(phone, ROLE_PASSWORD);
+
+    // Before: no session.
+    expect((await get('/check-ins/current', session.accessToken)).json()).toBeNull();
+
+    const ci = await post('/check-ins', session.accessToken, { facilityId: facility.id });
+    expect(ci.statusCode).toBe(200);
+    // The licence current at check-in is stamped on every row written
+    // during the shift.
+    expect(ci.json().licenceNumber).toBeTruthy();
+
+    const current = (await get('/check-ins/current', session.accessToken)).json();
+    expect(current.facilityName).toBe('Migosi Health Centre');
+    expect(current.minutesRemaining).toBeGreaterThan(0);
+  });
+
+  it('checks out, and the session is gone', async () => {
+    const doctor = await clinician();
+    expect((await get('/check-ins/current', doctor.accessToken)).json()).not.toBeNull();
+
+    const out = await post('/check-ins/end', doctor.accessToken);
+    expect(out.statusCode).toBe(200);
+    expect(out.json().ended).toBe(true);
+
+    expect((await get('/check-ins/current', doctor.accessToken)).json()).toBeNull();
+  });
+
+  it('checking out twice is not an error', async () => {
+    const doctor = await clinician();
+    await post('/check-ins/end', doctor.accessToken);
+    const again = await post('/check-ins/end', doctor.accessToken);
+
+    // Already in the state they asked for. A 500 here would look like a
+    // failure at the end of a shift.
+    expect(again.statusCode).toBe(200);
+    expect(again.json().ended).toBe(false);
+  });
+
+  it('is refused to a citizen and an unauthenticated caller', async () => {
+    const person = await makePerson();
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { phone: person.phone, password: CITIZEN_PASSWORD },
+    });
+
+    expect((await get('/check-ins/facilities', login.json().accessToken)).statusCode).toBe(403);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/v1/check-ins/facilities' })).statusCode,
+    ).toBe(401);
+  });
+});

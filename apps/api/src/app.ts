@@ -21,6 +21,8 @@ import {
   currentSession,
   canWriteClinical,
   registerPractitioner,
+  checkIn,
+  checkOut,
   grantAffiliation,
   endAffiliation,
   licencesExpiringSoon,
@@ -927,6 +929,102 @@ export async function buildApp(prismaOverride?: PrismaClient) {
   app.post<{ Body: { mfaToken: string } }>(`${v1}/auth/mfa/resend`, async (req) =>
     resendMfaCode(prisma, req.body.mfaToken),
   );
+
+  /**
+   * The facilities this clinician may check in to.
+   *
+   * Their affiliations, which is the whole basis of the check-in gate: a
+   * clinician can only work where someone authorised them to. Returned so
+   * the portal can offer a choice rather than making them type an id.
+   */
+  app.get(`${v1}/check-ins/facilities`, async (req) => {
+    const practitionerId = await practitionerFrom(req);
+    const affiliations = await prisma.affiliation.findMany({
+      where: { practitionerId, status: 'ACTIVE' },
+      select: {
+        id: true,
+        role: true,
+        facility: {
+          select: {
+            id: true,
+            name: true,
+            mflCode: true,
+            kephLevel: true,
+            countyId: true,
+            registrationStatus: true,
+          },
+        },
+      },
+    });
+
+    return affiliations
+      // An unapproved facility can host no check-in, so offering it would
+      // be offering a refusal.
+      .filter((a) => a.facility.registrationStatus === 'ACTIVE')
+      .map((a) => ({
+        affiliationId: a.id,
+        role: a.role,
+        facilityId: a.facility.id,
+        name: a.facility.name,
+        mflCode: a.facility.mflCode,
+        kephLevel: a.facility.kephLevel,
+        countyId: a.facility.countyId,
+      }));
+  });
+
+  /**
+   * Starting a shift.
+   *
+   * The check-in is what makes a clinical write attributable to a place as
+   * well as a person, and `checkIn` refuses without an active affiliation
+   * and licence. Exposing it here is what lets a clinician actually begin
+   * work — until now the service existed and nothing could call it.
+   */
+  app.post<{ Body: { facilityId: string } }>(
+    `${v1}/check-ins`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['facilityId'],
+          properties: { facilityId: { type: 'string', minLength: 1 } },
+        },
+      },
+    },
+    async (req) => {
+      const practitionerId = await practitionerFrom(req);
+      const { session, licenceNumber } = await checkIn(prisma, {
+        practitionerId,
+        facilityId: req.body.facilityId,
+      });
+      return {
+        id: session.id,
+        facilityId: session.facilityId,
+        expiresAt: session.expiresAt,
+        // Stamped on every clinical row written during this session, so a
+        // record carries which licence was current at the time.
+        licenceNumber,
+      };
+    },
+  );
+
+  /** Ending a shift. */
+  app.post(`${v1}/check-ins/end`, async (req) => {
+    const practitionerId = await practitionerFrom(req);
+    try {
+      await checkOut(prisma, practitionerId);
+      return { ended: true };
+    } catch (err) {
+      // `checkOut` throws NO_OPEN_SESSION, which the error handler renders
+      // as a 403. A clinician who was already checked out is not being
+      // refused anything — they are in the state they asked for, and a
+      // permission error at the end of a shift reads as a fault.
+      if (err instanceof PractitionerError && err.code === 'NO_OPEN_SESSION') {
+        return { ended: false };
+      }
+      throw err;
+    }
+  });
 
   app.get(`${v1}/check-ins/current`, async (req) => {
     const session = await currentSession(prisma, await practitionerFrom(req));
