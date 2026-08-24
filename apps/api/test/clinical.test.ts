@@ -25,6 +25,7 @@ import {
   recordProcedure,
   keyResults,
   procedureHistory,
+  resolvePersonId,
   frequencyPerDay,
 } from '../src/clinical.js';
 import { registerAdult } from '../src/identity.js';
@@ -800,5 +801,86 @@ describe('the summary screen payload', () => {
         valueNum: 12,
       }),
     ).rejects.toThrow(/check in to a facility/i);
+  });
+});
+
+describe('the NHP number a clinician actually types', () => {
+  /**
+   * The routes take `:nhpId` — the number printed on a patient's card,
+   * `NHP-XXXX-XXXX` — while every clinical query filters on the internal
+   * `person_id`. Handing the display number straight to those queries
+   * matched nothing and returned an EMPTY timeline: a patient with a full
+   * history rendered as a patient with none, with no error anywhere.
+   *
+   * These tests exist because every existing test called the services with
+   * `patient.id` directly and so could never see the mismatch.
+   */
+  it('resolves the display number to the internal person id', async () => {
+    const patient = await makePerson();
+    expect(patient.displayNumber).toMatch(/^NHP-/);
+    expect(await resolvePersonId(prisma, patient.displayNumber)).toBe(patient.id);
+  });
+
+  it('accepts an internal id unchanged', async () => {
+    const patient = await makePerson();
+    expect(await resolvePersonId(prisma, patient.id)).toBe(patient.id);
+  });
+
+  it('refuses an unknown number rather than returning nothing', async () => {
+    // The dangerous failure is the quiet one — "no records" for a patient
+    // who has them reads as a clean history at the point of treatment.
+    await expect(resolvePersonId(prisma, 'NHP-0000-0000')).rejects.toThrow(
+      /not found/i,
+    );
+  });
+
+  it('THE REGRESSION — a timeline found by display number is not empty', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+
+    const e = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'fever',
+    });
+    await recordDiagnosis(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: e.id,
+      icd11Code: '1F41.0',
+    });
+
+    // What the route does now.
+    const viaDisplay = await patientTimeline(
+      prisma,
+      await resolvePersonId(prisma, patient.displayNumber),
+    );
+    // What it did before: the display number passed straight through.
+    const viaRawDisplayNumber = await patientTimeline(prisma, patient.displayNumber);
+
+    expect(viaDisplay).toHaveLength(1);
+    expect(viaRawDisplayNumber).toHaveLength(0);
+  });
+
+  it('resolves for the summary banner too', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    await recordAllergy(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      substanceKind: 'DRUG',
+      substanceLabel: 'Penicillin',
+      allergyClass: 'PENICILLIN',
+      reaction: 'anaphylaxis',
+      severity: 'ANAPHYLAXIS',
+    });
+
+    const summary = await patientSummary(
+      prisma,
+      await resolvePersonId(prisma, patient.displayNumber),
+    );
+    // An allergy banner that silently fails to load is the exact failure
+    // this system exists to prevent.
+    expect(summary.allergies).toHaveLength(1);
   });
 });

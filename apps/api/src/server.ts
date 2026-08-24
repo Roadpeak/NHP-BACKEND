@@ -28,6 +28,7 @@ import {
   checkPrescribing,
   keyResults,
   procedureHistory,
+  resolvePersonId,
   ClinicalError,
 } from './clinical.js';
 import { filteredRecord, logAccess, accessHistory, ConsentError } from './consent.js';
@@ -41,6 +42,19 @@ import {
   type Lang,
 } from './citizen.js';
 import { findFacilities, FacilityError } from './facility.js';
+import {
+  burdenByCounty,
+  burdenBySubcounty,
+  referralClosureByCounty,
+  workforceByCounty,
+  careGaps,
+  notifiableSignals,
+  provenance,
+  periodFrom,
+  rollupConditions,
+  AnalyticsError,
+  SUPPRESSION_THRESHOLD,
+} from './analytics.js';
 import { IdentityError } from './identity.js';
 import { PractitionerError } from './practitioner.js';
 import {
@@ -51,6 +65,7 @@ import {
   verifyAccessToken,
   contextFromClaims,
   requirePractitioner,
+  requireMinistry,
   requireSelf,
   enrolTotp,
   confirmTotp,
@@ -135,6 +150,7 @@ app.setErrorHandler((error, request, reply) => {
   }
 
   const known =
+    error instanceof AnalyticsError ||
     error instanceof CitizenError ||
     error instanceof ClinicalError ||
     error instanceof ConsentError ||
@@ -398,7 +414,8 @@ app.get<{ Params: { nhpId: string } }>(
     const practitionerId = await practitionerFrom(req);
     const gate = await canWriteClinical(prisma, practitionerId);
 
-    const summary = await patientSummary(prisma, req.params.nhpId);
+    const personId = await resolvePersonId(prisma, req.params.nhpId);
+    const summary = await patientSummary(prisma, personId);
 
     // Consent filtering needs a session; without one the caller still sees
     // the Tier 1 banner, which must never be gated.
@@ -407,7 +424,7 @@ app.get<{ Params: { nhpId: string } }>(
 
     if (gate.allowed) {
       const view = await filteredRecord(prisma, {
-        personId: req.params.nhpId,
+        personId,
         practitionerId,
         facilityId: gate.facilityId,
         checkInId: gate.checkInId,
@@ -416,7 +433,9 @@ app.get<{ Params: { nhpId: string } }>(
       withheldCategories = view.withheldCategories;
 
       await logAccess(prisma, {
-        personId: req.params.nhpId,
+        // The internal id, not the typed number — an access log keyed on a
+        // value that matches no person row is an audit trail of nobody.
+        personId,
         practitionerId,
         checkInId: gate.checkInId,
         facilityId: gate.facilityId,
@@ -432,19 +451,28 @@ app.get<{ Params: { nhpId: string } }>(
   },
 );
 
+// `:nhpId` is the number a clinician types (NHP-XXXX-XXXX); the services
+// below key on the internal person id. `resolvePersonId` bridges the two —
+// without it these queries silently matched nothing and returned [].
+
 app.get<{ Params: { nhpId: string }; Querystring: { limit?: string } }>(
   `${v1}/persons/:nhpId/encounters`,
-  async (req) =>
-    patientTimeline(prisma, req.params.nhpId, {
+  async (req) => {
+    // This route previously had NO auth check: an unauthenticated caller
+    // got HTTP 200 on a patient's clinical timeline. It only ever returned
+    // [] because of the id-resolution bug above, which is not a control.
+    await practitionerFrom(req);
+    return patientTimeline(prisma, await resolvePersonId(prisma, req.params.nhpId), {
       limit: req.query.limit ? Number(req.query.limit) : 20,
-    }),
+    });
+  },
 );
 
 app.get<{ Params: { nhpId: string } }>(
   `${v1}/persons/:nhpId/results`,
   async (req) => {
     await practitionerFrom(req);
-    return keyResults(prisma, req.params.nhpId);
+    return keyResults(prisma, await resolvePersonId(prisma, req.params.nhpId));
   },
 );
 
@@ -452,14 +480,112 @@ app.get<{ Params: { nhpId: string } }>(
   `${v1}/persons/:nhpId/procedures`,
   async (req) => {
     await practitionerFrom(req);
-    return procedureHistory(prisma, req.params.nhpId);
+    return procedureHistory(prisma, await resolvePersonId(prisma, req.params.nhpId));
   },
 );
 
 app.get<{ Params: { nhpId: string } }>(
   `${v1}/persons/:nhpId/access-log`,
-  async (req) => accessHistory(prisma, req.params.nhpId),
+  async (req) => {
+    // Also previously unauthenticated. Who has read a record is itself
+    // sensitive — it names the clinicians and facilities a patient attended.
+    await practitionerFrom(req);
+    return accessHistory(prisma, await resolvePersonId(prisma, req.params.nhpId));
+  },
 );
+
+// ---------------------------------------------------------------- ministry
+//
+// Every route here reads AGGREGATES. There is deliberately no endpoint that
+// returns a patient list, because the tables these queries touch have never
+// held a person_id. The absence is structural, not a permission check.
+
+// `periodFrom` lives in analytics.ts — it encodes the day-grain of the
+// aggregate tables, which is a property of the data, not of HTTP.
+
+app.get(`${v1}/analytics/burden`, async (req) => {
+  const ctx = await contextFrom(req);
+  requireMinistry(ctx);
+  const { icd11Code, chapter } = req.query as { icd11Code?: string; chapter?: string };
+  return burdenByCounty(prisma, { ...periodFrom(req.query as never), icd11Code, chapter });
+});
+
+app.get<{ Params: { countyId: string } }>(
+  `${v1}/analytics/burden/:countyId`,
+  async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx);
+    const { icd11Code, chapter } = req.query as { icd11Code?: string; chapter?: string };
+    // Refuses a subcounty breakdown of a restricted chapter outright — those
+    // aggregate at county level only, even for an Analyst.
+    return burdenBySubcounty(prisma, {
+      countyId: req.params.countyId,
+      ...periodFrom(req.query as never),
+      icd11Code,
+      chapter,
+    });
+  },
+);
+
+app.get(`${v1}/analytics/referral-closure`, async (req) => {
+  const ctx = await contextFrom(req);
+  requireMinistry(ctx);
+  return referralClosureByCounty(prisma, periodFrom(req.query as never));
+});
+
+app.get(`${v1}/analytics/workforce`, async (req) => {
+  const ctx = await contextFrom(req);
+  requireMinistry(ctx);
+  const { from } = periodFrom(req.query as never);
+  return workforceByCounty(prisma, { since: from });
+});
+
+app.get(`${v1}/analytics/care-gaps`, async (req) => {
+  const ctx = await contextFrom(req);
+  requireMinistry(ctx);
+  return careGaps(prisma);
+});
+
+app.get(`${v1}/analytics/surveillance`, async (req) => {
+  const ctx = await contextFrom(req);
+  requireMinistry(ctx);
+  return notifiableSignals(prisma, periodFrom(req.query as never));
+});
+
+/**
+ * Provenance.
+ *
+ * A national health figure with no stated denominator, period or
+ * completeness rate is a number someone will misquote in a press
+ * conference, so the dashboard carries it alongside every count.
+ */
+app.get(`${v1}/analytics/provenance`, async (req) => {
+  const ctx = await contextFrom(req);
+  requireMinistry(ctx);
+  return {
+    ...(await provenance(prisma, periodFrom(req.query as never))),
+    suppressionNote:
+      `Cells below ${SUPPRESSION_THRESHOLD} cases are suppressed, with ` +
+      'complementary suppression so no hidden cell can be recovered by subtraction.',
+  };
+});
+
+/** Reference data for the map: counties and their codes. */
+app.get(`${v1}/analytics/counties`, async (req) => {
+  const ctx = await contextFrom(req);
+  requireMinistry(ctx);
+  return prisma.county.findMany({
+    select: { id: true, code: true, name: true },
+    orderBy: { code: 'asc' },
+  });
+});
+
+/** Triggers the nightly rollup. Normally a cron job. */
+app.post(`${v1}/analytics/rollup`, async (req) => {
+  const ctx = await contextFrom(req);
+  requireMinistry(ctx);
+  return rollupConditions(prisma, periodFrom(req.query as never));
+});
 
 // ----------------------------------------------------------------- citizen
 // A citizen reads their OWN record. requireSelf compares in constant time,

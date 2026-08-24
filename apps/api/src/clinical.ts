@@ -751,6 +751,30 @@ export async function amendDiagnosis(
 // ----------------------------------------------------------- patient view
 
 /**
+ * Resolves the NHP number a clinician types (`NHP-0Y3F-4RGH`) to the
+ * internal person id every service below expects.
+ *
+ * These are two different things and confusing them fails quietly: the
+ * clinical queries filter on `person_id`, so a display number matches
+ * nothing and the caller gets an empty timeline rather than an error —
+ * a patient with a real history looking like a patient with none.
+ *
+ * Accepts an internal id too, so callers that already hold one still work.
+ */
+export async function resolvePersonId(db: Db, nhpIdOrPersonId: string): Promise<string> {
+  const person = await db.person.findFirst({
+    where: {
+      OR: [{ displayNumber: nhpIdOrPersonId }, { id: nhpIdOrPersonId }],
+    },
+    select: { id: true },
+  });
+  if (!person) {
+    throw new ClinicalError('Patient not found', 'PERSON_NOT_FOUND');
+  }
+  return person.id;
+}
+
+/**
  * The clinician's summary banner.
  *
  * Allergies, current medications and chronic conditions — everything capable

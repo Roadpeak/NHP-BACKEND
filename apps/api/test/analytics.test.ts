@@ -20,6 +20,7 @@ import {
   notifiableSignals,
   referralClosureByCounty,
   provenance,
+  periodFrom,
   ageBandOf,
   SUPPRESSION_THRESHOLD,
   TIER3_CHAPTERS,
@@ -485,5 +486,49 @@ describe('provenance', () => {
     expect(p.suppressionThreshold).toBe(SUPPRESSION_THRESHOLD);
     expect(p.lastRollupDate).not.toBeNull();
     expect(p.denominatorNote).toMatch(/census denominators/i);
+  });
+});
+
+describe('the reporting period', () => {
+  /**
+   * This is the regression the test suite originally missed, because the
+   * helper `window()` above sets `to` a day into the future and so never
+   * exercised the real "up to now" bound the HTTP layer uses.
+   *
+   * `agg_condition_daily.date` is a Postgres DATE. Handing Postgres a
+   * mid-afternoon timestamp as an exclusive upper bound coerces it to
+   * today's DATE, so `date < today` silently drops today's rollup — while
+   * still returning 200 and a shorter, entirely plausible list.
+   */
+  it('includes today when the period runs up to now', async () => {
+    const { practitioner } = await makeClinician();
+    await recordCases(practitioner.id, '1F41.0', 12, ctx.subA);
+
+    const period = periodFrom({});
+    await rollupConditions(prisma, period);
+
+    const burden = await burdenByCounty(prisma, { ...period, icd11Code: '1F41.0' });
+    const total = burden.reduce((s, b) => s + b.cases, 0);
+    expect(total).toBe(12);
+  });
+
+  it('snaps the upper bound past the end of the last day covered', () => {
+    const { from, to } = periodFrom({ from: '2026-08-01', to: '2026-08-23' });
+    expect(from.toISOString()).toBe('2026-08-01T00:00:00.000Z');
+    // Exclusive: the instant after 2026-08-23 ends, so that day is included.
+    expect(to.toISOString()).toBe('2026-08-24T00:00:00.000Z');
+  });
+
+  it('reports the inclusive last day, not the exclusive bound', async () => {
+    const period = periodFrom({ from: '2026-08-01', to: '2026-08-23' });
+    const p = await provenance(prisma, period);
+    // An analyst reading "to 24 August" for figures that stop on the 23rd
+    // would date an outbreak a day late.
+    expect(p.periodTo.toISOString().slice(0, 10)).toBe('2026-08-23');
+  });
+
+  it('defaults to a 30-day window ending today', () => {
+    const { from, to } = periodFrom({});
+    expect(Math.round((to.getTime() - from.getTime()) / 86_400_000)).toBe(30);
   });
 });

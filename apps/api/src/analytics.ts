@@ -45,7 +45,16 @@ export const TIER3_CHAPTERS = new Set([
   'TIER3_SUBSTANCE',
 ]);
 
-export type AgeBand = 'U1' | '1_4' | '5_14' | '15_24' | '25_49' | '50_64' | '65_PLUS';
+export type AgeBand =
+  | 'U1'
+  | '1_4'
+  | '5_14'
+  | '15_24'
+  | '25_49'
+  | '50_64'
+  | '65_PLUS'
+  /** The county-total row, which carries no age breakdown. */
+  | 'ALL';
 
 export function ageBandOf(ageYears: number): AgeBand {
   if (ageYears < 1) return 'U1';
@@ -84,7 +93,7 @@ interface Cell {
   icd11Code: string;
   icd11Chapter: string;
   ageBand: AgeBand;
-  sex: 'MALE' | 'FEMALE' | 'INTERSEX';
+  sex: 'MALE' | 'FEMALE' | 'INTERSEX' | 'ALL';
   kephLevel: number;
   caseCount: number;
   newCaseCount: number;
@@ -172,8 +181,38 @@ export async function rollupConditions(
     cells.set(key, existing);
   }
 
+  // The fine-grained cells above are what an analyst drills into. But a
+  // county choropleth needs a county TOTAL, and splitting 34 cases across
+  // age band, sex, subcounty and facility level scatters them into cells of
+  // three or four — all correctly suppressed, leaving a blank map.
+  //
+  // So roll a county-level cell alongside: same suppression rules, but the
+  // denominator large enough that a real caseload survives them. It carries
+  // no subcounty, no age band and no sex, so it discloses less than any of
+  // the cells beneath it.
+  const countyTotals = new Map<string, Cell>();
+  for (const cell of cells.values()) {
+    const key = [cell.date.toISOString().slice(0, 10), cell.countyId, cell.icd11Code].join('|');
+    const existing = countyTotals.get(key);
+    if (existing) {
+      existing.caseCount += cell.caseCount;
+      existing.newCaseCount += cell.newCaseCount;
+    } else {
+      countyTotals.set(key, {
+        ...cell,
+        subcountyId: null,
+        ageBand: 'ALL' as AgeBand,
+        sex: 'ALL' as Cell['sex'],
+        kephLevel: 0,
+      });
+    }
+  }
+
   const reporting = await facilityReportingCounts(db, opts.from, opts.to);
-  const suppressed = applySuppression([...cells.values()], threshold);
+  const suppressed = applySuppression(
+    [...cells.values(), ...countyTotals.values()],
+    threshold,
+  );
 
   // Replace the window wholesale — a rerun must be idempotent, not additive.
   await db.aggConditionDaily.deleteMany({
@@ -333,6 +372,9 @@ export async function burdenByCounty(
   const rows = await db.aggConditionDaily.findMany({
     where: {
       date: { gte: opts.from, lt: opts.to },
+      // Only the county-total rows — summing the breakdown as well would
+      // double-count every case.
+      ageBand: 'ALL',
       ...(opts.icd11Code ? { icd11Code: opts.icd11Code } : {}),
       ...(opts.chapter ? { icd11Chapter: opts.chapter } : {}),
     },
@@ -390,6 +432,7 @@ export async function burdenBySubcounty(
       countyId: opts.countyId,
       date: { gte: opts.from, lt: opts.to },
       subcountyId: { not: null },
+      ageBand: { not: 'ALL' },
       ...(opts.icd11Code ? { icd11Code: opts.icd11Code } : {}),
       ...(opts.chapter ? { icd11Chapter: opts.chapter } : {}),
     },
@@ -604,6 +647,36 @@ export async function notifiableSignals(db: Db, opts: { from: Date; to: Date }) 
     .sort((a, b) => b.cases - a.cases);
 }
 
+/**
+ * Parses a requested reporting period, defaulting to the last 30 days.
+ *
+ * The aggregate tables are day-grained — `date` is a Postgres DATE, not a
+ * timestamp — so both bounds are snapped to midnight UTC and the returned
+ * upper bound is exclusive: the start of the day AFTER the last day covered.
+ *
+ * Passing a mid-afternoon `new Date()` straight through as an exclusive
+ * bound made Postgres coerce it to today's DATE, so `date < today` dropped
+ * every row dated today. The most recent rollup — the one an outbreak
+ * shows up in first — was missing from every analytics answer, and the
+ * endpoints still returned 200 with a plausible-looking shorter list.
+ */
+export function periodFrom(query: Record<string, unknown>): {
+  from: Date;
+  to: Date;
+} {
+  const startOfDay = (d: Date) =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+  const toRequested = query.to ? new Date(String(query.to)) : new Date();
+  const lastDay = startOfDay(toRequested);
+  return {
+    from: query.from
+      ? startOfDay(new Date(String(query.from)))
+      : new Date(lastDay.getTime() - 29 * 86_400_000),
+    to: new Date(lastDay.getTime() + 86_400_000),
+  };
+}
+
 /** Provenance footer. A figure without these is a figure someone misquotes. */
 export async function provenance(db: Db, opts: { from: Date; to: Date }) {
   const [facilitiesActive, lastRollup] = await Promise.all([
@@ -619,7 +692,10 @@ export async function provenance(db: Db, opts: { from: Date; to: Date }) {
 
   return {
     periodFrom: opts.from,
-    periodTo: opts.to,
+    // `opts.to` is the exclusive upper bound — the start of the day AFTER
+    // the last day covered. Reporting it verbatim would tell an analyst the
+    // figures run a day later than they do, so publish the inclusive last day.
+    periodTo: new Date(opts.to.getTime() - 86_400_000),
     facilitiesReporting: reported.length,
     facilitiesRegistered: facilitiesActive,
     completenessPercent:

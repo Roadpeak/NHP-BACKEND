@@ -1352,7 +1352,9 @@ model AggConditionDaily {
   icd11Code           String   @map("icd11_code")
   icd11Chapter        String   @map("icd11_chapter")
   ageBand             String   @map("age_band")
-  sex                 Sex
+  /// Plain string, not the Sex enum: the county-total row carries 'ALL',
+  /// which is not a person's sex and must not pretend to be.
+  sex                 String
   kephLevel           Int      @map("keph_level")
   caseCount           Int      @map("case_count")
   newCaseCount        Int      @map("new_case_count")
