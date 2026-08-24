@@ -72,6 +72,14 @@ const UI = {
     cannotChange:
       'This record cannot be deleted or changed. Corrections are added as a new entry, so your full history stays intact.',
     pendingReview: 'A recent result is being reviewed. Your clinician will contact you.',
+    // The identity strip. Deliberately not "Allergies · Active issues ·
+    // Medications" — that is the clinician's vocabulary, and this screen is
+    // read by someone with no clinical training who may be worried.
+    harmful: 'Things that could harm you',
+    longTerm: 'Long-term conditions',
+    medicines: 'Medicines you take',
+    none: 'None recorded',
+    yourNumber: 'Your number',
   },
   sw: {
     greeting: 'Habari',
@@ -86,6 +94,11 @@ const UI = {
     whoTreated: 'Aliyekutibu',
     somethingWrong: 'Kuna kitu si sahihi?',
     tellUs: 'Tuambie — tutauliza kituo',
+    harmful: 'Vitu vinavyoweza kukudhuru',
+    longTerm: 'Magonjwa ya muda mrefu',
+    medicines: 'Dawa unazotumia',
+    none: 'Hakuna iliyorekodiwa',
+    yourNumber: 'Nambari yako',
     cannotChange:
       'Rekodi hii haiwezi kufutwa wala kubadilishwa. Marekebisho huongezwa kama kipengele kipya, hivyo historia yako yote inabaki.',
     pendingReview: 'Matokeo ya hivi karibuni yanakaguliwa. Daktari wako atawasiliana nawe.',

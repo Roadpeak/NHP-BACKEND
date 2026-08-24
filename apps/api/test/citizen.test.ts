@@ -454,3 +454,37 @@ describe('disputes', () => {
     ).rejects.toThrow(/not on your record/i);
   });
 });
+
+describe('the identity strip labels', () => {
+  /**
+   * The strip mirrors the clinician's patient header, but the words must
+   * not. "Allergies · Active issues · Medications" is the vocabulary of
+   * someone with a medical degree; this screen is read by someone who may
+   * be worried, on a shared handset, in Swahili.
+   */
+  it('avoids clinical vocabulary in English', () => {
+    const en = uiStrings('en');
+    expect(en.harmful).toBe('Things that could harm you');
+    // "Allergy" is a word a lot of people will not connect to the rash they
+    // once had after an injection.
+    expect(en.harmful.toLowerCase()).not.toContain('allerg');
+    expect(en.longTerm.toLowerCase()).not.toContain('chronic');
+  });
+
+  it('translates every label, so no column renders in English inside Swahili', () => {
+    const en = uiStrings('en');
+    const sw = uiStrings('sw');
+    for (const key of ['harmful', 'longTerm', 'medicines', 'none', 'yourNumber'] as const) {
+      expect(sw[key], key).toBeTruthy();
+      // An untranslated key silently falls back to the English string and
+      // reads as a half-finished product.
+      expect(sw[key], key).not.toBe(en[key]);
+    }
+  });
+
+  it('has no missing key in either language', () => {
+    // A key present in one language and absent in the other renders as
+    // `undefined` on screen.
+    expect(Object.keys(uiStrings('sw')).sort()).toEqual(Object.keys(uiStrings('en')).sort());
+  });
+});
