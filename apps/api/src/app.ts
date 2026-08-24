@@ -24,6 +24,7 @@ import {
   grantAffiliation,
   endAffiliation,
   licencesExpiringSoon,
+  searchPractitioners,
 } from './practitioner.js';
 import {
   searchDiagnoses,
@@ -1074,6 +1075,64 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       const ctx = await contextFrom(req);
       requireMinistry(ctx, ['REGISTRAR']);
       return endAffiliation(prisma, req.params.affiliationId);
+    },
+  );
+
+  /**
+   * Practitioner search, for a registrar about to post someone.
+   *
+   * By licence number: names are encrypted with no blind index, and a
+   * licence is what a registrar is actually working from.
+   */
+  app.get<{ Querystring: { q?: string } }>(
+    `${v1}/admin/practitioners/search`,
+    async (req) => {
+      const ctx = await contextFrom(req);
+      requireMinistry(ctx, ['REGISTRAR']);
+      return searchPractitioners(prisma, req.query.q ?? '');
+    },
+  );
+
+  /**
+   * Facility search, for the same screen.
+   *
+   * Carries `ownership` on every row because it decides whether the Ministry
+   * may post here at all — a registrar choosing blind would pick a private
+   * clinic and meet the refusal afterwards.
+   */
+  app.get<{ Querystring: { q?: string; countyId?: string } }>(
+    `${v1}/admin/facilities/search`,
+    async (req) => {
+      const ctx = await contextFrom(req);
+      requireMinistry(ctx, ['REGISTRAR']);
+      const q = (req.query.q ?? '').trim();
+
+      return prisma.facility.findMany({
+        where: {
+          // Only ACTIVE: an unapproved facility can hold no affiliation, so
+          // offering it would be offering a refusal.
+          registrationStatus: 'ACTIVE',
+          ...(req.query.countyId ? { countyId: req.query.countyId } : {}),
+          ...(q.length >= 2
+            ? {
+                OR: [
+                  { name: { contains: q, mode: 'insensitive' as const } },
+                  { mflCode: { contains: q, mode: 'insensitive' as const } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: { name: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          mflCode: true,
+          name: true,
+          kephLevel: true,
+          ownership: true,
+          countyId: true,
+        },
+      });
     },
   );
 

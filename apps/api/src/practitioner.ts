@@ -22,6 +22,7 @@ import {
   type Regulator,
   type VerificationRegistry,
 } from './verification.js';
+import { decryptField } from './crypto.js';
 
 export type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -200,6 +201,87 @@ export async function activeLicences(db: Db, practitionerId: string, at: Date = 
     },
     orderBy: { expiresOn: 'desc' },
   });
+}
+
+/**
+ * Finds a practitioner a registrar is about to post.
+ *
+ * Searches by LICENCE NUMBER, not by name. Names are encrypted at rest and
+ * have no blind index, so a name search is not possible without weakening
+ * that — and it would be the wrong key anyway: a registrar posting staff is
+ * working from a licence, and two clinicians share a name far more often
+ * than they share a KMPDC number.
+ *
+ * Returns the affiliations too, so the screen can say "already at Migosi
+ * Health Centre" rather than letting someone post a duplicate and meet the
+ * refusal afterwards.
+ */
+export async function searchPractitioners(
+  db: Db,
+  query: string,
+  limit = 10,
+): Promise<
+  Array<{
+    practitionerId: string;
+    name: string;
+    cadre: string;
+    status: string;
+    licences: Array<{ regulator: string; licenceNumber: string; status: string; expiresOn: Date }>;
+    affiliations: Array<{ id: string; facilityId: string; facilityName: string; role: string }>;
+  }>
+> {
+  const q = query.trim();
+  // Two characters is too loose for a licence number and would return the
+  // whole register on a single keystroke.
+  if (q.length < 3) return [];
+
+  const licences = await db.licence.findMany({
+    where: { licenceNumber: { contains: q, mode: 'insensitive' } },
+    select: { practitionerId: true },
+    take: limit * 3,
+  });
+
+  const ids = [...new Set(licences.map((l) => l.practitionerId))].slice(0, limit);
+  if (ids.length === 0) return [];
+
+  const practitioners = await db.practitioner.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      cadre: true,
+      status: true,
+      person: { select: { givenName: true, familyName: true } },
+      licences: {
+        select: { regulator: true, licenceNumber: true, status: true, expiresOn: true },
+        orderBy: { expiresOn: 'desc' },
+      },
+      affiliations: {
+        where: { status: 'ACTIVE' },
+        select: {
+          id: true,
+          facilityId: true,
+          role: true,
+          facility: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  return practitioners.map((p) => ({
+    practitionerId: p.id,
+    // Decrypted for display only. A registrar needs to confirm they are
+    // posting the person they mean.
+    name: `${decryptField(p.person.givenName)} ${decryptField(p.person.familyName)}`,
+    cadre: p.cadre,
+    status: p.status,
+    licences: p.licences,
+    affiliations: p.affiliations.map((a) => ({
+      id: a.id,
+      facilityId: a.facilityId,
+      facilityName: a.facility.name,
+      role: a.role,
+    })),
+  }));
 }
 
 /** Licence expiry warnings — 30 days, 7 days, and on the day. */

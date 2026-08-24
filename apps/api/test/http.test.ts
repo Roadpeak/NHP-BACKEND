@@ -1401,3 +1401,192 @@ describe('the admin surface', () => {
     });
   });
 });
+
+describe('the postings search', () => {
+  /**
+   * A registrar posting staff needs to find the right clinician and the
+   * right facility. Both searches are REGISTRAR-only, and both are shaped
+   * so the screen can refuse a bad posting before it is attempted rather
+   * than showing the refusal afterwards.
+   */
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  it('finds a practitioner by licence number', async () => {
+    const doctor = await clinician();
+    const registrar = await ministryUserAs('REGISTRAR');
+
+    const licence = await prisma.licence.findFirst({
+      where: { practitionerId: doctor.practitioner.id },
+      select: { licenceNumber: true },
+    });
+    expect(licence).toBeTruthy();
+
+    const res = await get(
+      `/admin/practitioners/search?q=${encodeURIComponent(licence!.licenceNumber)}`,
+      registrar.accessToken,
+    );
+
+    expect(res.statusCode).toBe(200);
+    const hits = res.json();
+    expect(hits).toHaveLength(1);
+    expect(hits[0].practitionerId).toBe(doctor.practitioner.id);
+    // Decrypted for display: a registrar must confirm they are posting the
+    // person they mean.
+    expect(hits[0].name).toMatch(/Amina/);
+    expect(hits[0].cadre).toBe('DOCTOR');
+  });
+
+  it('matches a partial licence number', async () => {
+    const doctor = await clinician();
+    const registrar = await ministryUserAs('REGISTRAR');
+    const licence = await prisma.licence.findFirst({
+      where: { practitionerId: doctor.practitioner.id },
+      select: { licenceNumber: true },
+    });
+
+    const partial = licence!.licenceNumber.slice(-6);
+    const res = await get(
+      `/admin/practitioners/search?q=${encodeURIComponent(partial)}`,
+      registrar.accessToken,
+    );
+    expect(res.json().length).toBeGreaterThan(0);
+  });
+
+  it('returns nothing below three characters', async () => {
+    const registrar = await ministryUserAs('REGISTRAR');
+    // Two characters would return the whole register on one keystroke.
+    expect((await get('/admin/practitioners/search?q=KM', registrar.accessToken)).json()).toEqual([]);
+    expect((await get('/admin/practitioners/search', registrar.accessToken)).json()).toEqual([]);
+  });
+
+  it('THE DUPLICATE GUARD — reports where a practitioner is already posted', async () => {
+    const doctor = await clinician();
+    const registrar = await ministryUserAs('REGISTRAR');
+    const licence = await prisma.licence.findFirst({
+      where: { practitionerId: doctor.practitioner.id },
+      select: { licenceNumber: true },
+    });
+
+    const hits = (
+      await get(
+        `/admin/practitioners/search?q=${encodeURIComponent(licence!.licenceNumber)}`,
+        registrar.accessToken,
+      )
+    ).json();
+
+    // `clinician()` affiliates and checks in, so there is one already. The
+    // screen shows it so nobody posts a duplicate and meets the refusal.
+    expect(hits[0].affiliations.length).toBeGreaterThan(0);
+    expect(hits[0].affiliations[0].facilityName).toBe('Kisumu County Referral');
+  });
+
+  it('finds a facility by name and by MFL code', async () => {
+    const registrar = await ministryUserAs('REGISTRAR');
+    seq++;
+    const f = await registerFacility(prisma, {
+      name: 'Nyalenda Dispensary',
+      kephLevel: 2,
+      ownership: 'PUBLIC_MOH',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      locality: 'Nyalenda',
+      latitude: -0.1122,
+      longitude: 34.755,
+      mflCode: `MFL-SRCH-${seq}`,
+    });
+    await approveFacility(prisma, f.id, 'ministry-fixture');
+
+    const byName = await get('/admin/facilities/search?q=Nyalenda', registrar.accessToken);
+    expect(byName.json().map((x: { id: string }) => x.id)).toContain(f.id);
+
+    const byCode = await get(
+      `/admin/facilities/search?q=MFL-SRCH-${seq}`,
+      registrar.accessToken,
+    );
+    expect(byCode.json().map((x: { id: string }) => x.id)).toContain(f.id);
+  });
+
+  it('THE OWNERSHIP FIELD — every facility row says who may staff it', async () => {
+    const registrar = await ministryUserAs('REGISTRAR');
+    seq++;
+    const f = await registerFacility(prisma, {
+      name: 'Ownership Test Clinic',
+      kephLevel: 3,
+      ownership: 'FAITH_BASED',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      locality: 'Town',
+      latitude: -0.0917,
+      longitude: 34.768,
+      mflCode: `MFL-OWNF-${seq}`,
+    });
+    await approveFacility(prisma, f.id, 'ministry-fixture');
+
+    const res = await get('/admin/facilities/search?q=Ownership', registrar.accessToken);
+    const row = res.json().find((x: { id: string }) => x.id === f.id);
+
+    // Without this the registrar picks blind and meets the refusal after
+    // choosing. Faith-based is private: the facility engages its own staff.
+    expect(row.ownership).toBe('FAITH_BASED');
+  });
+
+  it('never offers an unapproved facility', async () => {
+    const registrar = await ministryUserAs('REGISTRAR');
+    seq++;
+    const pending = await registerFacility(prisma, {
+      name: 'Unapproved Search Clinic',
+      kephLevel: 3,
+      ownership: 'PUBLIC_MOH',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      locality: 'Town',
+      latitude: -0.0917,
+      longitude: 34.768,
+      mflCode: `MFL-UNS-${seq}`,
+    });
+
+    const res = await get('/admin/facilities/search?q=Unapproved', registrar.accessToken);
+    // Offering it would be offering a refusal: an unapproved facility can
+    // hold no affiliation.
+    expect(res.json().map((x: { id: string }) => x.id)).not.toContain(pending.id);
+  });
+
+  it('is REGISTRAR-only, like the postings it feeds', async () => {
+    for (const role of ['ANALYST', 'AUDITOR', 'SURVEILLANCE']) {
+      const { accessToken } = await ministryUserAs(role);
+      for (const url of [
+        '/admin/practitioners/search?q=KMPDC',
+        '/admin/facilities/search?q=Kisumu',
+      ]) {
+        expect((await get(url, accessToken)).statusCode, `${role} ${url}`).toBe(403);
+      }
+    }
+  });
+
+  it('refuses a practitioner and an unauthenticated caller', async () => {
+    const doctor = await clinician();
+    const url = '/admin/practitioners/search?q=KMPDC';
+    expect((await get(url, doctor.accessToken)).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: `/api/v1${url}` })).statusCode).toBe(401);
+  });
+
+  it('does not leak a National ID or an NHP number through the search', async () => {
+    const doctor = await clinician();
+    const registrar = await ministryUserAs('REGISTRAR');
+    const licence = await prisma.licence.findFirst({
+      where: { practitionerId: doctor.practitioner.id },
+      select: { licenceNumber: true },
+    });
+
+    const res = await get(
+      `/admin/practitioners/search?q=${encodeURIComponent(licence!.licenceNumber)}`,
+      registrar.accessToken,
+    );
+
+    // A registrar needs a name and a licence to post someone. Their patient
+    // identity is not part of that decision.
+    expect(res.body).not.toMatch(/NHP-[A-Z0-9]{4}/);
+    expect(res.body).not.toMatch(/nationalId/i);
+  });
+});
