@@ -95,6 +95,7 @@ import {
   revokeAllSessions,
   verifyAccessToken,
   contextFromClaims,
+  accountFromEnrolToken,
   requirePractitioner,
   requireMinistry,
   requireSelf,
@@ -830,15 +831,43 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     };
   });
 
-  app.post<{ Body: { label?: string } }>(`${v1}/auth/mfa/enrol`, async (req) => {
-    const ctx = await contextFrom(req);
-    return enrolTotp(prisma, ctx.accountId, req.body?.label ?? 'NHP account');
-  });
+  /**
+   * Whose account is enrolling.
+   *
+   * Accepts EITHER a normal session (someone adding or changing a factor
+   * while already signed in) OR an enrolment token (someone who cannot
+   * sign in yet because they have no factor at all). Without the second
+   * case a newly registered clinician is locked out permanently: every
+   * enrolment route needs a session, and they cannot obtain one.
+   *
+   * The enrolment token is checked on its own audience, so it unlocks
+   * nothing but these four routes.
+   */
+  async function enrollingAccount(req: {
+    headers: Record<string, unknown>;
+    body?: unknown;
+  }): Promise<string> {
+    const enrolToken = (req.body as { enrolToken?: string } | undefined)?.enrolToken;
+    if (enrolToken) return accountFromEnrolToken(enrolToken);
+    const ctx = await contextFrom(req as never);
+    return ctx.accountId;
+  }
 
-  app.post<{ Body: { code: string } }>(`${v1}/auth/mfa/confirm`, async (req) => {
-    const ctx = await contextFrom(req);
-    return confirmTotp(prisma, ctx.accountId, req.body.code);
-  });
+  app.post<{ Body: { label?: string; enrolToken?: string } }>(
+    `${v1}/auth/mfa/enrol`,
+    async (req) => {
+      const accountId = await enrollingAccount(req);
+      return enrolTotp(prisma, accountId, req.body?.label ?? 'NHP account');
+    },
+  );
+
+  app.post<{ Body: { code: string; enrolToken?: string } }>(
+    `${v1}/auth/mfa/confirm`,
+    async (req) => {
+      const accountId = await enrollingAccount(req);
+      return confirmTotp(prisma, accountId, req.body.code);
+    },
+  );
 
   /**
    * SMS second factor.
@@ -846,15 +875,21 @@ export async function buildApp(prismaOverride?: PrismaClient) {
    * The primary channel for Kenya: authenticator apps assume a smartphone,
    * and a clinical officer on a feature phone has none.
    */
-  app.post(`${v1}/auth/mfa/sms/enrol`, async (req) => {
-    const ctx = await contextFrom(req);
-    return enrolSms(prisma, ctx.accountId);
-  });
+  app.post<{ Body: { enrolToken?: string } }>(
+    `${v1}/auth/mfa/sms/enrol`,
+    async (req) => {
+      const accountId = await enrollingAccount(req);
+      return enrolSms(prisma, accountId);
+    },
+  );
 
-  app.post<{ Body: { code: string } }>(`${v1}/auth/mfa/sms/confirm`, async (req) => {
-    const ctx = await contextFrom(req);
-    return confirmSms(prisma, ctx.accountId, req.body.code);
-  });
+  app.post<{ Body: { code: string; enrolToken?: string } }>(
+    `${v1}/auth/mfa/sms/confirm`,
+    async (req) => {
+      const accountId = await enrollingAccount(req);
+      return confirmSms(prisma, accountId, req.body.code);
+    },
+  );
 
   /** Resend a login code. No session yet, so the mfaToken is the credential. */
   app.post<{ Body: { mfaToken: string } }>(`${v1}/auth/mfa/resend`, async (req) =>

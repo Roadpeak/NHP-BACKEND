@@ -240,13 +240,22 @@ describe('login', () => {
 });
 
 describe('MFA', () => {
-  it('THE ENROLMENT GATE — a clinician with no second factor cannot sign in', async () => {
+  it('THE ENROLMENT GATE — a clinician with no second factor gets no session', async () => {
     const { phone } = await makeClinicianAccount({ mfa: 'NONE' });
 
     // A client that "forgets" to prompt must not reach patient data, so the
-    // refusal is here rather than trusted to the UI.
-    const result = await login(prisma, { phone, password: PASSWORD }).catch((e) => e);
-    expect(result.code).toBe('MFA_ENROLMENT_REQUIRED');
+    // gate is here rather than trusted to the UI.
+    const result = await login(prisma, { phone, password: PASSWORD });
+    expect(result.status).toBe('MFA_ENROLMENT_REQUIRED');
+
+    // The guarantee, stated directly: no session of any kind.
+    expect(result.accessToken).toBeUndefined();
+    expect(result.refreshToken).toBeUndefined();
+
+    // What they DO get is a way through — scoped to enrolment, on its own
+    // audience. Before this they were locked out permanently, because every
+    // enrolment route needed the session they could not obtain.
+    expect(result.enrolToken).toBeTruthy();
   });
 
   it('stops a clinician login at the MFA step', async () => {

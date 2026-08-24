@@ -333,12 +333,17 @@ export function verifyTotp(secretBase32: string, code: string): boolean {
 // ------------------------------------------------------------------- login
 
 export interface LoginResult {
-  status: 'AUTHENTICATED' | 'MFA_REQUIRED';
+  status: 'AUTHENTICATED' | 'MFA_REQUIRED' | 'MFA_ENROLMENT_REQUIRED';
   accessToken?: string;
   refreshToken?: string;
   /** Present when MFA is required — proves the password step passed. */
   mfaToken?: string;
   mfaMode?: 'SMS' | 'TOTP';
+  /**
+   * Present when the account has no second factor yet. Scoped to enrolment
+   * only: it is NOT a session and cannot read a patient record.
+   */
+  enrolToken?: string;
   /** Masked destination, so the user knows which handset to check. */
   sentTo?: string;
 }
@@ -450,12 +455,32 @@ export async function login(
   }
 
   if (privileged && account.mfaMode === 'NONE') {
-    throw new AuthError(
-      'This account can reach patient data and has no second factor. ' +
-        'Enrol in MFA before signing in.',
-      'MFA_ENROLMENT_REQUIRED',
-      403,
-    );
+    /*
+     * The deadlock this resolves: every enrolment route needs a session,
+     * and this account cannot obtain one until it has enrolled. A clinician
+     * who registered had no way through at all.
+     *
+     * The password has ALREADY been verified above, so credentials are
+     * proven. What is issued here is deliberately not a session: a
+     * short-lived token on its own audience (`nhp-enrol`) that the
+     * enrolment routes accept and nothing else does. It cannot read a
+     * patient record, and it expires in ten minutes.
+     */
+    const enrolToken = await new SignJWT({ accountId: account.id, stage: 'ENROL' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setIssuer('nhp')
+      .setAudience('nhp-enrol')
+      .setExpirationTime('10m')
+      .sign(secret());
+
+    return {
+      status: 'MFA_ENROLMENT_REQUIRED',
+      enrolToken,
+      // The number a code would go to, masked — so the clinician can
+      // confirm which handset before choosing SMS.
+      sentTo: maskPhone(normalisePhone(decryptField(account.phone))),
+    };
   }
 
   return issueSession(db, account, input.deviceHint, false);
@@ -503,6 +528,29 @@ async function issueSession(
 
   const refreshToken = await issueRefreshToken(db, account.id, familyId, deviceHint);
   return { status: 'AUTHENTICATED', accessToken, refreshToken };
+}
+
+/**
+ * Verifies an enrolment token and returns the account it belongs to.
+ *
+ * Separate from `verifyAccessToken` and on its own audience, so a token
+ * minted for enrolment can never be presented as a session — and a session
+ * token can never be presented here.
+ */
+export async function accountFromEnrolToken(token: string): Promise<string> {
+  try {
+    const { payload } = await jwtVerify(token, secret(), {
+      issuer: 'nhp',
+      audience: 'nhp-enrol',
+    });
+    if (payload.stage !== 'ENROL') throw new Error('wrong stage');
+    return payload.accountId as string;
+  } catch {
+    throw new AuthError(
+      'That enrolment session expired. Sign in again to restart it.',
+      'ENROL_TOKEN_INVALID',
+    );
+  }
 }
 
 /** Completes login for an account that requires a second factor. */

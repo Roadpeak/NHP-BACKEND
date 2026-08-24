@@ -1918,10 +1918,12 @@ describe('a registered clinician can actually sign in as one', () => {
     });
 
     const login = await post('/auth/login', { phone: licenceNumber, password });
-    // A privileged account must enrol a second factor before it can sign
-    // in — reaching THAT refusal proves the account exists and is clinical.
-    expect(login.statusCode).toBe(403);
-    expect(login.json().code).toBe('MFA_ENROLMENT_REQUIRED');
+    // A privileged account must enrol a second factor before it can hold a
+    // session. Reaching THAT state proves the account exists and is
+    // clinical — and it now comes with a way through rather than a dead end.
+    expect(login.json().status).toBe('MFA_ENROLMENT_REQUIRED');
+    expect(login.json().enrolToken).toBeTruthy();
+    expect(login.json().accessToken).toBeUndefined();
   });
 
   it('the phone still signs them in to their OWN patient record', async () => {
@@ -2660,5 +2662,174 @@ describe('CORS', () => {
       },
     });
     expect(res.headers['access-control-allow-credentials']).toBe('true');
+  });
+});
+
+describe('MFA enrolment for an account that cannot yet sign in', () => {
+  /**
+   * THE DEADLOCK. A privileged account with no second factor is refused at
+   * sign-in, and every enrolment route required a session — so a newly
+   * registered clinician could never obtain one. They were locked out
+   * permanently with no route through.
+   *
+   * The password is verified BEFORE that refusal, so credentials are already
+   * proven. What login now returns is deliberately not a session: a
+   * short-lived token on its own audience that unlocks the four enrolment
+   * routes and nothing else.
+   */
+  async function unenrolledClinician() {
+    const person = await makePerson('Amina');
+    seq++;
+    const { practitioner } = await registerPractitioner(prisma, {
+      personId: person.id,
+      cadre: 'DOCTOR',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      licenceNumber: `KMPDC/2026/E${String(seq).padStart(3, '0')}`,
+    });
+
+    seq++;
+    const phone = `07330000${String(seq).padStart(2, '0')}`;
+    const password = 'a-long-enough-password';
+    await prisma.account.create({
+      data: {
+        practitionerId: practitioner.id,
+        phone: encryptField(phone),
+        phoneIndex: blindIndex(phone, normalisePhone),
+        passwordHash: await hashPassword(password),
+        status: 'ACTIVE',
+        // The state the deadlock describes.
+        mfaMode: 'NONE',
+      },
+    });
+
+    return { phone, password, practitioner };
+  }
+
+  const login = (phone: string, password: string) =>
+    app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { phone, password } });
+
+  it('THE WAY THROUGH — login offers an enrolment token instead of refusing', async () => {
+    const c = await unenrolledClinician();
+    const res = await login(c.phone, c.password);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('MFA_ENROLMENT_REQUIRED');
+    expect(res.json().enrolToken).toBeTruthy();
+    // Masked, so they can confirm which handset before choosing SMS.
+    expect(res.json().sentTo).toMatch(/\*/);
+  });
+
+  it('is NOT a session — it carries no access token', async () => {
+    const c = await unenrolledClinician();
+    const body = (await login(c.phone, c.password)).json();
+
+    expect(body.accessToken).toBeUndefined();
+    expect(body.refreshToken).toBeUndefined();
+  });
+
+  it('THE SCOPE RULE — the enrolment token cannot read a patient record', async () => {
+    const c = await unenrolledClinician();
+    const { enrolToken } = (await login(c.phone, c.password)).json();
+    const patient = await makePerson();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/persons/${patient.displayNumber}/summary`,
+      headers: { authorization: `Bearer ${enrolToken}` },
+    });
+    // Different audience: presenting it as a session must fail outright.
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('enrols SMS and completes, so the account can then sign in', async () => {
+    const c = await unenrolledClinician();
+    const { enrolToken } = (await login(c.phone, c.password)).json();
+
+    const enrol = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/sms/enrol',
+      payload: { enrolToken },
+    });
+    expect(enrol.statusCode).toBe(200);
+
+    const code = sms.sent.at(-1)?.body.match(/\b(\d{6})\b/)?.[1];
+    expect(code).toBeTruthy();
+
+    const confirm = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/sms/confirm',
+      payload: { enrolToken, code },
+    });
+    expect(confirm.statusCode).toBe(200);
+
+    // The deadlock is broken: the same credentials now reach the MFA step
+    // rather than being refused outright.
+    const after = await login(c.phone, c.password);
+    expect(after.json().status).toBe('MFA_REQUIRED');
+    expect(after.json().mfaToken).toBeTruthy();
+  });
+
+  it('enrols TOTP and completes', async () => {
+    const c = await unenrolledClinician();
+    const { enrolToken } = (await login(c.phone, c.password)).json();
+
+    const enrol = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/enrol',
+      payload: { enrolToken, label: 'NHP' },
+    });
+    expect(enrol.statusCode).toBe(200);
+    // An authenticator app needs both: the QR to scan and the secret to
+    // type when a camera will not focus.
+    expect(enrol.json().otpauthUrl ?? enrol.json().uri).toBeTruthy();
+  });
+
+  it('refuses a forged or expired enrolment token', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/sms/enrol',
+      payload: { enrolToken: 'not-a-real-token' },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('ENROL_TOKEN_INVALID');
+  });
+
+  it('THE AUDIENCE RULE — a session token is not an enrolment token', async () => {
+    const doctor = await clinician();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/sms/enrol',
+      payload: { enrolToken: doctor.accessToken },
+    });
+    // Minted for `nhp-api`, presented to `nhp-enrol`: refused. The two
+    // tokens are not interchangeable in either direction.
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('still lets a signed-in account enrol a second factor normally', async () => {
+    const doctor = await clinician();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/enrol',
+      headers: { authorization: `Bearer ${doctor.accessToken}` },
+      payload: { label: 'NHP' },
+    });
+    // The ordinary path — adding or changing a factor while signed in —
+    // must keep working.
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('refuses enrolment with neither a session nor a token', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/v1/auth/mfa/sms/enrol' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('a citizen account still signs in without any of this', async () => {
+    const person = await makePerson();
+    const res = await login(person.phone, CITIZEN_PASSWORD);
+    // Only privileged accounts are forced to enrol; a citizen with no
+    // second factor is not locked out of their own record.
+    expect(res.json().status).toBe('AUTHENTICATED');
   });
 });
