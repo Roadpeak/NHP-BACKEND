@@ -90,6 +90,17 @@ export interface AccessClaims extends JWTPayload {
   /** Present only for clinical accounts. */
   practitionerId?: string;
   ministryUserId?: string;
+  /**
+   * The Ministry role, carried in the token so a guard can check it without
+   * a database round trip on every request. It is safe here because the
+   * token is signed: a client cannot promote itself to REGISTRAR by editing
+   * a claim.
+   */
+  ministryRole?: string;
+  /** NATIONAL, COUNTY or SUBCOUNTY — how far this account's remit reaches. */
+  geoScope?: string;
+  /** Set when geoScope is COUNTY: which county. */
+  scopeCountyId?: string;
   personId?: string;
   /** Whether a second factor was actually presented in this session. */
   mfa: boolean;
@@ -463,11 +474,29 @@ async function issueSession(
 ): Promise<LoginResult> {
   const familyId = randomBytes(16).toString('hex');
 
+  // A Ministry account's role and geographic scope go into the token, so
+  // every guard can check them without a query. Read at sign-in rather than
+  // trusted from the client: a revoked role takes effect on the next login,
+  // and the 15-minute access token bounds how long a stale one survives.
+  const ministry = account.ministryUserId
+    ? await db.ministryUser.findUnique({
+        where: { id: account.ministryUserId },
+        select: { role: true, geoScope: true, countyId: true, status: true },
+      })
+    : null;
+
+  if (ministry && ministry.status !== 'ACTIVE') {
+    throw new AuthError('That Ministry account is not active', 'ACCOUNT_SUSPENDED', 403);
+  }
+
   const accessToken = await issueAccessToken({
     sub: account.id,
     accountId: account.id,
     practitionerId: account.practitionerId ?? undefined,
     ministryUserId: account.ministryUserId ?? undefined,
+    ministryRole: ministry?.role ?? undefined,
+    geoScope: ministry?.geoScope ?? undefined,
+    scopeCountyId: ministry?.countyId ?? undefined,
     personId: account.personId ?? undefined,
     mfa: mfaSatisfied,
   });
@@ -705,6 +734,9 @@ export interface AuthContext {
   accountId: string;
   practitionerId?: string;
   ministryUserId?: string;
+  ministryRole?: string;
+  geoScope?: string;
+  scopeCountyId?: string;
   personId?: string;
   mfa: boolean;
 }
@@ -714,6 +746,9 @@ export function contextFromClaims(claims: AccessClaims): AuthContext {
     accountId: claims.accountId,
     practitionerId: claims.practitionerId,
     ministryUserId: claims.ministryUserId,
+    ministryRole: claims.ministryRole,
+    geoScope: claims.geoScope,
+    scopeCountyId: claims.scopeCountyId,
     personId: claims.personId,
     mfa: claims.mfa,
   };
@@ -739,6 +774,15 @@ export function requirePractitioner(ctx: AuthContext): string {
   return ctx.practitionerId;
 }
 
+/**
+ * The four Ministry roles exist to separate what one person can do, and
+ * SUPER_ADMIN is the platform administrator that holds all of them.
+ *
+ * `roles` was previously accepted and DISCARDED — `void roles` — so every
+ * Ministry route was reachable by every Ministry account and the separation
+ * was decoration. An AUDITOR could approve facilities; an ANALYST could post
+ * staff to a county hospital.
+ */
 export function requireMinistry(ctx: AuthContext, roles?: string[]): string {
   if (!ctx.ministryUserId) {
     throw new AuthError('This endpoint requires a Ministry account', 'NOT_MINISTRY', 403);
@@ -746,7 +790,22 @@ export function requireMinistry(ctx: AuthContext, roles?: string[]): string {
   if (!ctx.mfa) {
     throw new AuthError('Ministry accounts require a second factor', 'MFA_REQUIRED', 403);
   }
-  void roles;
+
+  if (roles && roles.length > 0) {
+    // A token issued before the role claim existed has no role. Refusing is
+    // the only safe reading: an absent claim must never satisfy a check.
+    const held = ctx.ministryRole;
+    const permitted = held === 'SUPER_ADMIN' || (held !== undefined && roles.includes(held));
+
+    if (!permitted) {
+      throw new AuthError(
+        `This action requires the ${roles.join(' or ')} role`,
+        'WRONG_MINISTRY_ROLE',
+        403,
+      );
+    }
+  }
+
   return ctx.ministryUserId;
 }
 

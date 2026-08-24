@@ -668,6 +668,12 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       accountId: ctx.accountId,
       practitionerId: ctx.practitionerId ?? null,
       ministryUserId: ctx.ministryUserId ?? null,
+      // The admin portal shows different sections per role, so it must be
+      // able to read the role without a second call. Authorisation is still
+      // the server's: this only tells the UI what not to bother rendering.
+      ministryRole: ctx.ministryRole ?? null,
+      geoScope: ctx.geoScope ?? null,
+      scopeCountyId: ctx.scopeCountyId ?? null,
       personId: ctx.personId ?? null,
       mfaSatisfied: ctx.mfa,
       checkedInAt: session?.facility.name ?? null,
@@ -856,7 +862,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
 
   app.get(`${v1}/analytics/burden`, async (req) => {
     const ctx = await contextFrom(req);
-    requireMinistry(ctx);
+    requireMinistry(ctx, ['ANALYST']);
     const { icd11Code, chapter } = req.query as { icd11Code?: string; chapter?: string };
     return burdenByCounty(prisma, { ...periodFrom(req.query as never), icd11Code, chapter });
   });
@@ -865,7 +871,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     `${v1}/analytics/burden/:countyId`,
     async (req) => {
       const ctx = await contextFrom(req);
-      requireMinistry(ctx);
+      requireMinistry(ctx, ['ANALYST']);
       const { icd11Code, chapter } = req.query as { icd11Code?: string; chapter?: string };
       // Refuses a subcounty breakdown of a restricted chapter outright — those
       // aggregate at county level only, even for an Analyst.
@@ -880,26 +886,28 @@ export async function buildApp(prismaOverride?: PrismaClient) {
 
   app.get(`${v1}/analytics/referral-closure`, async (req) => {
     const ctx = await contextFrom(req);
-    requireMinistry(ctx);
+    requireMinistry(ctx, ['ANALYST']);
     return referralClosureByCounty(prisma, periodFrom(req.query as never));
   });
 
   app.get(`${v1}/analytics/workforce`, async (req) => {
     const ctx = await contextFrom(req);
-    requireMinistry(ctx);
+    requireMinistry(ctx, ['ANALYST']);
     const { from } = periodFrom(req.query as never);
     return workforceByCounty(prisma, { since: from });
   });
 
   app.get(`${v1}/analytics/care-gaps`, async (req) => {
     const ctx = await contextFrom(req);
-    requireMinistry(ctx);
+    requireMinistry(ctx, ['ANALYST']);
     return careGaps(prisma);
   });
 
   app.get(`${v1}/analytics/surveillance`, async (req) => {
     const ctx = await contextFrom(req);
-    requireMinistry(ctx);
+    // Notifiable-disease signals belong to SURVEILLANCE, not to every
+      // analyst who can read a burden chart.
+    requireMinistry(ctx, ['SURVEILLANCE']);
     return notifiableSignals(prisma, periodFrom(req.query as never));
   });
 
@@ -934,7 +942,9 @@ export async function buildApp(prismaOverride?: PrismaClient) {
   /** Triggers the nightly rollup. Normally a cron job. */
   app.post(`${v1}/analytics/rollup`, async (req) => {
     const ctx = await contextFrom(req);
-    requireMinistry(ctx);
+    // Recomputing the national rollup rewrites what every other figure is
+    // derived from. Deliberately the narrowest role on the surface.
+    requireMinistry(ctx, ['SUPER_ADMIN']);
     return rollupConditions(prisma, periodFrom(req.query as never));
   });
 

@@ -15,7 +15,8 @@
     "serve": "tsx watch src/server.ts",
     "seed:demo": "tsx src/seed-demo.ts",
     "demo:reset": "tsx src/seed-demo.ts --reset",
-    "dev:code": "tsx src/dev-code.ts"
+    "dev:code": "tsx src/dev-code.ts",
+    "ministry:bootstrap": "tsx src/bootstrap-admin.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

@@ -417,6 +417,12 @@ enum ReviewStatus {
 }
 
 enum MinRole {
+  /**
+   * The platform administrator. Holds every Ministry capability, and is the
+   * only role that may create other Ministry accounts — which is why there
+   * is a bootstrap script and no self-registration for any of them.
+   */
+  SUPER_ADMIN
   ANALYST
   REGISTRAR
   SURVEILLANCE

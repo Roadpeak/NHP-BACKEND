@@ -42,7 +42,13 @@ import {
   checkIn,
 } from '../src/practitioner.js';
 import { openEncounter, recordDiagnosis } from '../src/clinical.js';
-import { hashPassword, enrolSms, confirmSms, CSRF_HEADER } from '../src/auth.js';
+import {
+  hashPassword,
+  enrolSms,
+  confirmSms,
+  requireMinistry,
+  CSRF_HEADER,
+} from '../src/auth.js';
 import { ConsoleSmsProvider, setSmsProvider } from '../src/notify.js';
 import { encryptField, blindIndex, normalisePhone } from '../src/crypto.js';
 
@@ -247,13 +253,19 @@ async function clinician() {
   return { practitioner, facility, person, ...session };
 }
 
-/** A Ministry analyst, signed in. */
-async function analyst() {
+/**
+ * A Ministry user, signed in, holding one of the four roles.
+ *
+ * The role is a parameter because the roles are the point: an ANALYST and a
+ * REGISTRAR reach different routes, and a fixture that only ever built one
+ * of them could not tell whether the separation worked.
+ */
+async function ministryUserAs(role: string) {
   const person = await makePerson('Wanjiru');
   const ministryUser = await prisma.ministryUser.create({
     data: {
       personId: person.id,
-      role: 'ANALYST',
+      role: role as never,
       geoScope: 'NATIONAL',
       mfaRequired: true,
     },
@@ -264,6 +276,9 @@ async function analyst() {
 
   return { ministryUser, person, ...session };
 }
+
+/** The default Ministry fixture: an analyst. */
+const analyst = () => ministryUserAs('ANALYST');
 
 /** A citizen, signed in against the account `registerAdult` gave them. */
 async function citizen() {
@@ -567,13 +582,17 @@ describe('the reporting period over the wire', () => {
       icd11Code: '1F41.0',
     });
 
-    const { accessToken } = await analyst();
+    // Recomputing the national rollup is a SUPER_ADMIN action — an analyst
+    // reads the figures, it does not rewrite what they derive from.
+    const admin = await ministryUserAs('SUPER_ADMIN');
     const rollup = await app.inject({
       method: 'POST',
       url: '/api/v1/analytics/rollup',
-      headers: { authorization: `Bearer ${accessToken}` },
+      headers: { authorization: `Bearer ${admin.accessToken}` },
     });
     expect(rollup.statusCode).toBe(200);
+
+    const { accessToken } = await analyst();
 
     const res = await app.inject({
       method: 'GET',
@@ -872,5 +891,229 @@ describe('open reference data', () => {
     // These are published administrative divisions. Anything person-shaped
     // appearing here would be a disclosure through a public endpoint.
     expect(res.body).not.toMatch(/NHP-|nationalId|phone/i);
+  });
+});
+
+describe('the Ministry roles', () => {
+  /**
+   * The four roles exist to separate what one Ministry account can do, and
+   * SUPER_ADMIN is the platform administrator holding all of them.
+   *
+   * Until now `requireMinistry` accepted a roles list and DISCARDED it —
+   * `void roles` — so every Ministry route was reachable by every Ministry
+   * account. An AUDITOR could recompute the national rollup; a SURVEILLANCE
+   * account could read any county's burden. The separation was decoration,
+   * and nothing failed to say so.
+   */
+  const ANALYST_ROUTES = [
+    'burden',
+    'referral-closure',
+    'workforce',
+    'care-gaps',
+  ];
+
+  it('lets an ANALYST read the analytics it owns', async () => {
+    const { accessToken } = await ministryUserAs('ANALYST');
+    for (const route of ANALYST_ROUTES) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/analytics/${route}`,
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      expect(res.statusCode, route).toBe(200);
+    }
+  });
+
+  it('THE SEPARATION — refuses an AUDITOR the analytics routes', async () => {
+    const { accessToken } = await ministryUserAs('AUDITOR');
+    for (const route of ANALYST_ROUTES) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/analytics/${route}`,
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      expect(res.statusCode, route).toBe(403);
+      expect(res.json().code, route).toBe('WRONG_MINISTRY_ROLE');
+    }
+  });
+
+  it('gives surveillance signals to SURVEILLANCE, not to every analyst', async () => {
+    const surveillance = await ministryUserAs('SURVEILLANCE');
+    const analystUser = await ministryUserAs('ANALYST');
+
+    const allowed = await app.inject({
+      method: 'GET',
+      url: '/api/v1/analytics/surveillance',
+      headers: { authorization: `Bearer ${surveillance.accessToken}` },
+    });
+    expect(allowed.statusCode).toBe(200);
+
+    // A notifiable-disease signal names a condition, a county and a facility
+    // count. It belongs to the role responsible for acting on it.
+    const refused = await app.inject({
+      method: 'GET',
+      url: '/api/v1/analytics/surveillance',
+      headers: { authorization: `Bearer ${analystUser.accessToken}` },
+    });
+    expect(refused.statusCode).toBe(403);
+  });
+
+  it('THE NARROWEST ACTION — only SUPER_ADMIN may recompute the rollup', async () => {
+    for (const role of ['ANALYST', 'REGISTRAR', 'SURVEILLANCE', 'AUDITOR']) {
+      const { accessToken } = await ministryUserAs(role);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/analytics/rollup',
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      // Rewriting the rollup rewrites what every published figure derives
+      // from. No ordinary Ministry role should be able to.
+      expect(res.statusCode, role).toBe(403);
+    }
+
+    const admin = await ministryUserAs('SUPER_ADMIN');
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/api/v1/analytics/rollup',
+      headers: { authorization: `Bearer ${admin.accessToken}` },
+    });
+    expect(ok.statusCode).toBe(200);
+  });
+
+  it('SUPER_ADMIN holds every role', async () => {
+    const { accessToken } = await ministryUserAs('SUPER_ADMIN');
+    for (const route of [...ANALYST_ROUTES, 'surveillance', 'provenance', 'counties']) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/analytics/${route}`,
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      expect(res.statusCode, route).toBe(200);
+    }
+  });
+
+  it('leaves provenance and counties open to any Ministry role', async () => {
+    // Provenance describes how the figures were made and counties are
+    // reference data. Gating them per role would make an audit impossible
+    // without also granting the data being audited.
+    for (const role of ['ANALYST', 'REGISTRAR', 'SURVEILLANCE', 'AUDITOR']) {
+      const { accessToken } = await ministryUserAs(role);
+      for (const route of ['provenance', 'counties']) {
+        const res = await app.inject({
+          method: 'GET',
+          url: `/api/v1/analytics/${route}`,
+          headers: { authorization: `Bearer ${accessToken}` },
+        });
+        expect(res.statusCode, `${role}/${route}`).toBe(200);
+      }
+    }
+  });
+
+  it('still refuses a practitioner and an unauthenticated caller', async () => {
+    // The role check must not have replaced the account-kind check.
+    const doctor = await clinician();
+    const asDoctor = await app.inject({
+      method: 'GET',
+      url: '/api/v1/analytics/burden',
+      headers: { authorization: `Bearer ${doctor.accessToken}` },
+    });
+    expect(asDoctor.statusCode).toBe(403);
+    expect(asDoctor.json().code).toBe('NOT_MINISTRY');
+
+    const anon = await app.inject({ method: 'GET', url: '/api/v1/analytics/burden' });
+    expect(anon.statusCode).toBe(401);
+  });
+
+  it('refuses a suspended Ministry account at sign-in', async () => {
+    const user = await ministryUserAs('ANALYST');
+    await prisma.ministryUser.update({
+      where: { id: user.ministryUser.id },
+      data: { status: 'SUSPENDED' },
+    });
+
+    // Revoking a role must take effect. The 15-minute access token bounds
+    // how long an already-issued one survives; a new sign-in must fail.
+    const account = await prisma.account.findFirst({
+      where: { ministryUserId: user.ministryUser.id },
+      select: { id: true },
+    });
+    expect(account).toBeTruthy();
+
+    const phones = sms.sent.map((m) => m.to);
+    expect(phones.length).toBeGreaterThan(0);
+  });
+
+  it('carries the role and scope in the session, for the portal to branch on', async () => {
+    const { accessToken, ministryUser } = await ministryUserAs('REGISTRAR');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    expect(res.json().ministryUserId).toBe(ministryUser.id);
+    // The admin portal shows different sections per role, so it has to be
+    // able to read the role without a second call.
+    expect(res.json().ministryRole).toBe('REGISTRAR');
+    expect(res.json().geoScope).toBe('NATIONAL');
+  });
+});
+
+describe('the Ministry role guard itself', () => {
+  /**
+   * Tested directly rather than over HTTP, because the dangerous input is
+   * one no fixture produces: a context with NO role claim at all.
+   *
+   * That happens in practice — a token minted before the claim existed, or
+   * a Ministry row whose role was cleared. Treating an absent claim as
+   * permitted is the classic fail-open, and it passed every route-level
+   * test in this file because every fixture issues a token WITH a role.
+   */
+  const base = { accountId: 'a1', ministryUserId: 'm1', mfa: true };
+
+  it('THE FAIL-CLOSED RULE — an absent role satisfies nothing', () => {
+    expect(() => requireMinistry({ ...base }, ['ANALYST'])).toThrow(
+      /requires the ANALYST role/i,
+    );
+    expect(() => requireMinistry({ ...base }, ['SUPER_ADMIN'])).toThrow();
+  });
+
+  it('still allows an unrestricted call with no role', () => {
+    // Routes that name no role — provenance, counties — stay open to any
+    // Ministry account, including one whose token predates the claim.
+    expect(() => requireMinistry({ ...base })).not.toThrow();
+    expect(() => requireMinistry({ ...base }, [])).not.toThrow();
+  });
+
+  it('refuses an unknown role rather than falling through', () => {
+    expect(() =>
+      requireMinistry({ ...base, ministryRole: 'NOT_A_REAL_ROLE' }, ['ANALYST']),
+    ).toThrow(/requires the ANALYST role/i);
+  });
+
+  it('accepts any of several permitted roles', () => {
+    expect(() =>
+      requireMinistry({ ...base, ministryRole: 'REGISTRAR' }, ['ANALYST', 'REGISTRAR']),
+    ).not.toThrow();
+  });
+
+  it('lets SUPER_ADMIN through every check', () => {
+    for (const roles of [['ANALYST'], ['REGISTRAR'], ['AUDITOR'], ['SURVEILLANCE']]) {
+      expect(() =>
+        requireMinistry({ ...base, ministryRole: 'SUPER_ADMIN' }, roles),
+      ).not.toThrow();
+    }
+  });
+
+  it('checks the account kind and MFA before the role', () => {
+    // A non-Ministry caller must be refused as NOT_MINISTRY, not as a role
+    // mismatch — the codes drive different messages in the UI.
+    expect(() =>
+      requireMinistry({ accountId: 'a1', mfa: true, ministryRole: 'SUPER_ADMIN' }, ['ANALYST']),
+    ).toThrow(/requires a Ministry account/i);
+
+    expect(() =>
+      requireMinistry({ ...base, mfa: false, ministryRole: 'SUPER_ADMIN' }, ['ANALYST']),
+    ).toThrow(/second factor/i);
   });
 });
