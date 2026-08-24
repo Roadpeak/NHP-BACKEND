@@ -1117,3 +1117,287 @@ describe('the Ministry role guard itself', () => {
     ).toThrow(/second factor/i);
   });
 });
+
+describe('the admin surface', () => {
+  /**
+   * The Ministry portal is the platform administrator, and these routes are
+   * what sits behind it. The thing worth testing is not that they return
+   * data — it is that each is reachable only by the role that owns it, and
+   * that the overview does not advertise a count its caller cannot act on.
+   */
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  const post = (url: string, token: string, payload?: Record<string, unknown>) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1${url}`,
+      headers: { authorization: `Bearer ${token}` },
+      ...(payload ? { payload } : {}),
+    });
+
+  const REGISTRAR_ROUTES = [
+    '/admin/facilities/pending',
+    '/admin/facilities',
+    '/admin/licences/expiring',
+  ];
+  const AUDITOR_ROUTES = [
+    '/admin/break-glass/pending',
+    '/admin/break-glass/rates',
+    '/admin/anomalies',
+  ];
+
+  it('gives the registrar its own routes and refuses the auditor theirs', async () => {
+    const { accessToken } = await ministryUserAs('REGISTRAR');
+
+    for (const route of REGISTRAR_ROUTES) {
+      expect((await get(route, accessToken)).statusCode, route).toBe(200);
+    }
+    for (const route of AUDITOR_ROUTES) {
+      // A registrar approving facilities has no business reading who opened
+      // a record under emergency access.
+      const res = await get(route, accessToken);
+      expect(res.statusCode, route).toBe(403);
+      expect(res.json().code, route).toBe('WRONG_MINISTRY_ROLE');
+    }
+  });
+
+  it('gives the auditor its own routes and refuses the registrar theirs', async () => {
+    const { accessToken } = await ministryUserAs('AUDITOR');
+
+    for (const route of AUDITOR_ROUTES) {
+      expect((await get(route, accessToken)).statusCode, route).toBe(200);
+    }
+    for (const route of REGISTRAR_ROUTES) {
+      expect((await get(route, accessToken)).statusCode, route).toBe(403);
+    }
+  });
+
+  it('refuses an analyst the whole admin surface', async () => {
+    const { accessToken } = await ministryUserAs('ANALYST');
+    for (const route of [...REGISTRAR_ROUTES, ...AUDITOR_ROUTES]) {
+      expect((await get(route, accessToken)).statusCode, route).toBe(403);
+    }
+  });
+
+  it('refuses a practitioner and an unauthenticated caller outright', async () => {
+    const doctor = await clinician();
+    for (const route of [...REGISTRAR_ROUTES, ...AUDITOR_ROUTES]) {
+      const asDoctor = await get(route, doctor.accessToken);
+      expect(asDoctor.statusCode, route).toBe(403);
+      expect(asDoctor.json().code, route).toBe('NOT_MINISTRY');
+
+      const anon = await app.inject({ method: 'GET', url: `/api/v1${route}` });
+      expect(anon.statusCode, route).toBe(401);
+    }
+  });
+
+  it('lets SUPER_ADMIN reach everything', async () => {
+    const { accessToken } = await ministryUserAs('SUPER_ADMIN');
+    for (const route of [...REGISTRAR_ROUTES, ...AUDITOR_ROUTES, '/admin/overview']) {
+      expect((await get(route, accessToken)).statusCode, route).toBe(200);
+    }
+  });
+
+  it('THE APPROVAL GATE — a pending facility becomes approvable, then active', async () => {
+    seq++;
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/facilities/register',
+      payload: {
+        mflCode: `MFL-ADM-${seq}`,
+        name: 'Pending Clinic',
+        kephLevel: 3,
+        ownership: 'PRIVATE_FOR_PROFIT',
+        countyId: ctx.countyId,
+        subcountyId: ctx.subcountyId,
+        latitude: -0.0917,
+        longitude: 34.768,
+      },
+    });
+    const facilityId = created.json().facilityId;
+
+    const registrar = await ministryUserAs('REGISTRAR');
+    const pending = await get('/admin/facilities/pending', registrar.accessToken);
+    expect(pending.json().map((f: { id: string }) => f.id)).toContain(facilityId);
+
+    const approved = await post(`/admin/facilities/${facilityId}/approve`, registrar.accessToken);
+    expect(approved.statusCode).toBe(200);
+
+    // Once approved it leaves the queue — a queue that never empties is one
+    // nobody works through.
+    const after = await get('/admin/facilities/pending', registrar.accessToken);
+    expect(after.json().map((f: { id: string }) => f.id)).not.toContain(facilityId);
+  });
+
+  it('refuses an auditor the approval action, not just the queue', async () => {
+    const { accessToken } = await ministryUserAs('AUDITOR');
+    const res = await post('/admin/facilities/some-id/approve', accessToken);
+    // The read and the write are guarded separately; hiding the queue while
+    // leaving the action open would be the worse half of a guard.
+    expect(res.statusCode).toBe(403);
+  });
+
+  describe('postings', () => {
+    /**
+     * The rule from the brief: the Ministry posts staff to PUBLIC facilities,
+     * private facilities engage their own. `grantAffiliation` enforces it, so
+     * these tests check the route actually reaches that enforcement rather
+     * than a permissive path around it.
+     */
+    async function facilityOf(ownership: string) {
+      seq++;
+      const f = await registerFacility(prisma, {
+        name: `${ownership} facility`,
+        kephLevel: 4,
+        ownership: ownership as never,
+        countyId: ctx.countyId,
+        subcountyId: ctx.subcountyId,
+        locality: 'Town',
+        latitude: -0.0917,
+        longitude: 34.768,
+        mflCode: `MFL-OWN-${seq}`,
+      });
+      await approveFacility(prisma, f.id, 'ministry-fixture');
+      return f;
+    }
+
+    it('THE OWNERSHIP RULE — posts a clinician to a PUBLIC facility', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const doctor = await clinician();
+      const publicFacility = await facilityOf('PUBLIC_MOH');
+
+      const res = await post('/admin/postings', registrar.accessToken, {
+        practitionerId: doctor.practitioner.id,
+        facilityId: publicFacility.id,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().status).toBe('ACTIVE');
+    });
+
+    it('THE OWNERSHIP RULE — refuses to post into a PRIVATE facility', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const doctor = await clinician();
+      const privateFacility = await facilityOf('PRIVATE_FOR_PROFIT');
+
+      const res = await post('/admin/postings', registrar.accessToken, {
+        practitionerId: doctor.practitioner.id,
+        facilityId: privateFacility.id,
+      });
+
+      // A private employer engages its own staff. The Ministry assigning
+      // someone there would be an engagement nobody agreed to.
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('FACILITY_GRANT_REQUIRED');
+    });
+
+    it('refuses a posting to a facility that is not yet approved', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const doctor = await clinician();
+      seq++;
+      const pending = await registerFacility(prisma, {
+        name: 'Unapproved',
+        kephLevel: 3,
+        ownership: 'PUBLIC_MOH',
+        countyId: ctx.countyId,
+        subcountyId: ctx.subcountyId,
+        locality: 'Town',
+        latitude: -0.0917,
+        longitude: 34.768,
+        mflCode: `MFL-UNAPP-${seq}`,
+      });
+
+      const res = await post('/admin/postings', registrar.accessToken, {
+        practitionerId: doctor.practitioner.id,
+        facilityId: pending.id,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('FACILITY_NOT_ACTIVE');
+    });
+
+    it('refuses a malformed posting with 400, not 500', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const res = await post('/admin/postings', registrar.accessToken, {
+        practitionerId: 'only-one-field',
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('MALFORMED_REQUEST');
+    });
+  });
+
+  describe('the overview', () => {
+    it('THE NULL RULE — omits counts the role cannot act on', async () => {
+      const auditor = await ministryUserAs('AUDITOR');
+      const body = (await get('/admin/overview', auditor.accessToken)).json();
+
+      expect(body.role).toBe('AUDITOR');
+      // null means "not your role". A zero would advertise a section that
+      // then refuses to open — worse than not showing it at all.
+      expect(body.pendingBreakGlassReviews).not.toBeNull();
+      expect(body.pendingFacilities).toBeNull();
+      expect(body.licencesExpiringSoon).toBeNull();
+    });
+
+    it('gives a registrar its own counts and not the auditor\'s', async () => {
+      const registrar = await ministryUserAs('REGISTRAR');
+      const body = (await get('/admin/overview', registrar.accessToken)).json();
+
+      expect(body.pendingFacilities).not.toBeNull();
+      expect(body.activeFacilities).not.toBeNull();
+      expect(body.pendingBreakGlassReviews).toBeNull();
+    });
+
+    it('gives SUPER_ADMIN every count', async () => {
+      const admin = await ministryUserAs('SUPER_ADMIN');
+      const body = (await get('/admin/overview', admin.accessToken)).json();
+
+      for (const key of [
+        'pendingFacilities',
+        'activeFacilities',
+        'practitioners',
+        'pendingBreakGlassReviews',
+        'licencesExpiringSoon',
+      ]) {
+        expect(body[key], key).not.toBeNull();
+      }
+    });
+
+    it('counts a real pending facility rather than reporting zero', async () => {
+      seq++;
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/facilities/register',
+        payload: {
+          mflCode: `MFL-CNT-${seq}`,
+          name: 'Counted Clinic',
+          kephLevel: 3,
+          ownership: 'NGO',
+          countyId: ctx.countyId,
+          subcountyId: ctx.subcountyId,
+          latitude: -0.0917,
+          longitude: 34.768,
+        },
+      });
+
+      const registrar = await ministryUserAs('REGISTRAR');
+      const body = (await get('/admin/overview', registrar.accessToken)).json();
+      expect(body.pendingFacilities).toBeGreaterThan(0);
+    });
+
+    it('is readable by any Ministry role, since it is the portal landing', async () => {
+      for (const role of ['ANALYST', 'REGISTRAR', 'SURVEILLANCE', 'AUDITOR']) {
+        const { accessToken } = await ministryUserAs(role);
+        expect((await get('/admin/overview', accessToken)).statusCode, role).toBe(200);
+      }
+    });
+
+    it('returns no clinical content', async () => {
+      const admin = await ministryUserAs('SUPER_ADMIN');
+      const res = await get('/admin/overview', admin.accessToken);
+      // The admin surface is administrative. An NHP number or an ICD-11 code
+      // appearing here would mean a Ministry screen had reached a patient.
+      expect(res.body).not.toMatch(/NHP-[A-Z0-9]{4}|icd11|diagnos/i);
+    });
+  });
+});

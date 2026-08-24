@@ -21,6 +21,9 @@ import {
   currentSession,
   canWriteClinical,
   registerPractitioner,
+  grantAffiliation,
+  endAffiliation,
+  licencesExpiringSoon,
 } from './practitioner.js';
 import {
   searchDiagnoses,
@@ -36,7 +39,16 @@ import {
   resolvePersonId,
   ClinicalError,
 } from './clinical.js';
-import { filteredRecord, logAccess, accessHistory, ConsentError } from './consent.js';
+import {
+  filteredRecord,
+  logAccess,
+  accessHistory,
+  pendingBreakGlassReviews,
+  reviewBreakGlass,
+  breakGlassRateByFacility,
+  denialAnomalies,
+  ConsentError,
+} from './consent.js';
 import { recommend, symptomPicker, TriageError } from './triage.js';
 import {
   citizenSummary,
@@ -46,7 +58,12 @@ import {
   CitizenError,
   type Lang,
 } from './citizen.js';
-import { findFacilities, registerFacility, FacilityError } from './facility.js';
+import {
+  findFacilities,
+  registerFacility,
+  approveFacility,
+  FacilityError,
+} from './facility.js';
 import {
   burdenByCounty,
   burdenBySubcounty,
@@ -946,6 +963,217 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     // derived from. Deliberately the narrowest role on the surface.
     requireMinistry(ctx, ['SUPER_ADMIN']);
     return rollupConditions(prisma, periodFrom(req.query as never));
+  });
+
+  // ------------------------------------------------------------------ admin
+  //
+  // The Ministry portal is the platform administrator, and these are the
+  // actions behind it. Each is bound to the role that owns it — REGISTRAR
+  // approves facilities and posts staff, AUDITOR reviews break-glass — and
+  // SUPER_ADMIN holds all of them.
+  //
+  // Every route here reads or writes ADMINISTRATIVE data: facilities,
+  // licences, affiliations, audit rows. None of them returns clinical
+  // content, and the break-glass reviews deliberately carry the justification
+  // and the actor without the record that was opened.
+
+  /** Facilities awaiting a registrar's decision. */
+  app.get(`${v1}/admin/facilities/pending`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['REGISTRAR']);
+    return prisma.facility.findMany({
+      where: { registrationStatus: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        mflCode: true,
+        name: true,
+        kephLevel: true,
+        ownership: true,
+        countyId: true,
+        subcountyId: true,
+        locality: true,
+        createdAt: true,
+      },
+    });
+  });
+
+  app.post<{ Params: { facilityId: string } }>(
+    `${v1}/admin/facilities/:facilityId/approve`,
+    async (req) => {
+      const ctx = await contextFrom(req);
+      const ministryUserId = requireMinistry(ctx, ['REGISTRAR']);
+      // Approval is attributed: `approveFacility` records who decided.
+      return approveFacility(prisma, req.params.facilityId, ministryUserId);
+    },
+  );
+
+  /** The register of facilities, for the administrative overview. */
+  app.get(`${v1}/admin/facilities`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['REGISTRAR']);
+    const { status, countyId } = req.query as { status?: string; countyId?: string };
+    return prisma.facility.findMany({
+      where: {
+        ...(status ? { registrationStatus: status as never } : {}),
+        ...(countyId ? { countyId } : {}),
+      },
+      orderBy: { name: 'asc' },
+      take: 200,
+      select: {
+        id: true,
+        mflCode: true,
+        name: true,
+        kephLevel: true,
+        ownership: true,
+        countyId: true,
+        registrationStatus: true,
+      },
+    });
+  });
+
+  /**
+   * Posting staff to a facility.
+   *
+   * `grantAffiliation` enforces the rule that matters: the Ministry posts
+   * to PUBLIC facilities, private facilities engage their own. A registrar
+   * calling this against a private clinic is refused by the service, not by
+   * a check here that could be forgotten.
+   */
+  app.post<{ Body: { practitionerId: string; facilityId: string; role?: string } }>(
+    `${v1}/admin/postings`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['practitionerId', 'facilityId'],
+          properties: {
+            practitionerId: { type: 'string', minLength: 1 },
+            facilityId: { type: 'string', minLength: 1 },
+            role: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const ctx = await contextFrom(req);
+      const ministryUserId = requireMinistry(ctx, ['REGISTRAR']);
+      return grantAffiliation(prisma, {
+        practitionerId: req.body.practitionerId,
+        facilityId: req.body.facilityId,
+        role: req.body.role as never,
+        grantedBy: ministryUserId,
+        grantedByKind: 'MINISTRY',
+      });
+    },
+  );
+
+  app.post<{ Params: { affiliationId: string } }>(
+    `${v1}/admin/postings/:affiliationId/end`,
+    async (req) => {
+      const ctx = await contextFrom(req);
+      requireMinistry(ctx, ['REGISTRAR']);
+      return endAffiliation(prisma, req.params.affiliationId);
+    },
+  );
+
+  /** Licences about to lapse — a clinician whose licence expires cannot write. */
+  app.get(`${v1}/admin/licences/expiring`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['REGISTRAR']);
+    const { days } = req.query as { days?: string };
+    return licencesExpiringSoon(prisma, days ? Number(days) : 30);
+  });
+
+  /** Break-glass events awaiting review. The AUDITOR's queue. */
+  app.get(`${v1}/admin/break-glass/pending`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['AUDITOR']);
+    return pendingBreakGlassReviews(prisma);
+  });
+
+  app.post<{
+    Params: { breakGlassId: string };
+    Body: { outcome: 'REVIEWED_OK' | 'FLAGGED' | 'ESCALATED'; note?: string };
+  }>(
+    `${v1}/admin/break-glass/:breakGlassId/review`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['outcome'],
+          properties: {
+            outcome: { type: 'string', enum: ['REVIEWED_OK', 'FLAGGED', 'ESCALATED'] },
+            note: { type: 'string', maxLength: 2000 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const ctx = await contextFrom(req);
+      const ministryUserId = requireMinistry(ctx, ['AUDITOR']);
+      return reviewBreakGlass(prisma, {
+        breakGlassId: req.params.breakGlassId,
+        ministryUserId,
+        outcome: req.body.outcome,
+        note: req.body.note,
+      });
+    },
+  );
+
+  /** Break-glass rate per facility — an outlier is the signal worth chasing. */
+  app.get(`${v1}/admin/break-glass/rates`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['AUDITOR']);
+    return breakGlassRateByFacility(prisma, periodFrom(req.query as never).from);
+  });
+
+  /** Actors whose access is refused unusually often — probing looks like this. */
+  app.get(`${v1}/admin/anomalies`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['AUDITOR']);
+    return denialAnomalies(prisma, periodFrom(req.query as never).from);
+  });
+
+  /**
+   * The administrative overview.
+   *
+   * Deliberately returns only what the caller's role may act on. A section
+   * with a count the role cannot open is worse than an absent one: it
+   * advertises a capability and then refuses it.
+   */
+  app.get(`${v1}/admin/overview`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx);
+
+    const role = ctx.ministryRole;
+    const all = role === 'SUPER_ADMIN';
+    const can = (r: string) => all || role === r;
+
+    const [pendingFacilities, activeFacilities, practitioners, pendingReviews, expiring] =
+      await Promise.all([
+        can('REGISTRAR')
+          ? prisma.facility.count({ where: { registrationStatus: 'PENDING' } })
+          : null,
+        can('REGISTRAR')
+          ? prisma.facility.count({ where: { registrationStatus: 'ACTIVE' } })
+          : null,
+        can('REGISTRAR') ? prisma.practitioner.count() : null,
+        can('AUDITOR') ? prisma.breakGlass.count({ where: { reviewStatus: 'PENDING' } }) : null,
+        can('REGISTRAR') ? licencesExpiringSoon(prisma, 30).then((l) => l.length) : null,
+      ]);
+
+    return {
+      role: role ?? null,
+      geoScope: ctx.geoScope ?? null,
+      // null means "not your role", which the UI renders as an absent
+      // section rather than a zero.
+      pendingFacilities,
+      activeFacilities,
+      practitioners,
+      pendingBreakGlassReviews: pendingReviews,
+      licencesExpiringSoon: expiring,
+    };
   });
 
   // ----------------------------------------------------------------- citizen
