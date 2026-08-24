@@ -642,3 +642,235 @@ describe('the error contract', () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe('registration', () => {
+  /**
+   * Nobody could get into this system before these routes existed — every
+   * account came from the seed script. That made registration the gap that
+   * blocked a pilot, and it makes these tests the ones that decide whether
+   * an open, unauthenticated endpoint is safe.
+   *
+   * The property that matters is not that registration works. It is that
+   * registration grants NOTHING: a new clinician leaves here unable to open
+   * a record, and a new facility leaves unable to host one.
+   */
+  const person = (over: Record<string, unknown> = {}) => {
+    seq++;
+    return {
+      nationalId: `820000${String(seq).padStart(2, '0')}`,
+      phone: `07190000${String(seq).padStart(2, '0')}`,
+      givenName: 'Wanjiku',
+      familyName: 'Kamau',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: '1994-06-15',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      password: 'a-long-enough-password',
+      ...over,
+    };
+  };
+
+  const post = (url: string, payload: Record<string, unknown>) =>
+    app.inject({ method: 'POST', url: `/api/v1${url}`, payload });
+
+  it('creates a citizen who can then sign in', async () => {
+    const body = person();
+    const res = await post('/auth/register/citizen', body);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().nhpId).toMatch(/^NHP-/);
+
+    // The account is real: the normal login path accepts it.
+    const login = await post('/auth/login', {
+      phone: body.phone,
+      password: body.password,
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.json().status).toBe('AUTHENTICATED');
+  });
+
+  it('never returns a session from registration itself', async () => {
+    const res = await post('/auth/register/citizen', person());
+    // One way to obtain a token. A second path is a second place for an
+    // authentication bug to live.
+    expect(res.json().accessToken).toBeUndefined();
+    expect(res.cookies.find((c: { name: string }) => c.name === 'nhp_refresh')).toBeUndefined();
+  });
+
+  it('refuses a duplicate National ID', async () => {
+    const first = person();
+    await post('/auth/register/citizen', first);
+
+    const again = await post('/auth/register/citizen', {
+      ...person(),
+      nationalId: first.nationalId,
+    });
+    expect(again.statusCode).toBe(400);
+    expect(again.json().code).toBe('IDENTIFIER_ALREADY_REGISTERED');
+  });
+
+  it('refuses a duplicate phone number', async () => {
+    const first = person();
+    await post('/auth/register/citizen', first);
+
+    const again = await post('/auth/register/citizen', {
+      ...person(),
+      phone: first.phone,
+    });
+    expect(again.statusCode).toBe(400);
+    expect(again.json().code).toBe('PHONE_IN_USE');
+  });
+
+  it('THE AGE RULE — refuses self-registration under 18', async () => {
+    const year = new Date().getUTCFullYear() - 12;
+    const res = await post('/auth/register/citizen', person({ dateOfBirth: `${year}-01-01` }));
+
+    // A child is registered as a dependant of their guardian, not by
+    // themselves — the brief's rule, enforced in the service.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('UNDERAGE_SELF_REGISTRATION');
+  });
+
+  it('refuses a short password rather than storing a weak one', async () => {
+    const res = await post('/auth/register/citizen', person({ password: 'short' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('MALFORMED_REQUEST');
+  });
+
+  it('refuses a missing field with 400, not 500', async () => {
+    const { familyName, ...withoutName } = person();
+    const res = await post('/auth/register/citizen', withoutName);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses an unusable date of birth', async () => {
+    const res = await post('/auth/register/citizen', person({ dateOfBirth: 'not-a-date' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('INVALID_DOB');
+  });
+
+  it('never echoes the password back', async () => {
+    const res = await post('/auth/register/citizen', person());
+    expect(res.body).not.toContain('a-long-enough-password');
+  });
+
+  it('registers a practitioner with their licence', async () => {
+    const body = person({ cadre: 'NURSE', licenceNumber: 'NCK/2026/9001' });
+    const res = await post('/auth/register/practitioner', body);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().practitionerId).toBeTruthy();
+    expect(res.json().nhpId).toMatch(/^NHP-/);
+  });
+
+  it('THE CAPABILITY RULE — a newly registered clinician cannot open a record', async () => {
+    const body = person({ cadre: 'DOCTOR', licenceNumber: 'KMPDC/2026/9002' });
+    await post('/auth/register/practitioner', body);
+
+    const login = await post('/auth/login', {
+      phone: body.phone,
+      password: body.password,
+    });
+
+    // A practitioner account requires a second factor before it can sign in
+    // at all, so registration cannot hand anyone a working clinical session.
+    if (login.json().status === 'AUTHENTICATED') {
+      const patient = await makePerson();
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/persons/${patient.displayNumber}/summary`,
+        headers: { authorization: `Bearer ${login.json().accessToken}` },
+      });
+      // No affiliation, no check-in: the gate refuses.
+      expect([403, 401]).toContain(res.statusCode);
+    } else {
+      expect(login.json().code).toBe('MFA_ENROLMENT_REQUIRED');
+    }
+  });
+
+  it('says plainly that a clinician cannot yet record clinical data', async () => {
+    const res = await post(
+      '/auth/register/practitioner',
+      person({ cadre: 'NURSE', licenceNumber: 'NCK/2026/9003' }),
+    );
+    // The UI must never imply that registering is enough.
+    expect(res.json().message).toMatch(/cannot record clinical data/i);
+  });
+
+  it('registers a facility as PENDING, never active', async () => {
+    seq++;
+    const res = await post('/facilities/register', {
+      mflCode: `MFL-REG-${seq}`,
+      name: 'Migosi Health Centre',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+
+    expect(res.statusCode).toBe(200);
+    // An unapproved facility can grant no affiliation and host no check-in.
+    expect(res.json().registrationStatus).toBe('PENDING');
+    expect(res.json().message).toMatch(/awaiting Ministry approval/i);
+  });
+
+  it('refuses a KEPH level outside the registrable range', async () => {
+    seq++;
+    const res = await post('/facilities/register', {
+      mflCode: `MFL-REG-${seq}`,
+      name: 'Community Unit',
+      // Level 1 is community units, which have no facility.
+      kephLevel: 1,
+      ownership: 'PUBLIC_MOH',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses coordinates outside Kenya', async () => {
+    seq++;
+    const res = await post('/facilities/register', {
+      mflCode: `MFL-REG-${seq}`,
+      name: 'Somewhere Else',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      latitude: 51.5,
+      longitude: -0.12,
+    });
+    // A facility the recommender would route patients to must be somewhere
+    // a patient can actually travel.
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('open reference data', () => {
+  it('serves counties without a session, because a form needs them', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/geo/counties' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().length).toBeGreaterThan(0);
+    expect(res.json()[0]).toHaveProperty('code');
+  });
+
+  it('serves the subcounties of a county', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/geo/counties/${ctx.countyId}/subcounties`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().length).toBeGreaterThan(0);
+  });
+
+  it('leaks no patient data through the open geography routes', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/geo/counties' });
+    // These are published administrative divisions. Anything person-shaped
+    // appearing here would be a disclosure through a public endpoint.
+    expect(res.body).not.toMatch(/NHP-|nationalId|phone/i);
+  });
+});

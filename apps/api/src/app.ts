@@ -17,7 +17,11 @@ import { PrismaClient } from '@prisma/client';
 import 'dotenv/config';
 
 import { searchByIdentifier } from './identity.js';
-import { currentSession, canWriteClinical } from './practitioner.js';
+import {
+  currentSession,
+  canWriteClinical,
+  registerPractitioner,
+} from './practitioner.js';
 import {
   searchDiagnoses,
   searchMedications,
@@ -42,7 +46,7 @@ import {
   CitizenError,
   type Lang,
 } from './citizen.js';
-import { findFacilities, FacilityError } from './facility.js';
+import { findFacilities, registerFacility, FacilityError } from './facility.js';
 import {
   burdenByCounty,
   burdenBySubcounty,
@@ -56,7 +60,7 @@ import {
   AnalyticsError,
   SUPPRESSION_THRESHOLD,
 } from './analytics.js';
-import { IdentityError } from './identity.js';
+import { IdentityError, registerAdult } from './identity.js';
 import { PractitionerError } from './practitioner.js';
 import { assertTestHooksEnabled, readLastSmsCode } from './testhooks.js';
 import {
@@ -260,6 +264,260 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       },
     );
   }
+
+  // ----------------------------------------------------------- registration
+  //
+  // Open by necessity: nobody has an account yet. Each of these creates an
+  // identity that can then SIGN IN — none of them grants any capability.
+  //
+  // In particular a practitioner leaves here with no affiliation and no
+  // check-in, so they cannot touch a patient record. Who grants that
+  // affiliation depends on who owns the facility, and `grantAffiliation`
+  // enforces it: the Ministry posts staff to public facilities, private
+  // facilities engage their own. Neither happens at registration.
+
+  const PASSWORD_MIN = 12;
+
+  /** Shared by every registration form. */
+  const personProperties = {
+    nationalId: { type: 'string', minLength: 4, maxLength: 32 },
+    phone: { type: 'string', minLength: 9, maxLength: 20 },
+    email: { type: 'string' },
+    givenName: { type: 'string', minLength: 1, maxLength: 80 },
+    middleName: { type: 'string', maxLength: 80 },
+    familyName: { type: 'string', minLength: 1, maxLength: 80 },
+    sexAtBirth: { type: 'string', enum: ['MALE', 'FEMALE', 'INTERSEX'] },
+    dateOfBirth: { type: 'string', minLength: 10 },
+    countyId: { type: 'string', minLength: 1 },
+    subcountyId: { type: 'string', minLength: 1 },
+    password: { type: 'string', minLength: PASSWORD_MIN },
+  };
+
+  const personRequired = [
+    'nationalId',
+    'phone',
+    'givenName',
+    'familyName',
+    'sexAtBirth',
+    'dateOfBirth',
+    'countyId',
+    'subcountyId',
+    'password',
+  ];
+
+  interface RegisterPersonBody {
+    nationalId: string;
+    phone: string;
+    email?: string;
+    givenName: string;
+    middleName?: string;
+    familyName: string;
+    sexAtBirth: 'MALE' | 'FEMALE' | 'INTERSEX';
+    dateOfBirth: string;
+    countyId: string;
+    subcountyId: string;
+    password: string;
+  }
+
+  /** Parses a date the form supplies, refusing anything unusable. */
+  function parseDob(value: string): Date {
+    const dob = new Date(value);
+    if (Number.isNaN(dob.getTime())) {
+      throw new IdentityError('That date of birth is not a valid date', 'INVALID_DOB');
+    }
+    if (dob.getTime() > Date.now()) {
+      throw new IdentityError('That date of birth is in the future', 'INVALID_DOB');
+    }
+    return dob;
+  }
+
+  app.post<{ Body: RegisterPersonBody }>(
+    `${v1}/auth/register/citizen`,
+    {
+      schema: {
+        body: { type: 'object', required: personRequired, properties: personProperties },
+      },
+    },
+    async (req) => {
+      const b = req.body;
+      const person = await registerAdult(prisma, {
+        nationalId: b.nationalId,
+        phone: b.phone,
+        email: b.email,
+        givenName: b.givenName,
+        middleName: b.middleName,
+        familyName: b.familyName,
+        sexAtBirth: b.sexAtBirth,
+        dateOfBirth: parseDob(b.dateOfBirth),
+        countyId: b.countyId,
+        subcountyId: b.subcountyId,
+        // Hashed here and never stored or logged in the clear.
+        passwordHash: await hashPassword(b.password),
+      });
+
+      // Deliberately no session: the client signs in through the normal
+      // path, so there is exactly one way to obtain a token.
+      return {
+        nhpId: person.displayNumber,
+        message: 'Account created. Sign in to continue.',
+      };
+    },
+  );
+
+  app.post<{
+    Body: RegisterPersonBody & {
+      cadre: string;
+      licenceNumber: string;
+      regulator?: string;
+    };
+  }>(
+    `${v1}/auth/register/practitioner`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: [...personRequired, 'cadre', 'licenceNumber'],
+          properties: {
+            ...personProperties,
+            cadre: { type: 'string', minLength: 2 },
+            licenceNumber: { type: 'string', minLength: 3, maxLength: 64 },
+            regulator: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const b = req.body;
+
+      // A practitioner is a person first. The identity and the professional
+      // registration are separate rows precisely so a clinician who is also
+      // a patient is one human being with one record.
+      const person = await registerAdult(prisma, {
+        nationalId: b.nationalId,
+        phone: b.phone,
+        email: b.email,
+        givenName: b.givenName,
+        middleName: b.middleName,
+        familyName: b.familyName,
+        sexAtBirth: b.sexAtBirth,
+        dateOfBirth: parseDob(b.dateOfBirth),
+        countyId: b.countyId,
+        subcountyId: b.subcountyId,
+        passwordHash: await hashPassword(b.password),
+      });
+
+      const { practitioner, licence, verification } = await registerPractitioner(prisma, {
+        personId: person.id,
+        cadre: b.cadre as never,
+        countyId: b.countyId,
+        subcountyId: b.subcountyId,
+        licenceNumber: b.licenceNumber,
+        regulator: b.regulator as never,
+        familyName: b.familyName,
+      });
+
+      return {
+        nhpId: person.displayNumber,
+        practitionerId: practitioner.id,
+        licenceNumber: licence?.licenceNumber ?? null,
+        verification,
+        // Says plainly what they still cannot do, so the UI never implies
+        // a registered clinician can open a record.
+        message:
+          'Registration received. You cannot record clinical data until a ' +
+          'facility affiliation is granted.',
+      };
+    },
+  );
+
+  app.post<{
+    Body: {
+      mflCode: string;
+      name: string;
+      kephLevel: number;
+      ownership: string;
+      countyId: string;
+      subcountyId: string;
+      locality?: string;
+      latitude: number;
+      longitude: number;
+    };
+  }>(
+    `${v1}/facilities/register`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: [
+            'mflCode',
+            'name',
+            'kephLevel',
+            'ownership',
+            'countyId',
+            'subcountyId',
+            'latitude',
+            'longitude',
+          ],
+          properties: {
+            mflCode: { type: 'string', minLength: 2, maxLength: 32 },
+            name: { type: 'string', minLength: 2, maxLength: 160 },
+            kephLevel: { type: 'integer', minimum: 2, maximum: 6 },
+            ownership: { type: 'string', minLength: 2 },
+            countyId: { type: 'string', minLength: 1 },
+            subcountyId: { type: 'string', minLength: 1 },
+            locality: { type: 'string', maxLength: 120 },
+            latitude: { type: 'number' },
+            longitude: { type: 'number' },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const facility = await registerFacility(prisma, {
+        ...req.body,
+        ownership: req.body.ownership as never,
+        // The service requires a locality; the form treats it as optional
+        // because many dispensaries are known only by their facility name.
+        locality: req.body.locality?.trim() || req.body.name,
+      });
+
+      // PENDING until a Ministry registrar approves it. An unapproved
+      // facility can grant no affiliation and host no check-in, so it
+      // cannot reach a patient record.
+      return {
+        facilityId: facility.id,
+        mflCode: facility.mflCode,
+        registrationStatus: facility.registrationStatus,
+        message:
+          'Facility registered and awaiting Ministry approval. Staff cannot ' +
+          'be affiliated until it is approved.',
+      };
+    },
+  );
+
+  // -------------------------------------------------------- geography (open)
+  //
+  // Registration forms need counties and subcounties before anyone has an
+  // account, so these cannot sit behind the Ministry guard the way
+  // /analytics/counties does. They are the published administrative
+  // divisions of Kenya — public record, not patient data.
+
+  app.get(`${v1}/geo/counties`, async () =>
+    prisma.county.findMany({
+      select: { id: true, code: true, name: true },
+      orderBy: { code: 'asc' },
+    }),
+  );
+
+  app.get<{ Params: { countyId: string } }>(
+    `${v1}/geo/counties/:countyId/subcounties`,
+    async (req) =>
+      prisma.subCounty.findMany({
+        where: { countyId: req.params.countyId },
+        select: { id: true, name: true, kind: true },
+        orderBy: { name: 'asc' },
+      }),
+  );
 
   // ------------------------------------------------------------- vocabulary
   // Public: these are reference data, not patient data.
