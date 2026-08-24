@@ -78,7 +78,12 @@ import {
   AnalyticsError,
   SUPPRESSION_THRESHOLD,
 } from './analytics.js';
-import { IdentityError, registerAdult } from './identity.js';
+import {
+  IdentityError,
+  registerAdult,
+  registerDependant,
+  ageAt,
+} from './identity.js';
 import { PractitionerError } from './practitioner.js';
 import { assertTestHooksEnabled, readLastSmsCode } from './testhooks.js';
 import { decryptField, encryptField, blindIndex, normalisePhone } from './crypto.js';
@@ -1668,6 +1673,281 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     }
     return accessHistory(prisma, ctx.personId);
   });
+
+  /**
+   * The citizen's own profile.
+   *
+   * Identity fields are returned but NOT editable: name, National ID, date
+   * of birth and sex are what a facility matches a person on, and a
+   * self-service edit is how someone quietly becomes a different person.
+   * A correction goes through the dispute route, where a facility reviews it.
+   *
+   * The National ID is masked. A citizen already knows their own number, so
+   * showing it in full only creates a shoulder-surfing target on a shared
+   * handset.
+   */
+  app.get(`${v1}/persons/me/profile`, async (req) => {
+    const ctx = await contextFrom(req);
+    if (!ctx.personId) {
+      throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+    }
+
+    const [person, account, identifier] = await Promise.all([
+      prisma.person.findUnique({
+        where: { id: ctx.personId },
+        select: {
+          displayNumber: true,
+          givenName: true,
+          middleName: true,
+          familyName: true,
+          dateOfBirth: true,
+          sexAtBirth: true,
+          bloodGroup: true,
+          countyId: true,
+          subcountyId: true,
+          maturity: true,
+          verificationState: true,
+          photo: true,
+        },
+      }),
+      prisma.account.findFirst({
+        where: { personId: ctx.personId },
+        select: { phone: true, email: true, mfaMode: true },
+      }),
+      prisma.identifier.findFirst({
+        where: { personId: ctx.personId, type: 'NATIONAL_ID', status: 'ACTIVE' },
+        select: { value: true },
+      }),
+    ]);
+
+    if (!person) throw new IdentityError('Record not found', 'PERSON_NOT_FOUND');
+
+    const nationalId = identifier ? decryptField(identifier.value) : null;
+
+    return {
+      // Editable by the citizen.
+      contact: {
+        phone: account ? decryptField(account.phone) : null,
+        email: account?.email ? decryptField(account.email) : null,
+      },
+      photo: decryptPhoto(person.photo),
+      mfaMode: account?.mfaMode ?? 'NONE',
+
+      // Read-only. Shown so a citizen can SEE an error and report it.
+      identity: {
+        displayNumber: person.displayNumber,
+        givenName: decryptField(person.givenName),
+        middleName: person.middleName ? decryptField(person.middleName) : null,
+        familyName: decryptField(person.familyName),
+        dateOfBirth: person.dateOfBirth,
+        sexAtBirth: person.sexAtBirth,
+        bloodGroup: person.bloodGroup,
+        // Last two digits only.
+        nationalIdMasked: nationalId
+          ? `${'•'.repeat(Math.max(0, nationalId.length - 2))}${nationalId.slice(-2)}`
+          : null,
+        verificationState: person.verificationState,
+      },
+      countyId: person.countyId,
+      subcountyId: person.subcountyId,
+    };
+  });
+
+  /** Updating what a citizen may change about themselves. */
+  app.patch<{ Body: { phone?: string; email?: string } }>(
+    `${v1}/persons/me/profile`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            phone: { type: 'string', minLength: 9, maxLength: 20 },
+            // An empty string clears the address, which is why minLength is 0.
+            email: { type: 'string', maxLength: 200 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const ctx = await contextFrom(req);
+      if (!ctx.personId) {
+        throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+      }
+
+      const account = await prisma.account.findFirst({
+        where: { personId: ctx.personId },
+        select: { id: true },
+      });
+      if (!account) throw new IdentityError('Account not found', 'ACCOUNT_NOT_FOUND');
+
+      const data: Record<string, unknown> = {};
+
+      if (req.body.phone !== undefined) {
+        const phoneIndex = blindIndex(req.body.phone, normalisePhone);
+        // The phone is how they sign in and how their security codes reach
+        // them; two accounts on one number would make both unreachable.
+        const taken = await prisma.account.findUnique({
+          where: { phoneIndex },
+          select: { id: true },
+        });
+        if (taken && taken.id !== account.id) {
+          throw new IdentityError('That phone number is already in use', 'PHONE_IN_USE');
+        }
+        data.phone = encryptField(req.body.phone);
+        data.phoneIndex = phoneIndex;
+        // Changing the number invalidates the verification of the old one.
+        data.phoneVerifiedAt = null;
+      }
+
+      if (req.body.email !== undefined) {
+        const email = req.body.email.trim();
+        data.email = email ? encryptField(email) : null;
+        data.emailIndex = email ? blindIndex(email) : null;
+      }
+
+      if (Object.keys(data).length === 0) {
+        throw new IdentityError('Nothing to update', 'NOTHING_TO_UPDATE');
+      }
+
+      await prisma.account.update({ where: { id: account.id }, data });
+      return { updated: Object.keys(data) };
+    },
+  );
+
+  /**
+   * The children a citizen is guardian to.
+   *
+   * A dependant registered by a parent is SELF_DECLARED and starts
+   * UNVERIFIED — not yet searchable by facilities — until a clinician
+   * attests it. Without that gate any adult could fabricate a child, so the
+   * response says plainly which state each one is in.
+   */
+  app.get(`${v1}/persons/me/family`, async (req) => {
+    const ctx = await contextFrom(req);
+    if (!ctx.personId) {
+      throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+    }
+
+    const links = await prisma.guardianship.findMany({
+      where: { guardianId: ctx.personId, status: 'ACTIVE' },
+      select: {
+        id: true,
+        relationship: true,
+        isPrimary: true,
+        evidence: true,
+        dependant: {
+          select: {
+            id: true,
+            displayNumber: true,
+            givenName: true,
+            familyName: true,
+            dateOfBirth: true,
+            sexAtBirth: true,
+            maturity: true,
+            verificationState: true,
+            photo: true,
+          },
+        },
+      },
+    });
+
+    return links.map((l) => ({
+      guardianshipId: l.id,
+      relationship: l.relationship,
+      isPrimary: l.isPrimary,
+      evidence: l.evidence,
+      child: {
+        displayNumber: l.dependant.displayNumber,
+        givenName: decryptField(l.dependant.givenName),
+        familyName: decryptField(l.dependant.familyName),
+        dateOfBirth: l.dependant.dateOfBirth,
+        ageYears: ageAt(l.dependant.dateOfBirth),
+        sexAtBirth: l.dependant.sexAtBirth,
+        maturity: l.dependant.maturity,
+        // The thing a parent needs to know: whether a facility can find them.
+        verified: l.dependant.verificationState === 'VERIFIED',
+        verificationState: l.dependant.verificationState,
+        photo: decryptPhoto(l.dependant.photo),
+      },
+    }));
+  });
+
+  /** Registering a child. */
+  app.post<{
+    Body: {
+      givenName: string;
+      middleName?: string;
+      familyName: string;
+      sexAtBirth: 'MALE' | 'FEMALE' | 'INTERSEX';
+      dateOfBirth: string;
+      relationship: string;
+      birthCertNumber?: string;
+      photo?: string;
+    };
+  }>(
+    `${v1}/persons/me/family`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['givenName', 'familyName', 'sexAtBirth', 'dateOfBirth', 'relationship'],
+          properties: {
+            givenName: { type: 'string', minLength: 1, maxLength: 80 },
+            middleName: { type: 'string', maxLength: 80 },
+            familyName: { type: 'string', minLength: 1, maxLength: 80 },
+            sexAtBirth: { type: 'string', enum: ['MALE', 'FEMALE', 'INTERSEX'] },
+            dateOfBirth: { type: 'string', minLength: 10 },
+            relationship: {
+              type: 'string',
+              enum: ['MOTHER', 'FATHER', 'LEGAL_GUARDIAN', 'GRANDPARENT', 'FOSTER', 'OTHER'],
+            },
+            birthCertNumber: { type: 'string', maxLength: 40 },
+            photo: { type: 'string', maxLength: 400_000 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const ctx = await contextFrom(req);
+      if (!ctx.personId) {
+        throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+      }
+
+      const dob = parseDob(req.body.dateOfBirth);
+      const child = await registerDependant(prisma, {
+        guardianPersonId: ctx.personId,
+        relationship: req.body.relationship as never,
+        // SELF_DECLARED by construction: a parent typing into a form has
+        // shown nobody a birth certificate. A facility upgrades this.
+        evidence: req.body.birthCertNumber ? 'BIRTH_CERT' : 'SELF_DECLARED',
+        birthCertNumber: req.body.birthCertNumber,
+        givenName: req.body.givenName,
+        middleName: req.body.middleName,
+        familyName: req.body.familyName,
+        sexAtBirth: req.body.sexAtBirth,
+        dateOfBirth: dob,
+        registeredBy: ctx.personId,
+        registrationRoute: 'GUARDIAN',
+      });
+
+      if (req.body.photo) {
+        await prisma.person.update({
+          where: { id: child.id },
+          data: { photo: encryptPhoto(req.body.photo) },
+        });
+      }
+
+      return {
+        displayNumber: child.displayNumber,
+        verified: child.verificationState === 'VERIFIED',
+        message:
+          child.verificationState === 'VERIFIED'
+            ? 'Added to your family.'
+            : 'Added. Take their birth certificate to any facility and they ' +
+              'will confirm the record — until then a facility cannot find it.',
+      };
+    },
+  );
 
   app.post<{ Body: { encounterId: string; note: string } }>(
     `${v1}/persons/me/disputes`,

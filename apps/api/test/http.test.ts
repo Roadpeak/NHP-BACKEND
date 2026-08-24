@@ -41,7 +41,7 @@ import {
   grantAffiliation,
   checkIn,
 } from '../src/practitioner.js';
-import { openEncounter, recordDiagnosis } from '../src/clinical.js';
+import { openEncounter, recordDiagnosis, recordAllergy } from '../src/clinical.js';
 import {
   hashPassword,
   enrolSms,
@@ -50,7 +50,12 @@ import {
   CSRF_HEADER,
 } from '../src/auth.js';
 import { ConsoleSmsProvider, setSmsProvider } from '../src/notify.js';
-import { encryptField, blindIndex, normalisePhone } from '../src/crypto.js';
+import {
+  encryptField,
+  decryptField,
+  blindIndex,
+  normalisePhone,
+} from '../src/crypto.js';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -2152,5 +2157,452 @@ describe('passport photos', () => {
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('NOT_A_CITIZEN');
+  });
+});
+
+describe('the citizen profile', () => {
+  /**
+   * What a citizen may change about themselves, and what they may not.
+   *
+   * Name, National ID, date of birth and sex are what a facility matches a
+   * person on. A self-service edit there is how someone quietly becomes a
+   * different person, and how a merged record becomes impossible to
+   * un-merge — so they are readable and NOT writable.
+   */
+  async function citizenSession() {
+    const person = await makePerson('Achieng');
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { phone: person.phone, password: CITIZEN_PASSWORD },
+    });
+    return { person, token: login.json().accessToken as string };
+  }
+
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  it('returns the contact details a citizen may change', async () => {
+    const { person, token } = await citizenSession();
+    const res = await get('/persons/me/profile', token);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().contact.phone).toBe(person.phone);
+  });
+
+  it('THE MASKING RULE — never returns the National ID in full', async () => {
+    const { token } = await citizenSession();
+    const body = (await get('/persons/me/profile', token)).json();
+
+    // A citizen already knows their own number; showing it in full only
+    // creates a shoulder-surfing target on a shared handset.
+    expect(body.identity.nationalIdMasked).toMatch(/^•+\d{2}$/);
+    expect(JSON.stringify(body)).not.toMatch(/"8100\d{4}"/);
+  });
+
+  it('shows identity fields so an error can be SEEN and reported', async () => {
+    const { token } = await citizenSession();
+    const id = (await get('/persons/me/profile', token)).json().identity;
+
+    // Hiding them would mean a wrong date of birth is undiscoverable until
+    // it matters clinically.
+    expect(id.givenName).toBe('Achieng');
+    expect(id.dateOfBirth).toBeTruthy();
+    expect(id.sexAtBirth).toBeTruthy();
+    expect(id.displayNumber).toMatch(/^NHP-/);
+  });
+
+  it('updates a phone number, and re-requires verification', async () => {
+    const { person, token } = await citizenSession();
+    seq++;
+    const newPhone = `07310000${String(seq).padStart(2, '0')}`;
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/persons/me/profile',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { phone: newPhone },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const account = await prisma.account.findFirst({
+      where: { personId: person.id },
+      select: { phoneVerifiedAt: true },
+    });
+    // The old number's verification cannot carry over to a new one.
+    expect(account!.phoneVerifiedAt).toBeNull();
+
+    // And the new number is what signs them in.
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { phone: newPhone, password: CITIZEN_PASSWORD },
+    });
+    expect(login.json().status).toBe('AUTHENTICATED');
+  });
+
+  it('refuses a phone number already in use', async () => {
+    const other = await makePerson('Other');
+    const { token } = await citizenSession();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/persons/me/profile',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { phone: other.phone },
+    });
+    // Two accounts on one number makes both unreachable by SMS.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PHONE_IN_USE');
+  });
+
+  it('THE READ-ONLY RULE — identity fields cannot be patched', async () => {
+    const { person, token } = await citizenSession();
+
+    await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/persons/me/profile',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { givenName: 'Somebody', dateOfBirth: '1970-01-01', nationalId: '99999999' },
+    });
+
+    const after = await prisma.person.findUnique({
+      where: { id: person.id },
+      select: { givenName: true, dateOfBirth: true },
+    });
+    // Ignored, not applied: the schema does not accept them, and the
+    // handler only ever writes phone and email.
+    expect(decryptField(after!.givenName)).toBe('Achieng');
+    expect(after!.dateOfBirth.getUTCFullYear()).toBe(1990);
+  });
+
+  it('is refused to a practitioner and to an unauthenticated caller', async () => {
+    const doctor = await clinician();
+    expect((await get('/persons/me/profile', doctor.accessToken)).statusCode).toBe(403);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/v1/persons/me/profile' })).statusCode,
+    ).toBe(401);
+  });
+});
+
+describe('a citizen adding a child', () => {
+  /**
+   * A dependant registered by a parent is SELF_DECLARED and starts
+   * unverified — not searchable by facilities — until a clinician attests
+   * it. Without that gate any adult could fabricate a child, and the
+   * clinical record of a person who does not exist is worse than no record.
+   */
+  async function citizenSession() {
+    const person = await makePerson('Achieng');
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { phone: person.phone, password: CITIZEN_PASSWORD },
+    });
+    return { person, token: login.json().accessToken as string };
+  }
+
+  const child = (over: Record<string, unknown> = {}) => ({
+    givenName: 'Baraka',
+    familyName: 'Wanjala',
+    sexAtBirth: 'MALE',
+    dateOfBirth: '2019-04-02',
+    relationship: 'MOTHER',
+    ...over,
+  });
+
+  it('adds a child and returns their NHP number', async () => {
+    const { token } = await citizenSession();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/persons/me/family',
+      headers: { authorization: `Bearer ${token}` },
+      payload: child(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().displayNumber).toMatch(/^NHP-/);
+  });
+
+  it('THE FABRICATION GATE — a self-declared child is not verified', async () => {
+    const { token } = await citizenSession();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/persons/me/family',
+      headers: { authorization: `Bearer ${token}` },
+      payload: child(),
+    });
+
+    // A parent typing into a form has shown nobody a birth certificate.
+    expect(res.json().verified).toBe(false);
+    // And the response says what to do about it, rather than leaving a
+    // parent to discover it at a facility counter.
+    expect(res.json().message).toMatch(/birth certificate|cannot find/i);
+  });
+
+  it('lists the children a citizen is guardian to', async () => {
+    const { token } = await citizenSession();
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/persons/me/family',
+      headers: { authorization: `Bearer ${token}` },
+      payload: child(),
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/persons/me/family',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    const family = res.json();
+    expect(family).toHaveLength(1);
+    expect(family[0].child.givenName).toBe('Baraka');
+    expect(family[0].relationship).toBe('MOTHER');
+    // The thing a parent needs to know: whether a facility can find them.
+    expect(family[0].child.verified).toBe(false);
+    expect(family[0].child.ageYears).toBeGreaterThan(0);
+  });
+
+  it('shows only YOUR children, never anyone else\'s', async () => {
+    const a = await citizenSession();
+    const b = await citizenSession();
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/persons/me/family',
+      headers: { authorization: `Bearer ${a.token}` },
+      payload: child({ givenName: 'Baraka' }),
+    });
+
+    const theirs = await app.inject({
+      method: 'GET',
+      url: '/api/v1/persons/me/family',
+      headers: { authorization: `Bearer ${b.token}` },
+    });
+    // Guardianship is the whole basis of access to a child's record.
+    expect(theirs.json()).toHaveLength(0);
+  });
+
+  it('refuses a child born in the future', async () => {
+    const { token } = await citizenSession();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/persons/me/family',
+      headers: { authorization: `Bearer ${token}` },
+      payload: child({ dateOfBirth: '2099-01-01' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('INVALID_DOB');
+  });
+
+  it('refuses a relationship outside the accepted list', async () => {
+    const { token } = await citizenSession();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/persons/me/family',
+      headers: { authorization: `Bearer ${token}` },
+      payload: child({ relationship: 'NEIGHBOUR' }),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('is refused to a practitioner and an unauthenticated caller', async () => {
+    const doctor = await clinician();
+    const asDoctor = await app.inject({
+      method: 'GET',
+      url: '/api/v1/persons/me/family',
+      headers: { authorization: `Bearer ${doctor.accessToken}` },
+    });
+    expect(asDoctor.statusCode).toBe(403);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/v1/persons/me/family' })).statusCode,
+    ).toBe(401);
+  });
+});
+
+describe('a hospital visit, end to end', () => {
+  /**
+   * The loop the whole system exists for: a clinician records an encounter,
+   * and the patient sees it on their own screen afterwards — in plain
+   * language, attributed, and unable to be edited by either of them.
+   *
+   * `/persons/me/visits` had no HTTP test at all, so nothing checked that
+   * what a clinician writes is what a citizen reads.
+   */
+  async function citizenWith(person: Awaited<ReturnType<typeof makePerson>>) {
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { phone: person.phone, password: CITIZEN_PASSWORD },
+    });
+    return login.json().accessToken as string;
+  }
+
+  it('THE LOOP — a recorded visit appears on the patient\'s own screen', async () => {
+    const doctor = await clinician();
+    const patient = await makePerson('Achieng');
+    const token = await citizenWith(patient);
+
+    const encounter = await openEncounter(prisma, {
+      practitionerId: doctor.practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'fever and headache',
+    });
+    await recordDiagnosis(prisma, {
+      practitionerId: doctor.practitioner.id,
+      encounterId: encounter.id,
+      icd11Code: '1F41.0',
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/persons/me/visits',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const visits = res.json();
+    expect(visits).toHaveLength(1);
+
+    // Attributed: a record nobody signed is a record nobody can be asked
+    // about.
+    expect(visits[0].facilityName).toBe('Kisumu County Referral');
+    expect(visits[0].treatedBy).toMatch(/Amina/);
+  });
+
+  it('THE LANGUAGE RULE — plain first, the clinical term below it', async () => {
+    const doctor = await clinician();
+    const patient = await makePerson('Achieng');
+    const token = await citizenWith(patient);
+
+    const e = await openEncounter(prisma, {
+      practitionerId: doctor.practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'fever',
+    });
+    await recordDiagnosis(prisma, {
+      practitionerId: doctor.practitioner.id,
+      encounterId: e.id,
+      icd11Code: '1F41.0',
+    });
+
+    const visit = (
+      await app.inject({
+        method: 'GET',
+        url: '/api/v1/persons/me/visits',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json()[0];
+
+    // "You had malaria confirmed by a blood test", not "1F41.0".
+    expect(visit.whatHappened).toMatch(/malaria/i);
+    expect(visit.whatHappened).not.toMatch(/1F41/);
+    // The clinical term is still available, for a patient carrying their
+    // record to a specialist.
+    expect(visit.clinicalTitle).toMatch(/falciparum/i);
+    expect(visit.icd11Code).toBe('1F41.0');
+  });
+
+  it('reads the same visit in Swahili', async () => {
+    const doctor = await clinician();
+    const patient = await makePerson('Achieng');
+    const token = await citizenWith(patient);
+
+    const e = await openEncounter(prisma, {
+      practitionerId: doctor.practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'fever',
+    });
+    await recordDiagnosis(prisma, {
+      practitionerId: doctor.practitioner.id,
+      encounterId: e.id,
+      icd11Code: '1F41.0',
+    });
+
+    const visit = (
+      await app.inject({
+        method: 'GET',
+        url: '/api/v1/persons/me/visits?lang=sw',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json()[0];
+
+    // Swahili is the language of everyday life here; a record only readable
+    // in English is a record most people cannot check.
+    expect(visit.whatHappened).toMatch(/ulikuwa|malaria/i);
+  });
+
+  it('shows nothing before any visit has happened', async () => {
+    const patient = await makePerson('Achieng');
+    const token = await citizenWith(patient);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/persons/me/visits',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    // Empty, not an error: a new citizen has no history and that is normal.
+    expect(res.json()).toEqual([]);
+  });
+
+  it('THE ISOLATION RULE — one patient never sees another\'s visit', async () => {
+    const doctor = await clinician();
+    const mine = await makePerson('Achieng');
+    const theirs = await makePerson('Someone');
+    const myToken = await citizenWith(mine);
+
+    const e = await openEncounter(prisma, {
+      practitionerId: doctor.practitioner.id,
+      personId: theirs.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'fever',
+    });
+    await recordDiagnosis(prisma, {
+      practitionerId: doctor.practitioner.id,
+      encounterId: e.id,
+      icd11Code: '1F41.0',
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/persons/me/visits',
+      headers: { authorization: `Bearer ${myToken}` },
+    });
+    // The person id comes from the token, so there is no parameter to
+    // tamper with — asserted rather than assumed.
+    expect(res.json()).toEqual([]);
+  });
+
+  it('the visit reaches the patient summary too', async () => {
+    const doctor = await clinician();
+    const patient = await makePerson('Achieng');
+    const token = await citizenWith(patient);
+
+    await recordAllergy(prisma, {
+      practitionerId: doctor.practitioner.id,
+      personId: patient.id,
+      substanceKind: 'DRUG',
+      substanceLabel: 'Penicillin',
+      allergyClass: 'PENICILLIN',
+      reaction: 'anaphylaxis',
+      severity: 'ANAPHYLAXIS',
+    });
+
+    const summary = (
+      await app.inject({
+        method: 'GET',
+        url: '/api/v1/persons/me/summary',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json();
+
+    // The allergy a clinician recorded is what the citizen header shows.
+    const allergies = summary.rightNow.filter((i: { kind: string }) => i.kind === 'ALLERGY');
+    expect(allergies.length).toBeGreaterThan(0);
+    expect(allergies[0].title).toMatch(/penicillin/i);
   });
 });
