@@ -172,6 +172,12 @@ enum CapStatus {
 }
 
 enum Cadre {
+  /**
+   * Reception. Deliberately listed here so a facility can employ them,
+   * but they hold NO licence and reach no clinical data — every clinical
+   * write requires an active licence, which reception can never have.
+   */
+  RECEPTION
   DOCTOR
   DENTIST
   CLINICAL_OFFICER
@@ -451,12 +457,12 @@ enum DetectMode {
 // ------------------------------------------------------------ geography
 
 model County {
-  id       String      @id @default(uuid(7))
-  code     String      @unique
-  name     String
-  subs     SubCounty[]
-  persons  Person[]
-  facils   Facility[]
+  id      String      @id @default(uuid(7))
+  code    String      @unique
+  name    String
+  subs    SubCounty[]
+  persons Person[]
+  facils  Facility[]
 
   @@map("county")
 }
@@ -488,52 +494,52 @@ model Ward {
 // ------------------------------------------------------------- identity
 
 model Person {
-  id                String     @id @default(uuid(7))
-  displayNumber     String     @unique @map("display_number")
-  givenName         String     @map("given_name")
-  middleName        String?    @map("middle_name")
-  familyName        String     @map("family_name")
-  sexAtBirth        Sex        @map("sex_at_birth")
-  dateOfBirth       DateTime   @map("date_of_birth") @db.Date
-  dobPrecision      Precision  @default(EXACT) @map("dob_precision")
+  id                String      @id @default(uuid(7))
+  displayNumber     String      @unique @map("display_number")
+  givenName         String      @map("given_name")
+  middleName        String?     @map("middle_name")
+  familyName        String      @map("family_name")
+  sexAtBirth        Sex         @map("sex_at_birth")
+  dateOfBirth       DateTime    @map("date_of_birth") @db.Date
+  dobPrecision      Precision   @default(EXACT) @map("dob_precision")
   bloodGroup        BloodGroup? @map("blood_group")
   /**
    * Passport photo, encrypted at rest like every other identifier.
-   *
    * A face is biometric data under the Data Protection Act, so it gets the
    * same AES-256-GCM treatment as a National ID rather than a public URL —
    * there is no object store to leak from and nothing a CDN can cache.
    */
   photo             String?     @map("photo_enc")
-  lifeStatus        LifeStatus @default(ALIVE) @map("life_status")
-  deceasedAt        DateTime?  @map("deceased_at")
-  countyId          String     @map("county_id")
-  county            County     @relation(fields: [countyId], references: [id])
-  subcountyId       String     @map("subcounty_id")
-  subcounty         SubCounty  @relation(fields: [subcountyId], references: [id])
-  wardId            String?    @map("ward_id")
-  residenceNote     String?    @map("residence_note")
-  maturity          Maturity   @default(ADULT)
-  registeredBy      String     @map("registered_by")
-  registrationRoute RegRoute   @map("registration_route")
-  verificationState VerState   @default(UNVERIFIED) @map("verification_state")
-  mergedIntoId      String?    @map("merged_into_id")
-  createdAt         DateTime   @default(now()) @map("created_at")
-  updatedAt         DateTime   @updatedAt @map("updated_at")
+  arrivals          Arrival[]
+  lifeStatus        LifeStatus  @default(ALIVE) @map("life_status")
+  deceasedAt        DateTime?   @map("deceased_at")
+  countyId          String      @map("county_id")
+  county            County      @relation(fields: [countyId], references: [id])
+  subcountyId       String      @map("subcounty_id")
+  subcounty         SubCounty   @relation(fields: [subcountyId], references: [id])
+  wardId            String?     @map("ward_id")
+  residenceNote     String?     @map("residence_note")
+  maturity          Maturity    @default(ADULT)
+  registeredBy      String      @map("registered_by")
+  registrationRoute RegRoute    @map("registration_route")
+  verificationState VerState    @default(UNVERIFIED) @map("verification_state")
+  mergedIntoId      String?     @map("merged_into_id")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
 
-  identifiers   Identifier[]
-  account       Account?
-  asDependant   Guardianship[] @relation("dependant")
-  asGuardian    Guardianship[] @relation("guardian")
-  practitioner  Practitioner?
-  ministryUser  MinistryUser?
-  encounters    Encounter[]
-  conditions    Condition[]
-  allergies     Allergy[]
-  medications   Medication[]
-  observations  Observation[]
-  procedures    Procedure[]
-  consents      ConsentGrant[]
+  identifiers  Identifier[]
+  account      Account?
+  asDependant  Guardianship[] @relation("dependant")
+  asGuardian   Guardianship[] @relation("guardian")
+  practitioner Practitioner?
+  ministryUser MinistryUser?
+  encounters   Encounter[]
+  conditions   Condition[]
+  allergies    Allergy[]
+  medications  Medication[]
+  observations Observation[]
+  procedures   Procedure[]
+  consents     ConsentGrant[]
 
   @@index([countyId, subcountyId])
   @@index([maturity, dateOfBirth])
@@ -541,12 +547,12 @@ model Person {
 }
 
 model Identifier {
-  id          String   @id @default(uuid(7))
-  personId    String   @map("person_id")
-  person      Person   @relation(fields: [personId], references: [id])
+  id          String    @id @default(uuid(7))
+  personId    String    @map("person_id")
+  person      Person    @relation(fields: [personId], references: [id])
   type        IdType
   value       String
-  valueIndex  String   @map("value_index")
+  valueIndex  String    @map("value_index")
   issuedOn    DateTime? @map("issued_on") @db.Date
   verifiedAt  DateTime? @map("verified_at")
   verifiedVia String?   @map("verified_via")
@@ -593,7 +599,6 @@ model Account {
   phoneIndex      String     @unique @map("phone_index")
   /**
    * Where security codes are SENT.
-   *
    * Separate from `phone` because that column doubles as the sign-in
    * identifier: a clinician keyed on a licence number would otherwise have
    * codes texted to a number derived from that licence — one nobody owns.
@@ -644,12 +649,41 @@ model Facility {
   phone              String?
   registrationStatus FacStatus @default(PENDING) @map("registration_status")
   licensedUntil      DateTime? @map("licensed_until") @db.Date
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  /**
+   * Ownership evidence for a private facility.
+   * Reference numbers, not scans: a registrar checks these against the
+   * Business Registry, KRA and the MOH register, which is stronger than a
+   * document someone uploaded. Null for a public facility, which the
+   * Ministry itself creates.
+   */
+  businessRegNo      String?   @map("business_reg_no")
+  kraPin             String?   @map("kra_pin")
+  practiceLicenceNo  String?   @map("practice_licence_no")
+  /**
+   * Encrypted, like every other National ID in the system.
+   */
+  ownerNationalId    String?   @map("owner_national_id")
+  ownerName          String?   @map("owner_name")
+
+  /// Who becomes the first FACILITY_ADMIN once a registrar approves this
+  /// facility. Held here rather than as an affiliation because an
+  /// affiliation to a PENDING facility is refused by design — nobody
+  /// administers a facility the Ministry has not yet verified.
+  pendingAdminPractitionerId String? @map("pending_admin_practitioner_id")
+
+  /// Who approved this facility, and when. `approveFacility` took a
+  /// ministryUserId and discarded it, so an approval was unattributable —
+  /// the one decision in the system that turns unverified ownership
+  /// paperwork into a facility that can reach patient records.
+  approvedBy String?   @map("approved_by")
+  approvedAt DateTime? @map("approved_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
   capabilities FacilityCapability[]
   affiliations Affiliation[]
   checkIns     CheckIn[]
+  arrivals     Arrival[]
 
   @@index([countyId, kephLevel, registrationStatus])
   @@index([name])
@@ -777,20 +811,65 @@ model CheckIn {
 // ------------------------------------------------------- clinical core
 // Every model below is APPEND-ONLY. See prisma/sql/harden.sql.
 
+/// Someone has arrived and is waiting to be seen.
+///
+/// Deliberately NOT an Encounter. An Encounter is append-only clinical
+/// data, requires an open check-in and a licence number, and is written by
+/// a clinician. Arriving at a reception desk is none of those things: it
+/// is an administrative fact that gets amended (people leave, get
+/// redirected, are added twice) and is recorded by someone with no licence.
+///
+/// Keeping the waiting room out of the clinical tables is what allows
+/// reception to write here at all.
+model Arrival {
+  id         String   @id @default(uuid(7))
+  personId   String   @map("person_id")
+  person     Person   @relation(fields: [personId], references: [id])
+  facilityId String   @map("facility_id")
+  facility   Facility @relation(fields: [facilityId], references: [id])
+
+  arrivedAt    DateTime @default(now()) @map("arrived_at")
+  /// Free text in the person's own words. Reception is not triaging and
+  /// must not be invited to: this is "chest pain since Tuesday", not a
+  /// diagnosis, and it is never treated as one.
+  statedReason String?  @map("stated_reason")
+
+  status       ArrivalStatus @default(WAITING)
+  /// The practitioner who took them through. Set when an encounter opens.
+  seenById     String?       @map("seen_by_id")
+  closedAt     DateTime?     @map("closed_at")
+  /// Who registered the arrival — reception, or a clinician working the
+  /// desk at a small dispensary where there is no separate reception.
+  registeredBy String        @map("registered_by")
+
+  @@index([facilityId, status, arrivedAt])
+  @@index([personId, arrivedAt])
+  @@map("arrival")
+}
+
+enum ArrivalStatus {
+  WAITING
+  IN_CONSULTATION
+  /// Seen and finished.
+  COMPLETED
+  /// Went home, or was sent elsewhere, without being seen.
+  LEFT
+}
+
 model Encounter {
-  id              String       @id @default(uuid(7))
-  personId        String       @map("person_id")
-  person          Person       @relation(fields: [personId], references: [id])
-  checkInId       String       @map("check_in_id")
-  checkIn         CheckIn      @relation(fields: [checkInId], references: [id])
-  recordedBy      String       @map("recorded_by")
-  facilityId      String       @map("facility_id")
-  licenceNumber   String       @map("licence_number")
-  recordedAt      DateTime     @default(now()) @map("recorded_at")
-  sensitivity     Tier         @default(TIER_2_GENERAL)
-  supersedesId    String?      @map("supersedes_id")
-  supersededAt    DateTime?    @map("superseded_at")
-  amendmentReason String?      @map("amendment_reason")
+  id              String    @id @default(uuid(7))
+  personId        String    @map("person_id")
+  person          Person    @relation(fields: [personId], references: [id])
+  checkInId       String    @map("check_in_id")
+  checkIn         CheckIn   @relation(fields: [checkInId], references: [id])
+  recordedBy      String    @map("recorded_by")
+  facilityId      String    @map("facility_id")
+  licenceNumber   String    @map("licence_number")
+  recordedAt      DateTime  @default(now()) @map("recorded_at")
+  sensitivity     Tier      @default(TIER_2_GENERAL)
+  supersedesId    String?   @map("supersedes_id")
+  supersededAt    DateTime? @map("superseded_at")
+  amendmentReason String?   @map("amendment_reason")
 
   kind           EncKind
   startedAt      DateTime     @map("started_at")
@@ -811,19 +890,19 @@ model Encounter {
 }
 
 model Condition {
-  id              String     @id @default(uuid(7))
-  personId        String     @map("person_id")
-  person          Person     @relation(fields: [personId], references: [id])
-  checkInId       String     @map("check_in_id")
-  checkIn         CheckIn    @relation(fields: [checkInId], references: [id])
-  recordedBy      String     @map("recorded_by")
-  facilityId      String     @map("facility_id")
-  licenceNumber   String     @map("licence_number")
-  recordedAt      DateTime   @default(now()) @map("recorded_at")
-  sensitivity     Tier       @default(TIER_2_GENERAL)
-  supersedesId    String?    @map("supersedes_id")
-  supersededAt    DateTime?  @map("superseded_at")
-  amendmentReason String?    @map("amendment_reason")
+  id              String    @id @default(uuid(7))
+  personId        String    @map("person_id")
+  person          Person    @relation(fields: [personId], references: [id])
+  checkInId       String    @map("check_in_id")
+  checkIn         CheckIn   @relation(fields: [checkInId], references: [id])
+  recordedBy      String    @map("recorded_by")
+  facilityId      String    @map("facility_id")
+  licenceNumber   String    @map("licence_number")
+  recordedAt      DateTime  @default(now()) @map("recorded_at")
+  sensitivity     Tier      @default(TIER_2_GENERAL)
+  supersedesId    String?   @map("supersedes_id")
+  supersededAt    DateTime? @map("superseded_at")
+  amendmentReason String?   @map("amendment_reason")
 
   encounterId    String?    @map("encounter_id")
   encounter      Encounter? @relation(fields: [encounterId], references: [id])
@@ -846,19 +925,19 @@ model Condition {
 }
 
 model Allergy {
-  id              String        @id @default(uuid(7))
-  personId        String        @map("person_id")
-  person          Person        @relation(fields: [personId], references: [id])
-  checkInId       String        @map("check_in_id")
-  checkIn         CheckIn       @relation(fields: [checkInId], references: [id])
-  recordedBy      String        @map("recorded_by")
-  facilityId      String        @map("facility_id")
-  licenceNumber   String        @map("licence_number")
-  recordedAt      DateTime      @default(now()) @map("recorded_at")
-  sensitivity     Tier          @default(TIER_1_EMERGENCY)
-  supersedesId    String?       @map("supersedes_id")
-  supersededAt    DateTime?     @map("superseded_at")
-  amendmentReason String?       @map("amendment_reason")
+  id              String    @id @default(uuid(7))
+  personId        String    @map("person_id")
+  person          Person    @relation(fields: [personId], references: [id])
+  checkInId       String    @map("check_in_id")
+  checkIn         CheckIn   @relation(fields: [checkInId], references: [id])
+  recordedBy      String    @map("recorded_by")
+  facilityId      String    @map("facility_id")
+  licenceNumber   String    @map("licence_number")
+  recordedAt      DateTime  @default(now()) @map("recorded_at")
+  sensitivity     Tier      @default(TIER_1_EMERGENCY)
+  supersedesId    String?   @map("supersedes_id")
+  supersededAt    DateTime? @map("superseded_at")
+  amendmentReason String?   @map("amendment_reason")
 
   substanceKind  SubstanceKind @map("substance_kind")
   substanceCode  String?       @map("substance_code")
@@ -874,34 +953,34 @@ model Allergy {
 }
 
 model Medication {
-  id              String     @id @default(uuid(7))
-  personId        String     @map("person_id")
-  person          Person     @relation(fields: [personId], references: [id])
-  checkInId       String     @map("check_in_id")
-  checkIn         CheckIn    @relation(fields: [checkInId], references: [id])
-  recordedBy      String     @map("recorded_by")
-  facilityId      String     @map("facility_id")
-  licenceNumber   String     @map("licence_number")
-  recordedAt      DateTime   @default(now()) @map("recorded_at")
-  sensitivity     Tier       @default(TIER_2_GENERAL)
-  supersedesId    String?    @map("supersedes_id")
-  supersededAt    DateTime?  @map("superseded_at")
-  amendmentReason String?    @map("amendment_reason")
+  id              String    @id @default(uuid(7))
+  personId        String    @map("person_id")
+  person          Person    @relation(fields: [personId], references: [id])
+  checkInId       String    @map("check_in_id")
+  checkIn         CheckIn   @relation(fields: [checkInId], references: [id])
+  recordedBy      String    @map("recorded_by")
+  facilityId      String    @map("facility_id")
+  licenceNumber   String    @map("licence_number")
+  recordedAt      DateTime  @default(now()) @map("recorded_at")
+  sensitivity     Tier      @default(TIER_2_GENERAL)
+  supersedesId    String?   @map("supersedes_id")
+  supersededAt    DateTime? @map("superseded_at")
+  amendmentReason String?   @map("amendment_reason")
 
-  encounterId    String     @map("encounter_id")
-  encounter      Encounter  @relation(fields: [encounterId], references: [id])
-  kemlCode       String     @map("keml_code")
-  genericName    String     @map("generic_name")
-  brandName      String?    @map("brand_name")
-  doseAmount     Decimal    @map("dose_amount") @db.Decimal(10, 3)
-  doseUnit       String     @map("dose_unit")
+  encounterId    String    @map("encounter_id")
+  encounter      Encounter @relation(fields: [encounterId], references: [id])
+  kemlCode       String    @map("keml_code")
+  genericName    String    @map("generic_name")
+  brandName      String?   @map("brand_name")
+  doseAmount     Decimal   @map("dose_amount") @db.Decimal(10, 3)
+  doseUnit       String    @map("dose_unit")
   route          Route
   frequency      String
-  durationDays   Int?       @map("duration_days")
-  quantity       Decimal?   @db.Decimal(10, 2)
-  indicationCode String?    @map("indication_code")
-  status         MedStatus  @default(PRESCRIBED)
-  stoppedReason  String?    @map("stopped_reason")
+  durationDays   Int?      @map("duration_days")
+  quantity       Decimal?  @db.Decimal(10, 2)
+  indicationCode String?   @map("indication_code")
+  status         MedStatus @default(PRESCRIBED)
+  stoppedReason  String?   @map("stopped_reason")
 
   @@index([personId, status])
   @@index([encounterId])
@@ -962,22 +1041,22 @@ model Procedure {
   supersededAt    DateTime? @map("superseded_at")
   amendmentReason String?   @map("amendment_reason")
 
-  encounterId String?    @map("encounter_id")
-  code        String
-  title       String
-  performedOn DateTime   @map("performed_on") @db.Date
+  encounterId           String?   @map("encounter_id")
+  code                  String
+  title                 String
+  performedOn           DateTime  @map("performed_on") @db.Date
   /// "Sometime in 2019" is a real answer.
-  datePrecision Precision @default(EXACT) @map("date_precision")
-  performedAtFacilityId String? @map("performed_at_facility_id")
+  datePrecision         Precision @default(EXACT) @map("date_precision")
+  performedAtFacilityId String?   @map("performed_at_facility_id")
   /// Free text for pre-NHP or foreign surgery — the registry cannot hold
   /// every facility a fifty-million-person population has ever used.
-  externalFacilityName  String? @map("external_facility_name")
-  indication    String
-  outcome       String?
-  complications String?
+  externalFacilityName  String?   @map("external_facility_name")
+  indication            String
+  outcome               String?
+  complications         String?
   /// Patient-recalled vs clinician-documented. A clinician must be able to
   /// tell them apart at a glance.
-  isSelfReported Boolean @default(false) @map("is_self_reported")
+  isSelfReported        Boolean   @default(false) @map("is_self_reported")
 
   @@index([personId, performedOn(sort: Desc)])
   @@map("procedure")
@@ -986,18 +1065,18 @@ model Procedure {
 // -------------------------------------------------------------- consent
 
 model ConsentGrant {
-  id             String       @id @default(uuid(7))
-  personId       String       @map("person_id")
-  person         Person       @relation(fields: [personId], references: [id])
-  facilityId     String?      @map("facility_id")
-  practitionerId String?      @map("practitioner_id")
+  id             String      @id @default(uuid(7))
+  personId       String      @map("person_id")
+  person         Person      @relation(fields: [personId], references: [id])
+  facilityId     String?     @map("facility_id")
+  practitionerId String?     @map("practitioner_id")
   scope          Scope
   category       SensCat?
-  grantedBy      GrantBy      @map("granted_by")
+  grantedBy      GrantBy     @map("granted_by")
   method         GrantMethod
-  grantedAt      DateTime     @default(now()) @map("granted_at")
-  expiresAt      DateTime     @map("expires_at")
-  revokedAt      DateTime?    @map("revoked_at")
+  grantedAt      DateTime    @default(now()) @map("granted_at")
+  expiresAt      DateTime    @map("expires_at")
+  revokedAt      DateTime?   @map("revoked_at")
 
   @@index([personId, facilityId, expiresAt])
   @@map("consent_grant")
@@ -1088,19 +1167,19 @@ model MergeRequest {
 // per concept: clinical for the clinician, plain_en/plain_sw for the citizen.
 
 model DiagnosisTerm {
-  id            String  @id @default(uuid(7))
-  icd11Code     String  @unique @map("icd11_code")
-  clinicalTitle String  @map("clinical_title")
-  plainEn       String  @map("plain_en")
-  plainSw       String  @map("plain_sw")
+  id            String   @id @default(uuid(7))
+  icd11Code     String   @unique @map("icd11_code")
+  clinicalTitle String   @map("clinical_title")
+  plainEn       String   @map("plain_en")
+  plainSw       String   @map("plain_sw")
   /// Pipe-delimited in the CSV; stored as an array for search.
   synonyms      String[]
   abbreviations String[]
-  bodySystem    String  @map("body_system")
-  isNotifiable  Boolean @default(false) @map("is_notifiable")
-  sensitivity   Tier    @default(TIER_2_GENERAL)
-  icd11Chapter  String  @map("icd11_chapter")
-  reviewStatus  String  @map("review_status")
+  bodySystem    String   @map("body_system")
+  isNotifiable  Boolean  @default(false) @map("is_notifiable")
+  sensitivity   Tier     @default(TIER_2_GENERAL)
+  icd11Chapter  String   @map("icd11_chapter")
+  reviewStatus  String   @map("review_status")
 
   @@index([bodySystem])
   @@index([isNotifiable])
@@ -1136,16 +1215,50 @@ model MedicationTerm {
   @@map("medication_term")
 }
 
+/// Paediatric dosing by weight band.
+///
+/// Some medicines are not dosed per kilogram at all. Artemether-lumefantrine
+/// and the anti-TB fixed-dose combinations come as whole dispersible tablets
+/// and are dispensed against a published band table, because a health worker
+/// counting tablets in a busy clinic cannot be asked to compute a mg/kg dose
+/// and then round it to a tablet fraction.
+///
+/// Bands are half-open — `minKg <= weight < maxKg` — and the seed validator
+/// refuses any drug whose bands leave a gap or overlap. A gap means a child
+/// of that weight gets no dose; an overlap means they match two. Both are
+/// answered before the data is allowed anywhere near a prescriber.
+model MedicationWeightBand {
+  id       String @id @default(uuid(7))
+  kemlCode String @map("keml_code")
+
+  /// Inclusive lower bound.
+  minKg Decimal @map("min_kg") @db.Decimal(5, 2)
+  /// Exclusive upper bound. The heaviest band carries a catch-all ceiling so
+  /// no adolescent falls off the end of the table.
+  maxKg Decimal @map("max_kg") @db.Decimal(5, 2)
+
+  doseAmount   Decimal @map("dose_amount") @db.Decimal(8, 3)
+  doseUnit     String  @map("dose_unit")
+  doseForm     String  @map("dose_form")
+  frequency    String
+  durationDays Int?    @map("duration_days")
+  notes        String?
+
+  @@unique([kemlCode, minKg])
+  @@index([kemlCode])
+  @@map("medication_weight_band")
+}
+
 model AllergyClassTerm {
-  id               String   @id @default(uuid(7))
-  allergyClass     String   @unique @map("allergy_class")
-  labelEn          String   @map("label_en")
-  labelSw          String   @map("label_sw")
-  crossReactsWith  String[] @map("cross_reacts_with")
-  severityDefault  Severity @map("severity_default")
-  alternatives     String[]
-  clinicalNote     String?  @map("clinical_note")
-  reviewStatus     String   @map("review_status")
+  id              String   @id @default(uuid(7))
+  allergyClass    String   @unique @map("allergy_class")
+  labelEn         String   @map("label_en")
+  labelSw         String   @map("label_sw")
+  crossReactsWith String[] @map("cross_reacts_with")
+  severityDefault Severity @map("severity_default")
+  alternatives    String[]
+  clinicalNote    String?  @map("clinical_note")
+  reviewStatus    String   @map("review_status")
 
   @@map("allergy_class_term")
 }
@@ -1179,16 +1292,16 @@ model RefreshToken {
 
 /// A one-time code, for phone verification and SMS second factors.
 model OtpChallenge {
-  id          String    @id @default(uuid(7))
-  accountId   String?   @map("account_id")
+  id         String    @id @default(uuid(7))
+  accountId  String?   @map("account_id")
   /// Blind index of the phone, so an unregistered number can still be sent one.
-  phoneIndex  String    @map("phone_index")
-  codeHash    String    @map("code_hash")
-  purpose     String
-  attempts    Int       @default(0)
-  issuedAt    DateTime  @default(now()) @map("issued_at")
-  expiresAt   DateTime  @map("expires_at")
-  consumedAt  DateTime? @map("consumed_at")
+  phoneIndex String    @map("phone_index")
+  codeHash   String    @map("code_hash")
+  purpose    String
+  attempts   Int       @default(0)
+  issuedAt   DateTime  @default(now()) @map("issued_at")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
 
   @@index([phoneIndex, purpose, expiresAt])
   @@map("otp_challenge")

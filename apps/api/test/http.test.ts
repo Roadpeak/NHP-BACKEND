@@ -832,12 +832,52 @@ describe('registration', () => {
       subcountyId: ctx.subcountyId,
       latitude: -0.0917,
       longitude: 34.768,
+      // A private facility asserts its own legality; the Ministry checks
+      // these against the Business Registry before approving.
+      businessRegNo: `PVT-${seq}/2026`,
+      kraPin: 'P051234567X',
     });
 
     expect(res.statusCode).toBe(200);
     // An unapproved facility can grant no affiliation and host no check-in.
     expect(res.json().registrationStatus).toBe('PENDING');
     expect(res.json().message).toMatch(/awaiting Ministry approval/i);
+  });
+
+  it('refuses a private facility that asserts no ownership', async () => {
+    seq++;
+    const res = await post('/facilities/register', {
+      mflCode: `MFL-NOEV-${seq}`,
+      name: 'Unevidenced Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('OWNERSHIP_EVIDENCE_REQUIRED');
+  });
+
+  it('asks a public facility for no ownership evidence', async () => {
+    // The Ministry stands behind its own facilities; asking one to prove
+    // it is registered with the Business Registry is meaningless.
+    seq++;
+    const res = await post('/facilities/register', {
+      mflCode: `MFL-PUB-${seq}`,
+      name: 'Kondele Dispensary',
+      kephLevel: 2,
+      ownership: 'PUBLIC_MOH',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().message).toMatch(/Ministry posts staff/i);
   });
 
   it('refuses a KEPH level outside the registrable range', async () => {
@@ -1210,7 +1250,7 @@ describe('the admin surface', () => {
       method: 'POST',
       url: '/api/v1/facilities/register',
       payload: {
-        mflCode: `MFL-ADM-${seq}`,
+        mflCode: `MFL-PEND-${seq}`,
         name: 'Pending Clinic',
         kephLevel: 3,
         ownership: 'PRIVATE_FOR_PROFIT',
@@ -1218,6 +1258,7 @@ describe('the admin surface', () => {
         subcountyId: ctx.subcountyId,
         latitude: -0.0917,
         longitude: 34.768,
+        businessRegNo: `PVT-PEND-${seq}`,
       },
     });
     const facilityId = created.json().facilityId;
@@ -1293,7 +1334,10 @@ describe('the admin surface', () => {
 
       // A private employer engages its own staff. The Ministry assigning
       // someone there would be an engagement nobody agreed to.
-      expect(res.statusCode).toBe(400);
+      //
+      // 403, not 400: the request was well-formed and the registrar is
+      // real. They are simply not permitted to do this.
+      expect(res.statusCode).toBe(403);
       expect(res.json().code).toBe('FACILITY_GRANT_REQUIRED');
     });
 
@@ -1317,7 +1361,7 @@ describe('the admin surface', () => {
         practitionerId: doctor.practitioner.id,
         facilityId: pending.id,
       });
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(403);
       expect(res.json().code).toBe('FACILITY_NOT_ACTIVE');
     });
 
@@ -1382,6 +1426,10 @@ describe('the admin surface', () => {
           subcountyId: ctx.subcountyId,
           latitude: -0.0917,
           longitude: 34.768,
+          // An NGO is non-public, so it proves its own legality too —
+          // "not for profit" is not the same as "vouched for by the
+          // Ministry".
+          businessRegNo: `NGO-${seq}/2026`,
         },
       });
 
@@ -3205,5 +3253,550 @@ describe('checking in and out of a facility', () => {
     expect(
       (await app.inject({ method: 'GET', url: '/api/v1/check-ins/facilities' })).statusCode,
     ).toBe(401);
+  });
+});
+
+/*
+ * The facility portal.
+ *
+ * Two guarantees are worth more than the rest of this suite:
+ *
+ *   - The ownership rule survives being reached from a new direction. It
+ *     was enforced when the Ministry posted staff; it must also hold when
+ *     a facility administrator adds their own, which is the whole point of
+ *     the private/public split.
+ *
+ *   - The reception queue carries no clinical data. Not "the UI does not
+ *     show it" — the payload does not contain it, so a receptionist with
+ *     the developer tools open learns nothing.
+ */
+describe('facility portal', () => {
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  const post = (url: string, token: string, payload?: Record<string, unknown>) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1${url}`,
+      headers: { authorization: `Bearer ${token}` },
+      ...(payload ? { payload } : {}),
+    });
+
+  const patch = (url: string, token: string, payload: Record<string, unknown>) =>
+    app.inject({
+      method: 'PATCH',
+      url: `/api/v1${url}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+
+  const del = (url: string, token: string) =>
+    app.inject({ method: 'DELETE', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  /** A signed-in clinician who administers a facility of the given ownership. */
+  async function facilityAdmin(ownership = 'PRIVATE_FOR_PROFIT') {
+    const doctor = await clinician();
+    seq++;
+    const f = await registerFacility(prisma, {
+      name: `${ownership} clinic ${seq}`,
+      kephLevel: 3,
+      ownership: ownership as never,
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      locality: 'Town',
+      latitude: -0.0917,
+      longitude: 34.768,
+      mflCode: `MFL-ADM-${seq}`,
+    });
+    await approveFacility(prisma, f.id, 'ministry-fixture');
+    await prisma.affiliation.create({
+      data: {
+        practitionerId: doctor.practitioner.id,
+        facilityId: f.id,
+        role: 'FACILITY_ADMIN',
+        grantedBy: 'ministry-fixture',
+        grantedByKind: 'MINISTRY',
+        status: 'ACTIVE',
+      },
+    });
+    return { ...doctor, adminFacility: f };
+  }
+
+  it('names the facility an administrator runs, and the staffing rule', async () => {
+    const admin = await facilityAdmin('PRIVATE_FOR_PROFIT');
+
+    const res = await get('/facility/me', admin.accessToken);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().id).toBe(admin.adminFacility.id);
+    expect(res.json().isPublic).toBe(false);
+    expect(res.json().staffingRule).toMatch(/engage your own staff/i);
+  });
+
+  it('tells a public facility that the Ministry posts its staff', async () => {
+    const admin = await facilityAdmin('PUBLIC_MOH');
+
+    const res = await get('/facility/me', admin.accessToken);
+
+    expect(res.json().isPublic).toBe(true);
+    expect(res.json().staffingRule).toMatch(/Ministry posts staff/i);
+  });
+
+  it('refuses a clinician who administers nothing', async () => {
+    // An ordinary attending, not an administrator. The role is the gate,
+    // and holding a licence is not the same as running the place.
+    const doctor = await clinician();
+
+    const res = await get('/facility/me', doctor.accessToken);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('NOT_A_FACILITY_ADMIN');
+  });
+
+  it('THE OWNERSHIP RULE — a private facility engages its own clinician', async () => {
+    const admin = await facilityAdmin('PRIVATE_FOR_PROFIT');
+    const hire = await clinician();
+    const licence = await prisma.licence.findFirstOrThrow({
+      where: { practitionerId: hire.practitioner.id },
+      select: { licenceNumber: true },
+    });
+
+    const res = await post('/facility/staff', admin.accessToken, {
+      licenceNumber: licence.licenceNumber,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().practitionerId).toBe(hire.practitioner.id);
+  });
+
+  it('THE OWNERSHIP RULE — a public facility cannot engage its own', async () => {
+    const admin = await facilityAdmin('PUBLIC_MOH');
+    const hire = await clinician();
+    const licence = await prisma.licence.findFirstOrThrow({
+      where: { practitionerId: hire.practitioner.id },
+      select: { licenceNumber: true },
+    });
+
+    const res = await post('/facility/staff', admin.accessToken, {
+      licenceNumber: licence.licenceNumber,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('MINISTRY_GRANT_REQUIRED');
+  });
+
+  it('shows the roster with who granted each affiliation, and who is on duty', async () => {
+    const admin = await facilityAdmin('PRIVATE_FOR_PROFIT');
+
+    const res = await get('/facility/staff', admin.accessToken);
+
+    expect(res.statusCode).toBe(200);
+    const me = res.json().staff.find(
+      (s: { practitionerId: string }) => s.practitionerId === admin.practitioner.id,
+    );
+    expect(me.role).toBe('FACILITY_ADMIN');
+    expect(me.grantedByKind).toBe('MINISTRY');
+    // Checked in at the fixture's OTHER facility, so not on duty here.
+    expect(me.onDuty).toBe(false);
+  });
+
+  it('will not let an administrator remove their own access', async () => {
+    const admin = await facilityAdmin('PRIVATE_FOR_PROFIT');
+    const mine = await prisma.affiliation.findFirstOrThrow({
+      where: { practitionerId: admin.practitioner.id, facilityId: admin.adminFacility.id },
+      select: { id: true },
+    });
+
+    const res = await del(`/facility/staff/${mine.id}`, admin.accessToken);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('CANNOT_REMOVE_SELF');
+  });
+
+  it("will not end an affiliation at somebody else's facility", async () => {
+    const admin = await facilityAdmin('PRIVATE_FOR_PROFIT');
+    const elsewhere = await facilityAdmin('PRIVATE_FOR_PROFIT');
+    const theirs = await prisma.affiliation.findFirstOrThrow({
+      where: { facilityId: elsewhere.adminFacility.id },
+      select: { id: true },
+    });
+
+    const res = await del(`/facility/staff/${theirs.id}`, admin.accessToken);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('AFFILIATION_NOT_FOUND');
+    // Still there: the refusal was not a silent partial success.
+    expect(
+      (await prisma.affiliation.findUniqueOrThrow({ where: { id: theirs.id } })).endedAt,
+    ).toBeNull();
+  });
+
+  // ------------------------------------------------------------- reception
+
+  it('registers an arrival and lists the person waiting', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Otieno');
+
+    const registered = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+      statedReason: 'Cough since Tuesday',
+    });
+    expect(registered.statusCode).toBe(200);
+    expect(registered.json().alreadyWaiting).toBe(false);
+
+    const queue = await get('/facility/queue', admin.accessToken);
+    const entry = queue.json().queue.find(
+      (q: { nhpId: string }) => q.nhpId === patient.displayNumber,
+    );
+    expect(entry.displayName).toContain('Otieno');
+    expect(entry.reasonForVisit).toBe('Cough since Tuesday');
+  });
+
+  it('does not queue the same person twice', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Njeri');
+
+    const first = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+    });
+    const second = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+    });
+
+    expect(second.json().alreadyWaiting).toBe(true);
+    expect(second.json().arrivalId).toBe(first.json().arrivalId);
+
+    const queue = await get('/facility/queue', admin.accessToken);
+    expect(
+      queue.json().queue.filter((q: { nhpId: string }) => q.nhpId === patient.displayNumber),
+    ).toHaveLength(1);
+  });
+
+  it('THE RECEPTION BOUNDARY — the queue payload carries nothing clinical', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Kamau');
+    // Give the person something clinical worth leaking, so this test can
+    // fail rather than passing because the record happened to be empty.
+    await prisma.person.update({
+      where: { id: patient.id },
+      data: { bloodGroup: 'O_POS' },
+    });
+    await post('/facility/queue', admin.accessToken, { nhpId: patient.displayNumber });
+
+    const body = (await get('/facility/queue', admin.accessToken)).body;
+
+    // Asserted against the serialised payload, not the typed object: what
+    // reaches the desk is the JSON, whatever the interface claims.
+    expect(body).not.toMatch(/bloodGroup|O_POS/i);
+    expect(body).not.toMatch(/condition|diagnos|allerg|medicat|nationalId/i);
+    // …while still carrying what reception actually needs.
+    expect(body).toContain(patient.displayNumber);
+  });
+
+  it('refuses an arrival for an NHP number that does not exist', async () => {
+    const admin = await facilityAdmin();
+
+    const res = await post('/facility/queue', admin.accessToken, { nhpId: 'NHP-NOPE-1' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PERSON_NOT_FOUND');
+  });
+
+  it('closes an arrival when someone leaves without being seen', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Wafula');
+    const arrival = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+    });
+
+    const res = await patch(
+      `/facility/queue/${arrival.json().arrivalId}`,
+      admin.accessToken,
+      { status: 'LEFT' },
+    );
+
+    expect(res.statusCode).toBe(200);
+    const queue = await get('/facility/queue', admin.accessToken);
+    expect(
+      queue.json().queue.some((q: { nhpId: string }) => q.nhpId === patient.displayNumber),
+    ).toBe(false);
+  });
+
+  it("cannot close an arrival at another facility", async () => {
+    const admin = await facilityAdmin();
+    const elsewhere = await facilityAdmin();
+    const patient = await makePerson('Chebet');
+    const arrival = await post('/facility/queue', elsewhere.accessToken, {
+      nhpId: patient.displayNumber,
+    });
+
+    const res = await patch(
+      `/facility/queue/${arrival.json().arrivalId}`,
+      admin.accessToken,
+      { status: 'LEFT' },
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('ARRIVAL_NOT_FOUND');
+  });
+
+  it('refuses every facility route without a token', async () => {
+    for (const [method, url] of [
+      ['GET', '/facility/me'],
+      ['GET', '/facility/staff'],
+      ['POST', '/facility/staff'],
+      ['GET', '/facility/queue'],
+      ['POST', '/facility/queue'],
+    ] as const) {
+      const res = await app.inject({ method, url: `/api/v1${url}` });
+      expect([401, 400]).toContain(res.statusCode);
+      expect(res.statusCode).not.toBe(200);
+    }
+  });
+});
+
+/*
+ * Registering a private facility and ending up able to run it.
+ *
+ * This is the path a private clinic owner actually walks, and every step
+ * of it crosses a gate built to refuse: a PENDING facility grants no
+ * affiliation, so the administrator cannot exist until a registrar has
+ * checked the ownership evidence. Nothing else tests the whole walk.
+ */
+describe('a private facility from registration to running it', () => {
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  const post = (url: string, token: string, payload?: Record<string, unknown>) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1${url}`,
+      headers: { authorization: `Bearer ${token}` },
+      ...(payload ? { payload } : {}),
+    });
+
+  it('names its registrant administrator only once the Ministry approves', async () => {
+    const owner = await clinician();
+    const licence = await prisma.licence.findFirstOrThrow({
+      where: { practitionerId: owner.practitioner.id },
+      select: { licenceNumber: true },
+    });
+    seq++;
+    // Held: the fixtures below bump `seq`, so reading it again later
+    // compares against a different number.
+    const reg = `PVT-E2E-${seq}`;
+
+    const registered = await app.inject({
+      method: 'POST',
+      url: '/api/v1/facilities/register',
+      payload: {
+        mflCode: `MFL-E2E-${seq}`,
+        name: 'Milimani Family Clinic',
+        kephLevel: 3,
+        ownership: 'PRIVATE_FOR_PROFIT',
+        countyId: ctx.countyId,
+        subcountyId: ctx.subcountyId,
+        latitude: -0.0917,
+        longitude: 34.768,
+        businessRegNo: reg,
+        kraPin: 'P051234567X',
+        ownerNationalId: '31234567',
+        ownerName: 'Amina Wanjiru',
+        adminLicenceNumber: licence.licenceNumber,
+      },
+    });
+    expect(registered.statusCode).toBe(200);
+    expect(registered.json().firstAdminPractitionerId).toBe(owner.practitioner.id);
+    const facilityId = registered.json().facilityId;
+
+    // Before approval they administer nothing. The paperwork is unchecked,
+    // so the claim to own the place is unverified.
+    expect((await get('/facility/me', owner.accessToken)).statusCode).toBe(403);
+
+    const registrar = await ministryUserAs('REGISTRAR');
+    expect(
+      (await post(`/admin/facilities/${facilityId}/approve`, registrar.accessToken)).statusCode,
+    ).toBe(200);
+
+    // After approval they run it.
+    const me = await get('/facility/me', owner.accessToken);
+    expect(me.statusCode).toBe(200);
+    expect(me.json().id).toBe(facilityId);
+    expect(me.json().businessRegNo).toBe(reg);
+
+    // The approval is attributable, and the affiliation is credited to the
+    // Ministry rather than to the applicant's own say-so.
+    const facility = await prisma.facility.findUniqueOrThrow({
+      where: { id: facilityId },
+      select: { approvedBy: true, approvedAt: true, ownerNationalId: true },
+    });
+    expect(facility.approvedBy).toBe(registrar.ministryUser.id);
+    expect(facility.approvedAt).not.toBeNull();
+    // The owner's National ID is encrypted at rest like every other.
+    expect(facility.ownerNationalId).not.toBe('31234567');
+
+    const affiliation = await prisma.affiliation.findFirstOrThrow({
+      where: { facilityId, practitionerId: owner.practitioner.id },
+      select: { grantedByKind: true, grantedBy: true, role: true },
+    });
+    expect(affiliation.role).toBe('FACILITY_ADMIN');
+    expect(affiliation.grantedByKind).toBe('MINISTRY');
+    expect(affiliation.grantedBy).toBe(registrar.ministryUser.id);
+  });
+
+  it('refuses a licence number that belongs to nobody', async () => {
+    seq++;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/facilities/register',
+      payload: {
+        mflCode: `MFL-BADL-${seq}`,
+        name: 'Ghost Clinic',
+        kephLevel: 3,
+        ownership: 'PRIVATE_FOR_PROFIT',
+        countyId: ctx.countyId,
+        subcountyId: ctx.subcountyId,
+        latitude: -0.0917,
+        longitude: 34.768,
+        businessRegNo: `PVT-BADL-${seq}`,
+        adminLicenceNumber: 'KMPDC/0000/NOBODY',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('ADMIN_LICENCE_NOT_FOUND');
+  });
+});
+
+/*
+ * Which desk is this?
+ *
+ * A clinician commonly works at two facilities — a county referral and a
+ * private clinic on alternate days. The queue route originally took
+ * whichever affiliation the database returned first, so arrivals joined
+ * the wrong waiting room and the desk displayed a queue belonging to a
+ * different building. The screen showed one facility's name in the header
+ * and another's in the navigation, which is how it was found.
+ */
+describe('the reception desk resolves which facility it is', () => {
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  const post = (url: string, token: string, payload?: Record<string, unknown>) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1${url}`,
+      headers: { authorization: `Bearer ${token}` },
+      ...(payload ? { payload } : {}),
+    });
+
+  /** A second facility, active, that this practitioner also works at. */
+  async function alsoAt(practitionerId: string, ownership = 'PRIVATE_FOR_PROFIT') {
+    seq++;
+    const f = await registerFacility(prisma, {
+      name: `Second Facility ${seq}`,
+      kephLevel: 3,
+      ownership: ownership as never,
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      locality: 'Town',
+      latitude: -0.0917,
+      longitude: 34.768,
+      mflCode: `MFL-2ND-${seq}`,
+    });
+    await approveFacility(prisma, f.id, 'ministry-fixture');
+    await prisma.affiliation.create({
+      data: {
+        practitionerId,
+        facilityId: f.id,
+        role: 'FACILITY_ADMIN',
+        grantedBy: 'ministry-fixture',
+        grantedByKind: 'MINISTRY',
+        status: 'ACTIVE',
+      },
+    });
+    return f;
+  }
+
+  it('uses the facility they are CHECKED IN to, over any other', async () => {
+    // The `clinician` fixture checks in at its own facility. The second is
+    // the one they administer — and being physically present wins, because
+    // the person walking up to the desk is standing in that building.
+    const doctor = await clinician();
+    await alsoAt(doctor.practitioner.id);
+
+    const res = await get('/facility/queue', doctor.accessToken);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().facilityName).toBe(doctor.facility.name);
+  });
+
+  it('falls back to the facility they administer when not checked in', async () => {
+    const doctor = await clinician();
+    const second = await alsoAt(doctor.practitioner.id);
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/check-ins/end',
+      headers: { authorization: `Bearer ${doctor.accessToken}` },
+    });
+
+    const res = await get('/facility/queue', doctor.accessToken);
+
+    expect(res.json().facilityName).toBe(second.name);
+  });
+
+  it('REFUSES rather than guessing when neither applies', async () => {
+    /*
+     * Two ordinary affiliations, no check-in, no administrator role. There
+     * is no correct answer, and picking one silently is how an arrival
+     * ends up in another building's queue.
+     */
+    const doctor = await clinician();
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/check-ins/end',
+      headers: { authorization: `Bearer ${doctor.accessToken}` },
+    });
+    seq++;
+    const other = await registerFacility(prisma, {
+      name: `Ordinary Second ${seq}`,
+      kephLevel: 3,
+      ownership: 'PUBLIC_MOH',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+      locality: 'Town',
+      latitude: -0.0917,
+      longitude: 34.768,
+      mflCode: `MFL-ORD-${seq}`,
+    });
+    await approveFacility(prisma, other.id, 'ministry-fixture');
+    await grantAffiliation(prisma, {
+      practitionerId: doctor.practitioner.id,
+      facilityId: other.id,
+      grantedBy: 'ministry-fixture',
+      grantedByKind: 'MINISTRY',
+    });
+
+    const res = await get('/facility/queue', doctor.accessToken);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('AMBIGUOUS_FACILITY');
+    expect(res.json().detail).toMatch(/check in to the one you are at/i);
+  });
+
+  it('registers the arrival into the facility the desk is showing', async () => {
+    // The fault that started this: the queue was read from one facility
+    // and written to another, so an arrival vanished from the desk that
+    // registered it.
+    const doctor = await clinician();
+    await alsoAt(doctor.practitioner.id);
+    const patient = await makePerson('Kiptoo');
+
+    await post('/facility/queue', doctor.accessToken, { nhpId: patient.displayNumber });
+    const queue = await get('/facility/queue', doctor.accessToken);
+
+    expect(
+      queue.json().queue.some((q: { nhpId: string }) => q.nhpId === patient.displayNumber),
+    ).toBe(true);
   });
 });

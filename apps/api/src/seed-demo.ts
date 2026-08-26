@@ -175,6 +175,68 @@ async function main() {
     data: { bloodGroup: 'O_POS' },
   });
 
+  /*
+   * The facility administrator.
+   *
+   * A separate human being from the doctor, on purpose. FACILITY_ADMIN is a
+   * role a practitioner holds, not a fourth kind of account, and the demo
+   * has to show that without also implying every administrator sees
+   * patients. This one is a records officer: a real cadre at a Kenyan
+   * hospital, holding no clinical licence that would let them write to a
+   * clinical table.
+   *
+   * The grant is MINISTRY-issued because the demo facility is PUBLIC_MOH,
+   * and `grantAffiliation` refuses a facility-issued grant at a public
+   * facility by design.
+   */
+  const adminPerson = await registerAdult(prisma, {
+    nationalId: '28773451',
+    phone: '0744333666',
+    givenName: 'Peter',
+    middleName: 'Kimani',
+    familyName: 'Njoroge',
+    sexAtBirth: 'MALE',
+    dateOfBirth: new Date(Date.UTC(1985, 8, 2)),
+    countyId: county.id,
+    subcountyId: subcounty.id,
+    passwordHash: 'argon2id$demo',
+  });
+
+  const { practitioner: adminPractitioner } = await registerPractitioner(prisma, {
+    personId: adminPerson.id,
+    cadre: 'RECEPTION',
+    countyId: county.id,
+    subcountyId: subcounty.id,
+    // No licence, deliberately. Reception has no statutory register, and
+    // issuing them one would fake the very credential the clinical gate
+    // checks — this account must be unable to write clinical data, and the
+    // demo is only honest if that is true rather than merely configured.
+    familyName: 'Njoroge',
+  });
+
+  const adminPhone = '0744333777';
+  const adminAccount = await prisma.account.create({
+    data: {
+      practitionerId: adminPractitioner.id,
+      phone: encryptField(adminPhone),
+      phoneIndex: blindIndex(adminPhone, normalisePhone),
+      passwordHash: await hashPassword('admin-password-123'),
+      status: 'ACTIVE',
+    },
+  });
+  await enrolSms(prisma, adminAccount.id);
+  const adminEnrolCode = smsBuffer.sent.at(-1)?.body.match(/\b(\d{6})\b/)?.[1];
+  if (!adminEnrolCode) throw new Error('Admin enrolment code was not sent');
+  await confirmSms(prisma, adminAccount.id, adminEnrolCode);
+
+  await grantAffiliation(prisma, {
+    practitionerId: adminPractitioner.id,
+    facilityId: facility.id,
+    role: 'FACILITY_ADMIN',
+    grantedBy: 'ministry-demo',
+    grantedByKind: 'MINISTRY',
+  });
+
   // A working citizen login, so the patient's own view is testable. No MFA:
   // citizens may enrol but are not required to — requiring a second factor
   // to read your own record would exclude the people it is meant to serve.
@@ -502,6 +564,10 @@ async function report() {
   console.log(`  facility  ${session?.facility.name}`);
   console.log(`  session   expires ${session?.expiresAt.toISOString()}`);
   console.log(`  patient   ${patient?.displayNumber} · National ID 39104882`);
+  console.log('\n  FACILITY ADMIN (the roster and reception desk, at /facility)');
+  console.log('    phone     0744333777');
+  console.log('    password  admin-password-123');
+  console.log('    who       Peter Njoroge · records officer · holds NO licence');
   console.log('\n  MINISTRY ANALYST (the map, at /ministry)');
   console.log('    phone     0733222555');
   console.log('    password  analyst-password-123');

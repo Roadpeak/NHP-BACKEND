@@ -14,6 +14,14 @@
 export type Regulator = 'KMPDC' | 'NCK' | 'COC' | 'PPB' | 'KMLTTB' | 'KNDI';
 
 export type Cadre =
+  /**
+   * Reception. Holds no licence and has no statutory register, so
+   * REGULATOR_FOR_CADRE maps them to null and the licence requirement in
+   * registerPractitioner does not apply. They can never write clinical
+   * data — every clinical write requires a valid licence — which is what
+   * makes it safe to employ them through the same practitioner record.
+   */
+  | 'RECEPTION'
   | 'DOCTOR'
   | 'DENTIST'
   | 'CLINICAL_OFFICER'
@@ -35,6 +43,7 @@ export type Cadre =
  * than pretend otherwise.
  */
 export const REGULATOR_FOR_CADRE: Record<Cadre, Regulator | null> = {
+  RECEPTION: null,
   DOCTOR: 'KMPDC',
   DENTIST: 'KMPDC',
   CLINICAL_OFFICER: 'COC',

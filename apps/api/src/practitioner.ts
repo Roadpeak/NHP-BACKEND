@@ -120,13 +120,33 @@ export async function registerPractitioner(
     }
   }
 
+  /*
+   * PENDING until something vouches for them.
+   *
+   * For a licensed cadre that something is the regulator, checked below.
+   * For a cadre with no statutory register — reception, community health
+   * workers, psychologists — there is no register to check, so waiting for
+   * one means waiting forever: they were created PENDING and had no path to
+   * ACTIVE at all, which left a facility unable to employ the reception
+   * staff the queue was built for.
+   *
+   * They are activated here instead, and the safety argument is unchanged:
+   * activation is not permission. Every clinical write independently
+   * demands a licence that was valid at that moment, so an unlicensed
+   * practitioner who is ACTIVE can hold an affiliation, appear on a roster
+   * and work a reception desk, and still cannot write a single clinical
+   * row. The licence gate, not the status field, is what protects the
+   * record.
+   */
+  const unregistered = !expectedRegulator;
+
   const practitioner = await db.practitioner.create({
     data: {
       personId: input.personId,
       cadre: input.cadre,
       countyId: input.countyId,
       subcountyId: input.subcountyId,
-      status: 'PENDING',
+      status: unregistered ? 'ACTIVE' : 'PENDING',
     },
   });
 

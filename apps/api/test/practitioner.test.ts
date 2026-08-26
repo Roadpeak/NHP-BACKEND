@@ -26,6 +26,8 @@ import {
 import { REGULATOR_FOR_CADRE } from '../src/verification.js';
 import { registerAdult } from '../src/identity.js';
 import { registerFacility, approveFacility } from '../src/facility.js';
+import { openEncounter } from '../src/clinical.js';
+import { VerificationRegistry } from '../src/verification.js';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -205,6 +207,99 @@ describe('practitioner registration', () => {
     });
     expect(licence).toBeNull();
     expect(practitioner.cadre).toBe('CHW');
+  });
+
+  /*
+   * An unregistered cadre had no path out of PENDING.
+   *
+   * `registerPractitioner` created everyone PENDING and promoted them only
+   * when a regulator verified their licence. For reception, community health
+   * workers and psychologists there is no register to verify against, so
+   * they waited on a check that could never run — which left a facility
+   * unable to employ the reception staff the arrival queue was built for.
+   */
+  it('activates a cadre that has no statutory register', async () => {
+    const person = await makePerson();
+    const { practitioner } = await registerPractitioner(prisma, {
+      personId: person.id,
+      cadre: 'RECEPTION',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+    });
+    expect(practitioner.status).toBe('ACTIVE');
+  });
+
+  it('still holds a licensed cadre at PENDING until the licence verifies', async () => {
+    const person = await makePerson();
+    const { practitioner } = await registerPractitioner(
+      prisma,
+      {
+        personId: person.id,
+        cadre: 'DOCTOR',
+        countyId: ctx.countyId,
+        subcountyId: ctx.subcountyId,
+        licenceNumber: 'KMPDC/2026/UNVERIFIED',
+      },
+      // A registry whose only provider answers "not found", so the licence
+      // does not verify and the practitioner has no route to ACTIVE.
+      new VerificationRegistry().register({
+        name: 'never-finds-anything',
+        supports: () => true,
+        verify: async () => ({ outcome: 'NOT_FOUND' as const, source: 'test-registry' }),
+      }),
+    );
+    expect(practitioner.status).toBe('PENDING');
+  });
+
+  /*
+   * ACTIVATION IS NOT PERMISSION.
+   *
+   * The safety argument for activating an unlicensed cadre rests entirely on
+   * this: every clinical write independently demands a licence valid at that
+   * moment, so being ACTIVE buys a roster place and nothing else. If this
+   * ever passes, the status field has silently become an authorisation.
+   */
+  it('THE LICENCE GATE — an active unlicensed practitioner still cannot write clinical data', async () => {
+    const person = await makePerson();
+    const { practitioner } = await registerPractitioner(prisma, {
+      personId: person.id,
+      cadre: 'RECEPTION',
+      countyId: ctx.countyId,
+      subcountyId: ctx.subcountyId,
+    });
+    expect(practitioner.status).toBe('ACTIVE');
+
+    const facility = await makeFacility('Kisumu Reception Test', 'PUBLIC_MOH');
+    await grantAffiliation(prisma, {
+      practitionerId: practitioner.id,
+      facilityId: facility.id,
+      role: 'FACILITY_ADMIN',
+      grantedBy: 'ministry-test',
+      grantedByKind: 'MINISTRY',
+    });
+
+    // Check-in itself succeeds — reception has to be able to hold a session
+    // to work a desk at all, and the session records `licenceNumber: null`.
+    const { licenceNumber } = await checkIn(prisma, {
+      practitionerId: practitioner.id,
+      facilityId: facility.id,
+    });
+    expect(licenceNumber).toBeNull();
+
+    // The refusal lands where the clinical row would be written. Both the
+    // service gate and the harden.sql trigger require a licence that was
+    // valid at that moment, and this account has none to cite.
+    const patient = await makePerson('Patient');
+    await expect(
+      openEncounter(prisma, {
+        practitionerId: practitioner.id,
+        personId: patient.id,
+        kind: 'OUTPATIENT',
+        chiefComplaint: 'Registering an arrival, not treating one',
+      }),
+      // Specifically the licence gate — not a validation error that would
+      // pass this test while proving nothing.
+    ).rejects.toThrow(/licence/i);
   });
 
   it('refuses a licence number already held by someone else', async () => {

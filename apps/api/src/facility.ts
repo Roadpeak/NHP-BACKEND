@@ -172,17 +172,58 @@ export async function registerFacility(db: Db, input: RegisterFacilityInput) {
 export async function approveFacility(db: Db, facilityId: string, ministryUserId: string) {
   const facility = await db.facility.findUnique({
     where: { id: facilityId },
-    select: { id: true, registrationStatus: true },
+    select: {
+      id: true,
+      registrationStatus: true,
+      pendingAdminPractitionerId: true,
+    },
   });
   if (!facility) throw new FacilityError('Facility not found', 'FACILITY_NOT_FOUND');
   if (facility.registrationStatus === 'ACTIVE') {
     throw new FacilityError('Facility is already active', 'ALREADY_ACTIVE');
   }
 
-  return db.facility.update({
+  const approved = await db.facility.update({
     where: { id: facilityId },
-    data: { registrationStatus: 'ACTIVE' },
+    data: {
+      registrationStatus: 'ACTIVE',
+      // Attributed. Approval is what turns unverified ownership paperwork
+      // into a facility that can reach patient records; an unattributable
+      // approval leaves nobody answerable for that check.
+      approvedBy: ministryUserId,
+      approvedAt: new Date(),
+    },
   });
+
+  /*
+   * The first administrator, materialised now.
+   *
+   * Whoever registered a private facility named themselves here. The
+   * affiliation could not be created at registration because an
+   * affiliation to a PENDING facility is refused by design — nobody
+   * administers a facility the Ministry has not verified. Approval is
+   * exactly the moment that verification happens.
+   */
+  if (facility.pendingAdminPractitionerId) {
+    await db.affiliation.create({
+      data: {
+        practitionerId: facility.pendingAdminPractitionerId,
+        facilityId,
+        role: 'FACILITY_ADMIN',
+        // Attributed to the approving registrar, not to the applicant:
+        // the Ministry conferred this by approving the application.
+        grantedBy: ministryUserId,
+        grantedByKind: 'MINISTRY',
+        status: 'ACTIVE',
+      },
+    });
+    await db.facility.update({
+      where: { id: facilityId },
+      data: { pendingAdminPractitionerId: null },
+    });
+  }
+
+  return approved;
 }
 
 // -------------------------------------------------------------- capabilities

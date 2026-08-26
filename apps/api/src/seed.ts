@@ -231,6 +231,44 @@ async function seedMedications() {
   return { medications: rows.length, controlled };
 }
 
+/**
+ * Paediatric weight bands.
+ *
+ * Replaced wholesale rather than upserted. A band table is only meaningful
+ * as a complete set — the validator proves the bands are contiguous and
+ * non-overlapping across the whole drug, and upserting row by row could
+ * leave a stale band behind that quietly reintroduces the gap or overlap
+ * that check exists to prevent.
+ */
+async function seedWeightBands() {
+  const path = join(SEED_DIR, 'weight_bands.csv');
+  if (!existsSync(path)) {
+    console.warn(`  weight_bands.csv not found — skipping`);
+    return { bands: 0, drugs: 0 };
+  }
+
+  const rows = readCsv(path);
+  const codes = [...new Set(rows.map((r) => r.keml_code))];
+
+  await prisma.medicationWeightBand.deleteMany({ where: { kemlCode: { in: codes } } });
+  for (const r of rows) {
+    await prisma.medicationWeightBand.create({
+      data: {
+        kemlCode: r.keml_code,
+        minKg: r.band_min_kg,
+        maxKg: r.band_max_kg,
+        doseAmount: r.dose_amount,
+        doseUnit: r.dose_unit,
+        doseForm: r.dose_form,
+        frequency: r.frequency,
+        durationDays: r.duration_days ? Number(r.duration_days) : null,
+        notes: r.notes || null,
+      },
+    });
+  }
+  return { bands: rows.length, drugs: codes.length };
+}
+
 async function seedAllergyClasses() {
   const path = join(SEED_DIR, 'allergy_classes.csv');
   if (!existsSync(path)) {
@@ -360,6 +398,9 @@ async function main() {
 
   const meds = await seedMedications();
   console.log(`  medications   ${meds.medications}  (${meds.controlled} controlled)`);
+
+  const bands = await seedWeightBands();
+  console.log(`  weight bands  ${bands.bands}  (${bands.drugs} drugs)`);
 
   const allergies = await seedAllergyClasses();
   console.log(`  allergy class ${allergies.allergyClasses}`);

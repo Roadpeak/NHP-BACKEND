@@ -68,6 +68,14 @@ import {
   FacilityError,
 } from './facility.js';
 import {
+  FacilityAdminError,
+  requireFacilityAdmin,
+  listStaff,
+  registerArrival,
+  listQueue,
+  closeArrival,
+} from './facility-admin.js';
+import {
   burdenByCounty,
   burdenBySubcounty,
   referralClosureByCounty,
@@ -234,7 +242,8 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       error instanceof FacilityError ||
       error instanceof IdentityError ||
       error instanceof PhotoError ||
-      error instanceof PractitionerError;
+      error instanceof PractitionerError ||
+      error instanceof FacilityAdminError;
 
     if (known) {
       const code = (error as { code: string }).code;
@@ -246,6 +255,13 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         'NO_ACTIVE_LICENCE',
         'SELF_ACCESS_REFUSED',
         'NOT_YOUR_CONSENT',
+        // Administering a facility you do not administer is a refusal,
+        // not a malformed request.
+        'NOT_A_FACILITY_ADMIN',
+        'AMBIGUOUS_FACILITY',
+        'FACILITY_NOT_ACTIVE',
+        'MINISTRY_GRANT_REQUIRED',
+        'FACILITY_GRANT_REQUIRED',
       ].includes(code);
 
       return reply.status(forbidden ? 403 : 400).send({
@@ -538,6 +554,12 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       locality?: string;
       latitude: number;
       longitude: number;
+      businessRegNo?: string;
+      kraPin?: string;
+      practiceLicenceNo?: string;
+      ownerNationalId?: string;
+      ownerName?: string;
+      adminLicenceNumber?: string;
     };
   }>(
     `${v1}/facilities/register`,
@@ -565,18 +587,95 @@ export async function buildApp(prismaOverride?: PrismaClient) {
             locality: { type: 'string', maxLength: 120 },
             latitude: { type: 'number' },
             longitude: { type: 'number' },
+            // Ownership evidence for a private facility. Reference numbers,
+            // not scans: a registrar checks these against the Business
+            // Registry, KRA and the MOH register, which is stronger than a
+            // document anyone could forge and upload.
+            businessRegNo: { type: 'string', maxLength: 64 },
+            kraPin: { type: 'string', maxLength: 32 },
+            practiceLicenceNo: { type: 'string', maxLength: 64 },
+            ownerNationalId: { type: 'string', maxLength: 32 },
+            ownerName: { type: 'string', maxLength: 160 },
+            // The person registering a PRIVATE facility becomes its first
+            // administrator, by licence number.
+            adminLicenceNumber: { type: 'string', maxLength: 64 },
           },
         },
       },
     },
     async (req) => {
+      const b = req.body;
+      const isPublic = b.ownership === 'PUBLIC_MOH' || b.ownership === 'PUBLIC_OTHER';
+
+      // Ownership evidence is required of a PRIVATE facility and meaningless
+      // for a public one, which the Ministry itself stands behind.
+      if (!isPublic && !b.businessRegNo) {
+        throw new FacilityError(
+          'A private facility must give its business registration number, ' +
+            'so the Ministry can check it against the Business Registry.',
+          'OWNERSHIP_EVIDENCE_REQUIRED',
+        );
+      }
+
       const facility = await registerFacility(prisma, {
-        ...req.body,
-        ownership: req.body.ownership as never,
+        mflCode: b.mflCode,
+        name: b.name,
+        kephLevel: b.kephLevel,
+        ownership: b.ownership as never,
+        countyId: b.countyId,
+        subcountyId: b.subcountyId,
         // The service requires a locality; the form treats it as optional
         // because many dispensaries are known only by their facility name.
-        locality: req.body.locality?.trim() || req.body.name,
+        locality: b.locality?.trim() || b.name,
+        latitude: b.latitude,
+        longitude: b.longitude,
       });
+
+      if (!isPublic) {
+        await prisma.facility.update({
+          where: { id: facility.id },
+          data: {
+            businessRegNo: b.businessRegNo,
+            kraPin: b.kraPin ?? null,
+            practiceLicenceNo: b.practiceLicenceNo ?? null,
+            // Encrypted, like every other National ID in the system.
+            ownerNationalId: b.ownerNationalId ? encryptField(b.ownerNationalId) : null,
+            ownerName: b.ownerName ?? null,
+          },
+        });
+      }
+
+      /*
+       * The first administrator.
+       *
+       * For a PRIVATE facility this is whoever registered it, named by
+       * licence number — they supplied the ownership evidence and the
+       * Ministry checks it before approving. The affiliation is created
+       * now but the facility is PENDING, so it confers nothing until a
+       * registrar has verified who they are.
+       */
+      let firstAdmin: string | null = null;
+      if (!isPublic && b.adminLicenceNumber) {
+        const licence = await prisma.licence.findFirst({
+          where: { licenceNumber: b.adminLicenceNumber.trim().toUpperCase() },
+          select: { practitionerId: true },
+        });
+        if (!licence) {
+          throw new FacilityError(
+            `No practitioner holds licence ${b.adminLicenceNumber}. Register ` +
+              'as a health worker first, then register the facility.',
+            'ADMIN_LICENCE_NOT_FOUND',
+          );
+        }
+        // Recorded as an intent, not an affiliation. `approveFacility`
+        // turns it into a real FACILITY_ADMIN once a registrar has checked
+        // the ownership evidence against national records.
+        await prisma.facility.update({
+          where: { id: facility.id },
+          data: { pendingAdminPractitionerId: licence.practitionerId },
+        });
+        firstAdmin = licence.practitionerId;
+      }
 
       // PENDING until a Ministry registrar approves it. An unapproved
       // facility can grant no affiliation and host no check-in, so it
@@ -585,9 +684,13 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         facilityId: facility.id,
         mflCode: facility.mflCode,
         registrationStatus: facility.registrationStatus,
-        message:
-          'Facility registered and awaiting Ministry approval. Staff cannot ' +
-          'be affiliated until it is approved.',
+        firstAdminPractitionerId: firstAdmin,
+        message: isPublic
+          ? 'Facility registered and awaiting Ministry approval. The Ministry ' +
+            'posts staff to public facilities.'
+          : 'Facility registered and awaiting Ministry approval. Your ' +
+            'ownership details will be checked against national records. ' +
+            'Staff cannot be added until it is approved.',
       };
     },
   );
@@ -843,6 +946,28 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         })
       : null;
 
+    /*
+     * Whether they administer a facility.
+     *
+     * A facility administrator IS a practitioner — that is what keeps the
+     * licence checks and audit trail applying to them — but the two
+     * portals are different places, and without this the sign-in form
+     * could not tell them apart and sent every administrator to the
+     * clinical portal.
+     */
+    const adminOf = ctx.practitionerId
+      ? await prisma.affiliation.findFirst({
+          where: {
+            practitionerId: ctx.practitionerId,
+            role: 'FACILITY_ADMIN',
+            status: 'ACTIVE',
+            endedAt: null,
+            facility: { registrationStatus: 'ACTIVE' },
+          },
+          select: { facilityId: true, facility: { select: { name: true } } },
+        })
+      : null;
+
     return {
       displayName: practitioner
         ? `${decryptField(practitioner.person.givenName)} ` +
@@ -862,6 +987,8 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       personId: ctx.personId ?? null,
       mfaSatisfied: ctx.mfa,
       checkedInAt: session?.facility.name ?? null,
+      facilityAdminOf: adminOf?.facilityId ?? null,
+      facilityAdminOfName: adminOf?.facility.name ?? null,
     };
   });
 
@@ -937,6 +1064,286 @@ export async function buildApp(prismaOverride?: PrismaClient) {
    * clinician can only work where someone authorised them to. Returned so
    * the portal can offer a choice rather than making them type an id.
    */
+  // ------------------------------------------------------- facility portal
+
+  /**
+   * The facility an administrator runs.
+   *
+   * Every route below re-derives the scope from the caller's own
+   * affiliations rather than trusting a facility id in the request. An
+   * administrator of one facility asking about another gets
+   * NOT_A_FACILITY_ADMIN, not somebody else's roster.
+   */
+  app.get(`${v1}/facility/me`, async (req) => {
+    const practitionerId = await practitionerFrom(req);
+    const scope = await requireFacilityAdmin(prisma, practitionerId);
+    const facility = await prisma.facility.findUniqueOrThrow({
+      where: { id: scope.facilityId },
+      select: {
+        id: true,
+        mflCode: true,
+        name: true,
+        kephLevel: true,
+        ownership: true,
+        registrationStatus: true,
+        locality: true,
+        approvedAt: true,
+        businessRegNo: true,
+        kraPin: true,
+        practiceLicenceNo: true,
+        ownerName: true,
+        county: { select: { name: true } },
+        subcounty: { select: { name: true } },
+      },
+    });
+    return {
+      ...facility,
+      countyName: facility.county.name,
+      subcountyName: facility.subcounty.name,
+      county: undefined,
+      subcounty: undefined,
+      isPublic: scope.isPublic,
+      // The ownership rule, stated to the portal so it can explain itself
+      // rather than surprising an administrator with a refusal.
+      staffingRule: scope.isPublic
+        ? 'The Ministry posts staff to public facilities. You cannot add staff here.'
+        : 'You engage your own staff. Add them by licence number below.',
+    };
+  });
+
+  app.get<{ Querystring: { includeEnded?: string } }>(`${v1}/facility/staff`, async (req) => {
+    const practitionerId = await practitionerFrom(req);
+    const scope = await requireFacilityAdmin(prisma, practitionerId);
+    return {
+      facilityName: scope.facilityName,
+      isPublic: scope.isPublic,
+      staff: await listStaff(prisma, scope.facilityId, {
+        includeEnded: req.query?.includeEnded === 'true',
+      }),
+    };
+  });
+
+  app.post<{
+    Body: { licenceNumber: string; role?: string };
+  }>(
+    `${v1}/facility/staff`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['licenceNumber'],
+          properties: {
+            licenceNumber: { type: 'string', minLength: 1, maxLength: 64 },
+            role: {
+              type: 'string',
+              enum: ['ATTENDING', 'RESIDENT', 'VISITING', 'LOCUM', 'FACILITY_ADMIN'],
+            },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const practitionerId = await practitionerFrom(req);
+      const scope = await requireFacilityAdmin(prisma, practitionerId);
+
+      const licence = await prisma.licence.findFirst({
+        where: { licenceNumber: req.body.licenceNumber.trim().toUpperCase() },
+        select: {
+          practitionerId: true,
+          status: true,
+          practitioner: {
+            select: {
+              cadre: true,
+              person: { select: { givenName: true, familyName: true } },
+            },
+          },
+        },
+      });
+      if (!licence) {
+        throw new FacilityAdminError(
+          `No practitioner holds licence ${req.body.licenceNumber}. They must ` +
+            'register on the health worker portal first.',
+          'LICENCE_NOT_FOUND',
+        );
+      }
+
+      // `grantAffiliation` enforces the ownership rule: naming the actor
+      // as FACILITY here is what makes it refuse on a public facility,
+      // where only the Ministry may post staff.
+      const affiliation = await grantAffiliation(prisma, {
+        practitionerId: licence.practitionerId,
+        facilityId: scope.facilityId,
+        role: (req.body.role ?? 'ATTENDING') as never,
+        grantedBy: practitionerId,
+        grantedByKind: 'FACILITY',
+      });
+
+      return {
+        affiliationId: affiliation.id,
+        practitionerId: licence.practitionerId,
+        displayName: `${licence.practitioner.person.givenName} ${licence.practitioner.person.familyName}`,
+        cadre: licence.practitioner.cadre,
+        licenceStatus: licence.status,
+      };
+    },
+  );
+
+  app.delete<{ Params: { affiliationId: string } }>(
+    `${v1}/facility/staff/:affiliationId`,
+    async (req) => {
+      const practitionerId = await practitionerFrom(req);
+      const scope = await requireFacilityAdmin(prisma, practitionerId);
+
+      const affiliation = await prisma.affiliation.findUnique({
+        where: { id: req.params.affiliationId },
+        select: { id: true, facilityId: true, practitionerId: true },
+      });
+      // Same answer whether it belongs to another facility or does not
+      // exist: an administrator does not get to probe other rosters.
+      if (!affiliation || affiliation.facilityId !== scope.facilityId) {
+        throw new FacilityAdminError('Affiliation not found', 'AFFILIATION_NOT_FOUND');
+      }
+      if (affiliation.practitionerId === practitionerId) {
+        throw new FacilityAdminError(
+          'You cannot remove your own administrator access. Ask the Ministry, ' +
+            'or appoint another administrator first.',
+          'CANNOT_REMOVE_SELF',
+        );
+      }
+
+      await endAffiliation(prisma, affiliation.id);
+      return { ended: true };
+    },
+  );
+
+  // --------------------------------------------------------- reception desk
+
+  /**
+   * The waiting room.
+   *
+   * Open to any active affiliate of the facility, not only the
+   * administrator: reception staff work these routes all day, and at a
+   * small dispensary the clinician works the desk themselves. What keeps
+   * reception out of clinical data is not this gate — it is that they
+   * hold no licence, and `canWriteClinical` refuses without one.
+   */
+  async function receptionScope(req: { headers: Record<string, unknown> }) {
+    const practitionerId = await practitionerFrom(req);
+
+    /*
+     * WHICH desk this is.
+     *
+     * A clinician commonly works at more than one facility — a county
+     * referral and a private clinic on alternate days. Picking whichever
+     * affiliation the database returned first put arrivals into the wrong
+     * waiting room, and showed a queue belonging to a different building.
+     *
+     * Resolved in this order:
+     *   1. an open check-in — they are physically at that facility now;
+     *   2. the facility they administer;
+     *   3. their single affiliation, if they have only one.
+     *
+     * With none of those, it refuses and asks rather than guessing.
+     */
+    const open = await prisma.checkIn.findFirst({
+      where: { practitionerId, endedAt: null, expiresAt: { gt: new Date() } },
+      select: { facilityId: true, facility: { select: { name: true } } },
+    });
+
+    const admin = open
+      ? null
+      : await prisma.affiliation.findFirst({
+          where: {
+            practitionerId,
+            role: 'FACILITY_ADMIN',
+            status: 'ACTIVE',
+            endedAt: null,
+            facility: { registrationStatus: 'ACTIVE' },
+          },
+          select: { facilityId: true, facility: { select: { name: true } } },
+        });
+
+    let affiliation = open ?? admin;
+
+    if (!affiliation) {
+      const all = await prisma.affiliation.findMany({
+        where: { practitionerId, status: 'ACTIVE', endedAt: null },
+        select: { facilityId: true, facility: { select: { name: true } } },
+        take: 2,
+      });
+      if (all.length === 1) affiliation = all[0];
+      else if (all.length > 1) {
+        throw new FacilityAdminError(
+          'You work at more than one facility. Check in to the one you are ' +
+            'at before registering arrivals, so they join the right queue.',
+          'AMBIGUOUS_FACILITY',
+        );
+      }
+    }
+
+    if (!affiliation) {
+      throw new FacilityAdminError(
+        'You are not affiliated to a facility, so you cannot register arrivals.',
+        'NOT_A_FACILITY_ADMIN',
+      );
+    }
+    return {
+      practitionerId,
+      facilityId: affiliation.facilityId,
+      facilityName: affiliation.facility.name,
+    };
+  }
+
+  app.get(`${v1}/facility/queue`, async (req) => {
+    const scope = await receptionScope(req);
+    return {
+      facilityName: scope.facilityName,
+      queue: await listQueue(prisma, scope.facilityId),
+    };
+  });
+
+  app.post<{ Body: { nhpId: string; statedReason?: string } }>(
+    `${v1}/facility/queue`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['nhpId'],
+          properties: {
+            nhpId: { type: 'string', minLength: 1, maxLength: 32 },
+            statedReason: { type: 'string', maxLength: 280 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const scope = await receptionScope(req);
+      return registerArrival(prisma, {
+        facilityId: scope.facilityId,
+        nhpId: req.body.nhpId,
+        statedReason: req.body.statedReason,
+        registeredBy: scope.practitionerId,
+      });
+    },
+  );
+
+  app.patch<{ Params: { arrivalId: string }; Body: { status: 'LEFT' | 'COMPLETED' } }>(
+    `${v1}/facility/queue/:arrivalId`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['status'],
+          properties: { status: { type: 'string', enum: ['LEFT', 'COMPLETED'] } },
+        },
+      },
+    },
+    async (req) => {
+      const scope = await receptionScope(req);
+      return closeArrival(prisma, req.params.arrivalId, scope.facilityId, req.body.status);
+    },
+  );
+
   app.get(`${v1}/check-ins/facilities`, async (req) => {
     const practitionerId = await practitionerFrom(req);
     const affiliations = await prisma.affiliation.findMany({

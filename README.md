@@ -31,6 +31,11 @@ bearer token.
 
 `pnpm test` wipes the demo data — re-run `pnpm seed:demo` afterwards.
 
+`pnpm demo:reset` clears the reference data too, so the order is
+`pnpm seed` (reference) then `pnpm seed:demo`. Running `demo:reset` on its
+own fails with *County 043 is missing*, which reads like a broken seed
+script rather than a missing prerequisite.
+
 Port 4400 is deliberate — 4000 is taken by another project on this machine.
 
 Port 5434 is deliberate — 5433 is already taken by another project on this
