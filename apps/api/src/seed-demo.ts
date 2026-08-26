@@ -520,7 +520,12 @@ async function main() {
 }
 
 async function report() {
+  // The doctor specifically. `findFirst` with no filter used to be
+  // unambiguous; now that the demo also seeds an unlicensed reception
+  // administrator it can return them instead, and the credentials block
+  // printed "Dr Amina Wanjiru · undefined".
   const practitioner = await prisma.practitioner.findFirst({
+    where: { cadre: 'DOCTOR' },
     include: { licences: true },
   });
   const patient = await prisma.person.findFirst({
