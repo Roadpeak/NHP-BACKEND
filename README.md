@@ -18,6 +18,31 @@ pnpm test           # prove the refusals
 
 `pnpm setup` runs all of the above in order.
 
+### Deploying
+
+```bash
+pnpm --filter @nhp/api deploy    # migrate deploy, then harden
+pnpm --filter @nhp/api seed      # reference data — required, not optional
+```
+
+**The order is not interchangeable.** `harden.sql` grants and triggers act
+on tables that must already exist, so running it against an empty database
+fails with `relation "encounter" does not exist`. `pnpm deploy` chains the
+two so that ordering cannot be got wrong.
+
+Use `migrate deploy`, never `migrate dev` — the latter is interactive and
+will offer to reset the database.
+
+`prisma/migrations/0_init` is the baseline, generated from the schema with
+`prisma migrate diff`. Local development previously used `db push`, which
+left the repo with no migration history at all and made the first deploy a
+manual `db push` against production.
+
+The API refuses to start in production without real SMS credentials, rather
+than printing sign-in codes to a log. See `apps/api/.env.example` — every
+variable the server reads is documented there, and `CORS_ORIGIN` must name
+the deployed frontend origin or every browser request fails CORS.
+
 ### Running the API
 
 ```bash

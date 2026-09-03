@@ -6,6 +6,7 @@
   "scripts": {
     "migrate": "prisma migrate dev --name init --skip-seed",
     "migrate:deploy": "prisma migrate deploy",
+    "deploy": "prisma migrate deploy && tsx src/harden.ts",
     "generate": "prisma generate",
     "harden": "tsx src/harden.ts",
     "seed": "tsx src/seed.ts",
