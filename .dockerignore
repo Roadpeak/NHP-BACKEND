@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/*.log
+.env
+.env.*
+!.env.example
+README.md
+docker/README.md
+infra
+.vscode
+.idea
