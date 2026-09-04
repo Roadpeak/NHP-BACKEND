@@ -214,6 +214,31 @@ export async function checkPrescribing(
     throw new ClinicalError(`Unknown medication '${input.kemlCode}'`, 'UNKNOWN_MEDICATION');
   }
 
+  /*
+   * A catalogue entry.
+   *
+   * These come from the official KEML PDF, which carries a name, a form, a
+   * strength and a level of use — and no allergy class, no pregnancy
+   * category and no paediatric dosing, because those are clinical policy
+   * rather than reference data. So the drug is real and on the national
+   * list, but the checks below have nothing to check against.
+   *
+   * Warned in the same terms as an uncoded medicine, for the same reason:
+   * an ALLOW here would be indistinguishable from a drug that passed every
+   * check, and that is the failure mode worth designing against.
+   */
+  if (drug.reviewStatus === 'CATALOGUE_ONLY') {
+    return {
+      verdict: 'WARN',
+      reasons: [
+        `${drug.genericName} is on the Kenya Essential Medicines List but has ` +
+          'no reviewed safety data, so no allergy, pregnancy or kidney-function ' +
+          'check could be run against it. Check the patient’s allergies yourself.',
+      ],
+      alternatives: [],
+    };
+  }
+
   const reasons: string[] = [];
   let verdict: PrescribingVerdict = 'ALLOW';
   const alternativeCodes: string[] = [];

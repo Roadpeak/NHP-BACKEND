@@ -63,3 +63,602 @@ KEML-SK-002,Benzyl benzoate,Lotion that treats scabies,Losheni inayotibu upele,l
 KEML-SK-003,Fluconazole,Medicine that treats fungal infection,Dawa inayotibu fangasi,capsule,150mg,ORAL,antifungal,3,150mg,STAT,1,3,MG_PER_KG,OD,400,true,AZOLE,AVOID,true,false,diflucan,NEEDS_CLINICAL_REVIEW
 KEML-EY-001,Tetracycline eye ointment,Ointment that treats eye infection,Marhamu inayotibu maambukizi ya jicho,ointment,1%,TOPICAL,antibiotic,2,apply,TDS,7,,ADULT_ONLY,TDS,,false,TETRACYCLINE,PERMITTED,false,false,eye ointment,NEEDS_CLINICAL_REVIEW
 KEML-EY-002,Chloramphenicol eye drops,Drops that treat eye infection,Matone yanayotibu maambukizi ya jicho,drops,0.5%,TOPICAL,antibiotic,2,1 drop,QDS,7,,ADULT_ONLY,QDS,,false,,USE_WITH_CAUTION,false,false,chloro drops,NEEDS_CLINICAL_REVIEW
+KEML-CAT-0001,Abacavir (ABC),Abacavir (ABC),,Tablet,300mg,ORAL,7.4.2.1 Nucleoside/Nucleotide Reverse Transcriptase Inhibitors (NRTI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0002,Abacavir + lamivudine (ABC+3TC),Abacavir + lamivudine (ABC+3TC),,"Tablet, (dispersible, scored)",120mg (as sulphate) + 60mg,ORAL,7.4.2.5 Fixed Dose Combinations (FDCs),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0003,Abatacept,Abatacept,,PFI (IV),250mg,ORAL,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0004,Abiraterone,Abiraterone,,Tablet,250mg,ORAL,9.2.4 Hormones and antihormones,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0005,Acamprosate,Acamprosate,,Tablet,333mg,ORAL,25.5 Medicines for Disorders due to Psychoactive Substance Abuse,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0006,Acetazolamide,Acetazolamide,,Tablet,250mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0007,Acetylcysteine,Acetylcysteine,,Injection,)200mg/mL (10mL amp,IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0008,Activated Charcoal,Activated Charcoal,,PFOL,50g,ORAL,5.1 Non-specific,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0009,Acyclovir,Acyclovir,,PFI,250mg vial (as sodium salt),IV,7.4.1 Antiherpes medicines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0010,Adalimumab,Adalimumab,,Injection,40mg/0.4mL,IV,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0011,Adenosine,Adenosine,,Injection,6mg/2mL,IV,14.2 Antiarrhythmic medicines,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0012,Adult nutritionally complete elemental peptide formula,Adult nutritionally complete elemental peptide formula,,Powder,20 to 30g sachet,ORAL,33.1.3 Enteral feeds - powder formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0013,Adult nutritionally complete isocaloric formula,Adult nutritionally complete isocaloric formula,,Powder,400g,ORAL,33.1.3 Enteral feeds - powder formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0014,Aflibercept,Aflibercept,,Injection,0.05mL (2mg vial),IV,22.6 Anti-vascular endothelial growth factor (VEGF) preparations,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0015,Alcohol-based hand rub,Alcohol-based hand rub,,Solution,Isopropyl alcohol 75% (500mL dispenser),ORAL,17.2 Disinfectants,1,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0016,Alendronate,Alendronate,,Tablet,70mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0017,All-trans retinoid acid (ATRA),All-trans retinoid acid (ATRA),,Capsule,10mg,ORAL,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0018,Allopurinol,Allopurinol,,Tablet,100mg,ORAL,9.2.5 Supportive medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0019,Alprazolam,Alprazolam,,Tablet,0.25mg,ORAL,25.3 Medicines for Anxiety disorders,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0020,Alteplase,Alteplase,,PFI,50mg,IV,14.5.2 Thrombolytic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0021,Amidotrizoate,Amidotrizoate,,Solution (oral and rectal use),370-420mg iodine/mL (as sodium or meglumine salt) (100mL),ORAL,16.2 Radiocontrast media,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0022,Amikacin,Amikacin,,Injection,50mg (as sulphate)/mL in 2ml vial [c],IV,7.2.1 Access Group Antibiotics,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0023,Amiloride,Amiloride,,Tablet,5mg (as HCl),ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0024,Amino acids,Amino acids,,Solution for IV infusion,21g amino acid + 12g glutamine per 100mL bottle,ORAL,33.1.1 Parenteral feeds,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0025,Amiodarone,Amiodarone,,Injection,50mg (as HCl)/mL in 3mL amp,IV,14.2 Antiarrhythmic medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0026,Amitriptyline,Amitriptyline,,Tablet,25mg,ORAL,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0027,Amphotericin B,Amphotericin B,,PFI,50mg (as sodium deoxycholate) vial,IV,7.3 Antifungal Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0028,Ampicillin,Ampicillin,,PFI,500mg vial,IV,7.2.1 Access Group Antibiotics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0029,Anastrozole,Anastrozole,,Tablet,1mg,ORAL,9.2.4 Hormones and antihormones,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0030,Ant-Tetanus immunoglobulin,Ant-Tetanus immunoglobulin,,Injection,1500 IU vial,IV,13.2.1 Human immunoglobulins,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0031,Anti-D immunoglobulin,Anti-D immunoglobulin,,PFI + diluent,750 IU/mL (2mL vial),ORAL,13.2.1 Human immunoglobulins,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0032,Anti-Hepatitis B immunoglobulin (HBIG),Anti-Hepatitis B immunoglobulin (HBIG),,Injection,100 IU/mL,IV,13.2.1 Human immunoglobulins,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0033,Anti-Rabies immunoglobulin,Anti-Rabies immunoglobulin,,Injection,200 IU/mL (5mL vial),IV,13.2.1 Human immunoglobulins,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0034,Anti Snake venom immunoglobulin,Anti Snake venom immunoglobulin,,Injection (for IV infusion),Polyvalent serum (African) (10mL vial),ORAL,21.2 Sera and Immunoglobulins,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0035,Antithymocyte globulin (ATG) (Equine),Antithymocyte globulin (ATG) (Equine),,Injection,"50mg/mL, 5mL vial",IV,9.1 Immunomodulators for non-malignant disease and supportive medicines,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0036,Aripiprazole,Aripiprazole,,Tablet,15mg,ORAL,25.1 Medicines used in Psychotic disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0037,Arsenic trioxide,Arsenic trioxide,,Concentrate solution for Infusion,1mg/mL,ORAL,9.2.1 Cytotoxic medicines,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0038,Ascorbic acid (Vit C),Ascorbic acid (Vit C),,Tablet,50mg,ORAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0039,Atazanavir + Ritonavir (ATV/r),Atazanavir + Ritonavir (ATV/r),,Tablet (heat-stable),300mg + 100mg,ORAL,7.4.2.3 Protease Inhibitors (PI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0040,Atomoxetine,Atomoxetine,,Tablet,10mg,ORAL,25.6 Medicines used in attention deficit hyperactivity disorder (ADHD),6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0041,Atovaquone + Proguanil,Atovaquone + Proguanil,,Tablet (f/c),62.5mg (as HCl) + 25mg,ORAL,7.5.3.2 For Prophylaxis,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0042,Atracurium,Atracurium,,Injection,10mg (as besilate)/mL (5mL amp),IV,2.1 Muscle relaxants,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0043,Atropine,Atropine,,Injection,1mg (as sulphate)/1mL amp,IV,2.3 Anticholinergics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0044,Azathioprine,Azathioprine,,Tablet (scored),50mg,ORAL,9.1 Immunomodulators for non-malignant disease and supportive medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0045,Azelastine,Azelastine,,Solution (eye-drops),0.05%,TOPICAL,22.7 Anti-allergy medicines for the eye,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0046,Baricitinib,Baricitinib,,Tablet,2mg,ORAL,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0047,Barium sulphate,Barium sulphate,,Suspension (aq),95% w/w concentration (1 litre),ORAL,16.2 Radiocontrast media,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0048,Basiliximab,Basiliximab,,PFI,20mg,IV,9.1 Immunomodulators for non-malignant disease and supportive medicines,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0049,BCG vaccine (live attenuated),BCG vaccine (live attenuated),,PFI + diluent,1mL vial (multi doses),ORAL,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0050,Bedaquiline (Bdq),Bedaquiline (Bdq),,Tablet,100mg,ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0051,Bendamustine,Bendamustine,,Injection,100mg vial,IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0052,Benzhexol,Benzhexol,,Tablet,5mg (as HCl),ORAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0053,Benzocaine + Chlorbutol + Paradichlorobenzene + Turpentine oil,Benzocaine + Chlorbutol + Paradichlorobenzene + Turpentine oil,,Solution (ear drops),2.7% + 2% + 5% + 15%,ORAL,27.1 Medicines for the Ear,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0054,Benzoyl peroxide,Benzoyl peroxide,,Gel,5% (30g),TOPICAL,15.4 Medicines affecting skin differentiation and proliferation,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0055,Betahistine,Betahistine,,Tablet,8mg,ORAL,27.1 Medicines for the Ear,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0056,Betamethasone,Betamethasone,,Cream,0.1% (as valerate),TOPICAL,15.3 Anti-inflammatory and antipruritic medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0057,Bevacizumab,Bevacizumab,,Injection,100mg,IV,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0058,Bicalutamide,Bicalutamide,,Tablet,50mg,ORAL,9.2.4 Hormones and antihormones,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0059,Bimatoprost,Bimatoprost,,Solution (eye-drops),0.01%,TOPICAL,22.4 Miotics and Anti-Glaucoma Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0060,Bimatoprost + Timolol,Bimatoprost + Timolol,,Solution (eye-drops),Bimatoprost 0.03% +Timolol 0.5%,TOPICAL,22.4 Miotics and Anti-Glaucoma Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0061,Biperiden,Biperiden,,Injection,5mg (lactate) in 1mL amp,IV,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0062,Bisacodyl,Bisacodyl,,Tablet,5mg,ORAL,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0063,Bisoprolol,Bisoprolol,,Tablet,2.5mg,ORAL,14.1 Antianginal Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0064,Bleomycin,Bleomycin,,PFI,15mg vial (as sulphate),IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0065,Bortezomib,Bortezomib,,PFI,3.5mg vial,IV,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0066,Bosentan,Bosentan,,Tablet,62.5mg,ORAL,14.3.6.6 Others,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0067,Brimonidine + Timolol,Brimonidine + Timolol,,Solution (eye-drops),Brimonidine 0.2% +Timolol 0.5%,TOPICAL,22.4 Miotics and Anti-Glaucoma Medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0068,Bromazepam,Bromazepam,,Tablet (scored),3mg,ORAL,25.3 Medicines for Anxiety disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0069,Budesonide,Budesonide,,Inhalation (aerosol),100 micrograms/dose (200 dose),ORAL,26.1 Antiasthmatic medicines and medicines for chronic obstructive pulmonary disease,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0070,Budesonide + Formoterol,Budesonide + Formoterol,,Metered dose inhaler,100 micrograms + 6mg/metered dose (120 dose),ORAL,26.1 Antiasthmatic medicines and medicines for chronic obstructive pulmonary disease,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0071,Bupivacaine,Bupivacaine,,Injection,0.5% (as HCl) (10mL vial),IV,1.2 Local Anaesthetics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0072,Bupivacaine + Glucose,Bupivacaine + Glucose,,Injection,0.5% (as HCl) (5mg/mL) + glucose 8% (80mg/mL) (4mL amp),IV,1.2 Local Anaesthetics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0073,Buprenorphine,Buprenorphine,,Tablet (sublingual),2mg (as HCl),ORAL,25.5 Medicines for Disorders due to Psychoactive Substance Abuse,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0074,Buprenorphine + Naloxone,Buprenorphine + Naloxone,,Tablet (sublingual),2mg + 500 micrograms (both as HCl),ORAL,25.5 Medicines for Disorders due to Psychoactive Substance Abuse,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0075,Bupropion,Bupropion,,Tablet,150mg,ORAL,25.5 Medicines for Disorders due to Psychoactive Substance Abuse,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0076,Cabazitaxel,Cabazitaxel,,Injection,60mg,IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0077,Cabergoline,Cabergoline,,Tablet,0.5mg,ORAL,20.9 Other endocrine medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0078,Cabotegravir,Cabotegravir,,"Injection (Long acting), Single-dose vial",600mg/3mL,ORAL,7.4.2.4 Integrase Inhibitors (PI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0079,Caffeine citrate,Caffeine citrate,,Sterile solution for IV or oral use,20mg/mL [c],ORAL,23.9 Medicines administered to the neonate [c],4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0080,Calamine,Calamine,,Lotion,15%,TOPICAL,15.3 Anti-inflammatory and antipruritic medicines,1,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0081,Calcitriol (Vit D3),Calcitriol (Vit D3),,Capsule,250 micrograms,ORAL,20.8 Medicines for Management of Hyperparathyroidism,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0082,Calcium carbonate,Calcium carbonate,,Tablet,500mg,ORAL,31.1 Oral,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0083,Calcium folinate,Calcium folinate,,Injection,10mg/mL (5mL vial),IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0084,Calcium gluconate,Calcium gluconate,,Injection,100mg/mL in 10mL amp,IV,5.2 Specific,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0085,Calcium polystyrene sulphonate,Calcium polystyrene sulphonate,,Powder,15g sachet,ORAL,31.1 Oral,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0086,Capecitabine,Capecitabine,,Tablet,150mg,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0087,Carbamazepin,Carbamazepin,,Tablet (cross-scored),200mg,ORAL,25.2.2 Medicines used in bipolar disorders,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0088,Carbetocin,Carbetocin,,Injection (heat stable),100 micrograms/mL,ORAL,23.6.1 Oxytocics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0089,Carbimazole,Carbimazole,,Tablet,5mg,ORAL,20.7 Thyroid Hormones and Anti-thyroid Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0090,Carboplatin,Carboplatin,,Injection,10mg/mL (15mL vial),IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0091,Carboprost,Carboprost,,Injection,250 micrograms/mL (as tromethamine),IV,23.6.1 Oxytocics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0092,Carvedilol,Carvedilol,,Tablet,3.125mg,ORAL,14.1 Antianginal Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0093,Cefalexin,Cefalexin,,PFOL,125mg/5mL,ORAL,7.2.1 Access Group Antibiotics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0094,Cefazolin,Cefazolin,,PFI,500mg (as sodium salt) in vial,IV,7.2.1 Access Group Antibiotics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0095,Cefixime,Cefixime,,Tablet,400mg (as trihydrate),ORAL,7.2.2 Watch Group antibiotics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0096,Cefotaxime,Cefotaxime,,Powder for Injection,500mg,ORAL,7.2.2 Watch Group antibiotics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0097,Ceftazidime,Ceftazidime,,PFI,250mg (as pentahydrate) vial,IV,7.2.2 Watch Group antibiotics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0098,Ceftazidime + avibactam,Ceftazidime + avibactam,,PFI,2000mg+500mg,IV,7.2.3 Reserve group antibiotics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0099,Cefuroxime,Cefuroxime,,PFI,750mg,IV,7.2.2 Watch Group antibiotics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0100,Celecoxib,Celecoxib,,Tablet,200mg,ORAL,3.1 Non-Opioids and Non-Steroidal Anti-Inflammatory Medicines (NSAIMs),4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0101,Chlorambucil,Chlorambucil,,Tablet,2mg,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0102,Chlorhexidine,Chlorhexidine,,Solution for dilution,5% (as gluconate/digluconate),TOPICAL,17.1 Antiseptics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0103,Chlorpromazine,Chlorpromazine,,Injection,25mg (as HCl)/mL (2mL amp),IV,25.1 Medicines used in Psychotic disorders,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0104,Chlorthalidone,Chlorthalidone,,Tablet,12.5mg,ORAL,14.3.5 Thiazide & Thiazide-like Diuretics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0105,Cholecalciferol (Vit D3),Cholecalciferol (Vit D3),,Oral liquid (drops),400 IU/mL [c],ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0106,Cholera vaccine,Cholera vaccine,,Oral suspension,1.5mL vial (single dose) - single dose vial,ORAL,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0107,Cinnarizine,Cinnarizine,,Tablet,25mg,ORAL,27.1 Medicines for the Ear,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0108,Cisatracurium,Cisatracurium,,Injection,2mg (as besilate)/mL (10mL amp),IV,2.1 Muscle relaxants,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0109,Cisplatin,Cisplatin,,Injection,1mg/mL (50mL vial),IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0110,Clarithromycin,Clarithromycin,,Tablet (scored),500mg,ORAL,7.2.2 Watch Group antibiotics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0111,Clindamycin,Clindamycin,,Capsule,150mg (as HCl),ORAL,7.2.2 Watch Group antibiotics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0112,Clobazam,Clobazam,,Tablet,10mg (scored),ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0113,Clobetasone propionate,Clobetasone propionate,,Ointment,0.05%,TOPICAL,15.3 Anti-inflammatory and antipruritic medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0114,Clofazamine,Clofazamine,,Capsule,50mg,ORAL,7.2.4 Antileprosy medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0115,Clofazimine (Cfx),Clofazimine (Cfx),,Capsule,50mg,ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0116,Clomifene,Clomifene,,Tablet,50mg (as citrate),ORAL,23.2 Ovulation Inducers,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0117,Clomipramine,Clomipramine,,Capsule,25mg (as HCl),ORAL,25.4 Medicines used in obsessive-compulsive disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0118,Clonazepam,Clonazepam,,Tablet,0.5mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0119,Clopidogrel,Clopidogrel,,Tablet,75mg,ORAL,14.5.1 Anti-platelet medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0120,Clozapine,Clozapine,,Tablet (scored),100mg,ORAL,25.1 Medicines used in Psychotic disorders,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0121,Coagulation factor IX,Coagulation factor IX,,PFI (Extended half-life),250 IU/vial,ORAL,13.2.2 Blood Coagulation Factors,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0122,Coagulation factor VIII,Coagulation factor VIII,,PFI (Extended half-life),250 IU vial,ORAL,13.2.2 Blood Coagulation Factors,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0123,Colchicine,Colchicine,,Tablet,500 micrograms,ORAL,28.1 Medicines used to treat Gout,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0124,Colistin,Colistin,,PFI,1MU (as colistemethate sodium) vial,IV,7.2.3 Reserve group antibiotics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0125,Collagenase clostridiopeptidase A + Proteases,Collagenase clostridiopeptidase A + Proteases,,Ointment,1.2 units + 0.24 units (15g),TOPICAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0126,Combined amino acid and glucose formulation for central administration-two chamber bag for central admnistration,Combined amino acid and glucose formulation for central administration-two chamber bag for central admnistration,,Solution for IV infusion,1 litre,ORAL,33.1.1 Parenteral feeds,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0127,"Combined amino acid, glucose, and lipids with medium chain Triglycerides (MCT) + Long chain Triglycerides (LCT) - three chamber bag for peripherial administration","Combined amino acid, glucose, and lipids with medium chain Triglycerides (MCT) + Long chain Triglycerides (LCT) - three chamber bag for peripherial administration",,Solution for IV infusion,500mL,ORAL,33.1.1 Parenteral feeds,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0128,"Combined amino acid, glucose and lipids with medium chain Triglycerides (MCT) / Long chain Triglycerides (LCT) - Three Chamber Bag For Central Administration","Combined amino acid, glucose and lipids with medium chain Triglycerides (MCT) / Long chain Triglycerides (LCT) - Three Chamber Bag For Central Administration",,Solution for IV infusion,1 litre,ORAL,33.1.1 Parenteral feeds,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0129,Conjugated Oestrogens,Conjugated Oestrogens,,Tablet,300 micrograms,ORAL,20.3 Oestrogens,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0130,Continuous ambulatory peritoneal dialysis solution (CAPD),Continuous ambulatory peritoneal dialysis solution (CAPD),,Parenteral solution,Of appropriate composition,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0131,Copper-containing device,Copper-containing device,,LNG-releasing Intrauterine system (LNG-IUS),,ORAL,23.1.3 Intrauterine devices (IUD),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0132,Crotamiton,Crotamiton,,Cream,10% (30g),TOPICAL,15.3 Anti-inflammatory and antipruritic medicines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0133,Cryoprecipitate,Cryoprecipitate,,PFI + diluent,,ORAL,13.1 Blood and Blood Components,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0134,Cyclopentolate,Cyclopentolate,,Solution (eye-drops),1%,TOPICAL,22.5 Mydriatics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0135,Cyclophosphamide,Cyclophosphamide,,PFI,500mg vial,IV,9.1 Immunomodulators for non-malignant disease and supportive medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0136,Cycloserine (Cs),Cycloserine (Cs),,Tablet,125mg [c],ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0137,Cyclosporin,Cyclosporin,,Capsule,25mg,ORAL,9.1 Immunomodulators for non-malignant disease and supportive medicines,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0138,Cytarabine,Cytarabine,,PFI,100mg vial,IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0139,Dacarbazine,Dacarbazine,,PFI,200mg vial (as citrate),IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0140,Dactinomycin (Actinomycin D),Dactinomycin (Actinomycin D),,PFI,500 micrograms vial,IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0141,Danazol,Danazol,,Capsule,50mg,ORAL,23.3 Medicines for treatment of Endometriosis,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0142,Dantrolene,Dantrolene,,Injection,20mg,IV,1.3 Pre-and Intra-Operative Medication and Sedation for Short-Term Procedures and Adjuncts for Spinal and,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0143,Dapivirine,Dapivirine,,Vaginal ring,25mg,ORAL,7.4.2.2 Non-nucleoside Reverse Transcriptase Inhibitors (NNRTI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0144,Dapsone,Dapsone,,Tablet,100mg,ORAL,7.2.4 Antileprosy medicines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0145,Darbepoetin alfa,Darbepoetin alfa,,Injection,25 micrograms for subcutaneous injection,IV,12.1 Antianaemics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0146,Darunavir (DRV),Darunavir (DRV),,Tablet,75mg,ORAL,7.4.2.3 Protease Inhibitors (PI),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0147,Darunavir + Ritonavir (DRV+r),Darunavir + Ritonavir (DRV+r),,Tablet,600mg + 100mg,ORAL,7.4.2.3 Protease Inhibitors (PI),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0148,Daunorubicin,Daunorubicin,,PFI,20mg vial (as HCl),IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0149,Deferasirox,Deferasirox,,Tablet,100mg,ORAL,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0150,Deferoxamine,Deferoxamine,,PFI,500mg (as mesilate) vial,IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0151,Deferoxamine mesilate,Deferoxamine mesilate,,PFI,500mg vial,IV,12.3 Other medicines for haemoglobinopathies,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0152,Delamanid (Dlm),Delamanid (Dlm),,Tablet,50mg,ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0153,Desmopressin,Desmopressin,,Injection,4mcg/mL,IV,20.9 Other endocrine medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0154,Dexamethasone,Dexamethasone,,Injection,4mg (as sodium phosphate)/1mL amp,IV,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0155,Dexamethasone + Polymixin B sulphate + Neomycin sulphate,Dexamethasone + Polymixin B sulphate + Neomycin sulphate,,Ointment,"1mg dexamethasone, 6000 IU polymixin B sulphate, 3500 IU neomycin sulphate",TOPICAL,22.1 Anti-infective agents,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0156,Dexketoprofen,Dexketoprofen,,Tablet,25mg,ORAL,3.1 Non-Opioids and Non-Steroidal Anti-Inflammatory Medicines (NSAIMs),4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0157,Dexmedetomidine,Dexmedetomidine,,Injection,200 micrograms/2mL,IV,1.1.2 Injectable medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0158,Dextran- 70,Dextran- 70,,Solution,6%,ORAL,13.3 Plasma substitutes,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0159,Diazoxide,Diazoxide,,Suspension,50mg/mL,ORAL,20.6 Medicines for hypoglycaemia,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0160,Dienogest,Dienogest,,Tablet,2mg,ORAL,23.3 Medicines for treatment of Endometriosis,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0161,Diethylcarbamazine (DEC),Diethylcarbamazine (DEC),,Tablet (scored),100mg (as dihydrogen citrate),ORAL,7.1.2 Antifilarials,1,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0162,Digoxin,Digoxin,,Oral liquid,50 micrograms/mL,ORAL,14.2 Antiarrhythmic medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0163,Dihydrocodeine phosphate,Dihydrocodeine phosphate,,Tablet,30mg,ORAL,3.2 Opioid analgesics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0164,Diloxanide,Diloxanide,,Tablet,500mg (as furoate),ORAL,7.5.1 Antiamoebic and antigiardiasis medicines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0165,Diphenhydramine,Diphenhydramine,,Injection,50mg/mL,IV,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0166,Distilled water,Distilled water,,Liquid,500mL,ORAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0167,Dithranol,Dithranol,,Paste,2%,ORAL,15.4 Medicines affecting skin differentiation and proliferation,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0168,Divalproex sodium,Divalproex sodium,,Tablet,500mg,ORAL,25.2.2 Medicines used in bipolar disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0169,Dobutamine,Dobutamine,,Injection (solution),12.5mg/mL (20mL),ORAL,14.4 Medicines used in Heart Failure,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0170,Docetaxel,Docetaxel,,Injection (premixed),120mg vial,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0171,Domperidone,Domperidone,,Oral liquid,5mg/5mL,ORAL,19.2 Antiemetics,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0172,Donepezil,Donepezil,,Tablet,5mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0173,Dopamine,Dopamine,,Injection,40mg/mL (as HCl) (5mL vial),IV,14.4 Medicines used in Heart Failure,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0174,Dorzolamide,Dorzolamide,,Solution (eye-drops),2% (as HCl),TOPICAL,22.4 Miotics and Anti-Glaucoma Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0175,Doxazosin,Doxazosin,,Tablet,2mg,ORAL,14.3.6.4 Alpha 1 Receptor Blockers,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0176,Doxorubicin,Doxorubicin,,PFI or Solution for Injection,50mg vial (as HCl),ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0177,DPT + HiB + Hep B vaccine (pentavalent),DPT + HiB + Hep B vaccine (pentavalent),,Injection (suspension),5mL vial (10 doses),ORAL,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0178,Eflornithine,Eflornithine,,Injection,200mg (as HCl)/mL in 100mL bottle,IV,7.5.5.1.2 Medicines for the treatment of 2nd stage Human African trypanosomiasis,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0179,Empagliflozin,Empagliflozin,,Tablet,10mg,ORAL,14.4 Medicines used in Heart Failure,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0180,Enoxaparin,Enoxaparin,,Injection (prefilled and calibrated syringe),40mg/0.4mL,ORAL,12.2.2 Anticoagulant medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0181,Entecavir,Entecavir,,Oral liquid,0.05mg/mL,ORAL,7.4.4.1.1 Nucleoside/Nucleotide reverse transcriptase inhibitors,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0182,Ephedrine,Ephedrine,,Injection,30mg,IV,1.3 Pre-and Intra-Operative Medication and Sedation for Short-Term Procedures and Adjuncts for Spinal and,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0183,Eplerenone,Eplerenone,,Tablet,25mg,ORAL,14.4 Medicines used in Heart Failure,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0184,Ergocalciferol (Vit D2),Ergocalciferol (Vit D2),,Oral liquid,"250 micrograms (10,000 IU)/mL",ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0185,Ergometrine,Ergometrine,,Injection,500 micrograms/1mL (as hydrogen maleate) amp,IV,23.6.1 Oxytocics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0186,Erythropoetin (alfa or beta) stimulating agents,Erythropoetin (alfa or beta) stimulating agents,,Injection (prefilled syringe),"2,000 IU",ORAL,12.1 Antianaemics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0187,Escitalopram,Escitalopram,,Tablet,10mg,ORAL,25.2.1 Medicines used in Depressive disorders,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0188,Estradiol,Estradiol,,Transdermal patch,0.1mg/day,ORAL,20.3 Oestrogens,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0189,Etanercept,Etanercept,,Injection,25mg vial,IV,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0190,Ethanol,Ethanol,,Injection,100% (10mL amp),IV,5.2 Specific,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0191,Ethinylestradiol + Levonorgestrel,Ethinylestradiol + Levonorgestrel,,Tablet,30 micrograms + 150 micrograms,ORAL,23.1.1 Oral hormonal contraceptives,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0192,Ethinylestradiol + Norethisterone,Ethinylestradiol + Norethisterone,,Tablet,35 micrograms + 1mg,ORAL,23.1.1 Oral hormonal contraceptives,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0193,Etomidate,Etomidate,,Injection,2mg/mL (10mL Vial),IV,1.1.2 Injectable medicines,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0194,Etonorgestrel-releasing implant,Etonorgestrel-releasing implant,,Implant,68mg (1 rod),ORAL,23.1.4 Contraceptive implants,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0195,Etoposide,Etoposide,,Capsule,50mg,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0196,Etravirine (ETV),Etravirine (ETV),,Tablet,25mg,ORAL,7.4.2.2 Non-nucleoside Reverse Transcriptase Inhibitors (NNRTI),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0197,Everolimus,Everolimus,,Tablet,500 micrograms (or 0.5mg),ORAL,9.1 Immunomodulators for non-malignant disease and supportive medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0198,Fat (lipid),Fat (lipid),,Infusion (emulsion) (IV),20% (100mL) [c],ORAL,33.1.1 Parenteral feeds,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0199,Fat-soluble vitamins,Fat-soluble vitamins,,"Solution for IV infusion, for infants and children",10mL [c],ORAL,33.1.1 Parenteral feeds,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0200,Febuxostat,Febuxostat,,Tablet,40mg,ORAL,9.2.5 Supportive medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0201,Fentanyl,Fentanyl,,Injection,50micrograms/mL (2mL Ampoule),IV,1.1.2 Injectable medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0202,Ferrous salt,Ferrous salt,,Oral liquid (drops),25mg (iron as sulphate)/mL,ORAL,12.1 Antianaemics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0203,Filgrastim,Filgrastim,,Injection (prefilled syringe),120 micrograms/0.2mL,ORAL,9.2.3 Immunomodulators,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0204,Finasteride,Finasteride,,Tablet,5mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0205,Flucloxacillin,Flucloxacillin,,Capsule,250mg (as sodium salt),ORAL,7.2.1 Access Group Antibiotics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0206,Flucytosine,Flucytosine,,Capsule,250mg,ORAL,7.3 Antifungal Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0207,Fludrocortisone,Fludrocortisone,,Tablet,100 micrograms (as acetate),ORAL,20.1 Adrenal Hormones & Synthetic Substitutes,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0208,Flumazenil,Flumazenil,,Injection,100 micrograms/mL (5mL amp),IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0209,Fluorescein,Fluorescein,,Test strip,0.6mg,ORAL,16.1 Ophthalmic diagnostics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0210,[Fluorine-18] Prostate Specific Membrane Antigen (PSMA) 1007,[Fluorine-18] Prostate Specific Membrane Antigen (PSMA) 1007,,Injection,,IV,34.1.2 Radiopharmaceuticals for Positron emission tomography (PET),6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0211,Fluorodeoxyglucose (FDG) (Fluorine -18),Fluorodeoxyglucose (FDG) (Fluorine -18),,Injection,0.74 – 11.1 GBq (20 – 300 mCi/mL),IV,34.1.2 Radiopharmaceuticals for Positron emission tomography (PET),5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0212,Fluorometholone,Fluorometholone,,Solution (eye-drops),0.1%,TOPICAL,22.2 Anti-inflammatory agents,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0213,Fluorouracil,Fluorouracil,,Injection,50mg/mL (5mL vial),IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0214,Fluoxetine,Fluoxetine,,Tablet (scored),20mg (as HCl),ORAL,25.2.1 Medicines used in Depressive disorders,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0215,Flupentixol,Flupentixol,,"Injection (oily, depot)",20mg (as decanoate)/mL (2mL amp),ORAL,25.1 Medicines used in Psychotic disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0216,Fluphenazine,Fluphenazine,,"Injection (oily, depot)",25mg (as decanoate)/1mL amp,ORAL,25.1 Medicines used in Psychotic disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0217,Fluticasone,Fluticasone,,Nasal spray,27.5 micrograms (as propionate or furoate),ORAL,27.2 Medicines for the Nose,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0218,Fomepizole,Fomepizole,,Injection,5mg (as sulphate)/mL (20mL amp),IV,5.2 Specific,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0219,Fortified Blended Food (FBF),Fortified Blended Food (FBF),,Flour,415kcal/100g (Sachet),ORAL,33.2 Nutrition Feeds for managing Severe acute malnutrition (SAM) and Moderate acute malnutrition (MAM),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0220,Fosaprepitant,Fosaprepitant,,Injection,150mg,IV,19.2 Antiemetics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0221,Fosfomycin,Fosfomycin,,Granules for oral suspension,3g sachet,IV,7.2.3 Reserve group antibiotics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0222,Fusidic acid,Fusidic acid,,Ointment,2% (15g),TOPICAL,15.2 Anti-infective medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0223,Gabapentin,Gabapentin,,Tablet,300mg,ORAL,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0224,Gadobutrol,Gadobutrol,,Injection (solution) (IV),1mmol/mL (7.5mL),ORAL,16.3 MRI contrast media,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0225,Gadodiamide,Gadodiamide,,Injection (solution) (IV),0.5 mmol/mL (20mL),ORAL,16.3 MRI contrast media,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0226,Gadopentate dimeglumine,Gadopentate dimeglumine,,Injection (solution) (IV),0.5 mmol/mL (10mL),ORAL,16.3 MRI contrast media,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0227,Gallium-68 oxodotreotide (dotatate),Gallium-68 oxodotreotide (dotatate),,Injection,40 micrograms of oxodotreotide kit for radiolabeling with up to 1110 MBq (30 mCi) of [68Ga]GaCl2,IV,34.1.2 Radiopharmaceuticals for Positron emission tomography (PET),6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0228,Gancyclovir,Gancyclovir,,PFI,500mg vial,IV,7.4.3 Other Antivirals,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0229,Gefitinib,Gefitinib,,Tablet,250mg,ORAL,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0230,Gelatin-based colloid,Gelatin-based colloid,,Solution for Infusion,4%,ORAL,13.3 Plasma substitutes,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0231,Gemcitabine,Gemcitabine,,PFI,200mg vial,IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0232,Germanium-68 - Gallium-68 radionuclide generator,Germanium-68 - Gallium-68 radionuclide generator,,Radionuclide generator,0.74 – 1.85 GBq,ORAL,34.1.2 Radiopharmaceuticals for Positron emission tomography (PET),6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0233,Gliclazide,Gliclazide,,Tablet (m/r),30mg,ORAL,20.5.2.1 Sulphonylureas,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0234,Glucagon,Glucagon,,injection,1mg/mL,IV,20.6 Medicines for hypoglycaemia,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0235,Glucose,Glucose,,Injectable solution,5% (isotonic) (500mL infusion pack),ORAL,31.2 Parenteral,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0236,Glucose + Sodium chloride,Glucose + Sodium chloride,,Injectable solution,5% + 0.9% [c],ORAL,31.2 Parenteral,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0237,Glutaral,Glutaral,,Solution,2%,ORAL,17.2 Disinfectants,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0238,Glyceryl trinitrate,Glyceryl trinitrate,,Tablet (sublingual),500 micrograms,ORAL,14.1 Antianginal Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0239,Glycopyrronium,Glycopyrronium,,Injection,200 micrograms (as bromide)/mL,IV,2.3 Anticholinergics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0240,Golimumab,Golimumab,,Injection (solution) (SC),50mg,ORAL,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0241,Goserelin,Goserelin,,Implant (in syringe applicator),3.6mg (as acetate),ORAL,9.2.4 Hormones and antihormones,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0242,Griseofulvin,Griseofulvin,,Tablet,125mg,ORAL,7.3 Antifungal Medicines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0243,Haemodialysis solution,Haemodialysis solution,,Parenteral solution,Of appropriate composition,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0244,Haloperidol,Haloperidol,,Injection,5mg/1mL amp,IV,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0245,Halothane,Halothane,,Inhalation,250mL,INHALED,1.1.1 Inhalational medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0246,Heparin sodium,Heparin sodium,,Injection,"5,000 IU/mL (5mL vial)",IV,12.2.2 Anticoagulant medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0247,Hepatic formula rich in BCAA,Hepatic formula rich in BCAA,,Powder,200g to 500g,ORAL,33.1.3 Enteral feeds - powder formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0248,Hepatitis A vaccine,Hepatitis A vaccine,,Injection,80 units (Paed),IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0249,Hepatitis B vaccine,Hepatitis B vaccine,,Injection (suspension),Single dose vial,ORAL,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0250,Hexamethyl propylene amine oxime (HMPAO) (Technetium-99m exametazime),Hexamethyl propylene amine oxime (HMPAO) (Technetium-99m exametazime),,"Injection, prepared from a non-radioactive exametazine kit for radiolabelling with 99mTc prior to administration",,ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0251,"High calorie, high protein formula","High calorie, high protein formula",,Powder,200g,ORAL,33.1.3 Enteral feeds - powder formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0252,High energy protein fat-free hydrolyzed feed,High energy protein fat-free hydrolyzed feed,,Liquid,200mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0253,HPV vaccine (quadrivalent),HPV vaccine (quadrivalent),,Injection,Single or multi dose vial,IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0254,Human albumin infusion,Human albumin infusion,,Solution,5%,ORAL,13.3 Plasma substitutes,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0255,Human chorionic gonadotropin (HCG),Human chorionic gonadotropin (HCG),,Injection,"5,000 IU/vial",IV,23.2 Ovulation Inducers,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0256,Human Epidermal growth factor (recombinant),Human Epidermal growth factor (recombinant),,Gel (water-based),60 micrograms (15g),ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0257,Human menopausal gonadotropin (HMG),Human menopausal gonadotropin (HMG),,Injection,75 IU,IV,23.2 Ovulation Inducers,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0258,Human Platelet derived growth factor (recombinant),Human Platelet derived growth factor (recombinant),,Gel (water-based),100 micrograms (15g),ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0259,Hydralazine,Hydralazine,,Injection,20mg (as HCl),IV,14.3.6.3 Vasodilators,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0260,Hydrogen peroxide,Hydrogen peroxide,,Solution (ear drops),3% (stabilised),ORAL,27.1 Medicines for the Ear,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0261,Hydroxocobalamin (Vit B12),Hydroxocobalamin (Vit B12),,Injection,"1mg/1mL amp (as HCl, acetate or sulphate)",IV,12.1 Antianaemics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0262,Hydroxycarbamide (Hydroxyurea),Hydroxycarbamide (Hydroxyurea),,SODF,500mg,ORAL,9.2.1 Cytotoxic medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0263,Hydroxychloroquine,Hydroxychloroquine,,Tablet,200mg (as sulphate),ORAL,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0264,Hydroxyethyl starch,Hydroxyethyl starch,,Solution for Infusion,6%,ORAL,13.3 Plasma substitutes,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0265,Hyoscine butylbromide,Hyoscine butylbromide,,Injection,20mg/1mL amp,IV,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0266,Hypertonic saline,Hypertonic saline,,Solution (eye-drops),3%,TOPICAL,22.8 Other medicines for the eye,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0267,Ibrutinib,Ibrutinib,,Capsule,140mg,ORAL,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0268,Ifosfamide + Mesna,Ifosfamide + Mesna,,Injection,1g + 600mg,IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0269,Imatinib,Imatinib,,Tablet,400mg (as mesylate),ORAL,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0270,Imipenem + Cilastatin,Imipenem + Cilastatin,,PFI,250mg + 250mg vial,IV,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0271,Indapamide,Indapamide,,Tablet,1.5mg,ORAL,14.3.5 Thiazide & Thiazide-like Diuretics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0272,Infliximab,Infliximab,,PFI,100mg,IV,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0273,Influenza vaccine (inactivated),Influenza vaccine (inactivated),,Injection,0.5mL vial (single dose),IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0274,"Insulin, intermediate-acting (NPH)","Insulin, intermediate-acting (NPH)",,Injection,100 IU/mL (10mL vial),IV,20.5.1 Insulins,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0275,"Insulin, long-acting, Detemir","Insulin, long-acting, Detemir",,Injection,100U/mL (10mL vial),IV,20.5.1 Insulins,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0276,"Insulin, Long-acting (basal), Glargine","Insulin, Long-acting (basal), Glargine",,Injection,100 IU/mL (10mL vial),IV,20.5.1 Insulins,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0277,"Insulin, Premixed (Short acting + Intermediate acting) (Human)","Insulin, Premixed (Short acting + Intermediate acting) (Human)",,Injection,100 IU/mL (10mL vial),IV,20.5.1 Insulins,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0278,"Insulin, Short acting (Soluble / regular)","Insulin, Short acting (Soluble / regular)",,Injection,100 IU/mL (10mL vial),IV,20.5.1 Insulins,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0279,"Insulin, Ultra short-acting (Rapid) (Insulin Lispro and Aspart)","Insulin, Ultra short-acting (Rapid) (Insulin Lispro and Aspart)",,Injection,100 IU/mL (10mL vial),IV,20.5.1 Insulins,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0280,Iodine -123 (sodium iodide),Iodine -123 (sodium iodide),,Capsule (Oral),3.7MBq (100uCi),ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0281,Iodine 131(sodium iodide),Iodine 131(sodium iodide),,Capsule (Oral),0.33 MBq (9uCi),ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0282,[Iodine-131] sodium iodide,[Iodine-131] sodium iodide,,Oral solution,5 mCi/mL,ORAL,34.2 Therapeutic Radiopharmaceuticals,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0283,Ipratropium bromide,Ipratropium bromide,,Inhalation (aerosol),20 micrograms/metered dose (200 dose),ORAL,26.1 Antiasthmatic medicines and medicines for chronic obstructive pulmonary disease,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0284,Irinotecan,Irinotecan,,Injection,20mg/mL (2mL vial),IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0285,Iron sucrose,Iron sucrose,,Injection,100mg,IV,12.1 Antianaemics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0286,Iso-osmolar contrast media,Iso-osmolar contrast media,,Solution for IV injection/infusion,320mg iodine/mL (100mL),ORAL,16.2 Radiocontrast media,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0287,Isoflurane,Isoflurane,,Inhalation,250mL,INHALED,1.1.1 Inhalational medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0288,Isosorbide dinitrate,Isosorbide dinitrate,,Tablet,20mg,ORAL,14.1 Antianginal Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0289,Itraconazole,Itraconazole,,Capsule,100mg,ORAL,7.3 Antifungal Medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0290,Ivabradine,Ivabradine,,Tablet (f/c),5mg,ORAL,14.4 Medicines used in Heart Failure,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0291,Ivermectin,Ivermectin,,Tablet (scored),3mg,ORAL,7.1.2 Antifilarials,1,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0292,Ketamine,Ketamine,,Injection,50mg (as HCL)/mL (10mL vial),IV,1.1.2 Injectable medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0293,Ketorolac,Ketorolac,,Injection (IM/IV),30mg/mL,ORAL,3.1 Non-Opioids and Non-Steroidal Anti-Inflammatory Medicines (NSAIMs),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0294,Ketorolac trometamol,Ketorolac trometamol,,Solution (eye-drops),0.5%,TOPICAL,22.2 Anti-inflammatory agents,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0295,L - Asparaginase,L - Asparaginase,,PFI,"10,000 IU vial",IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0296,Labetalol,Labetalol,,Injection,5mg/mL (20mL amp),IV,14.3.3 Beta Blockers (BBs),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0297,Lactulose,Lactulose,,Oral liquid,3.1-3.7g/5mL,ORAL,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0298,Lamotrigine,Lamotrigine,,Tablet,25mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0299,Lansoprazole,Lansoprazole,,Tablet (dispersible),15mg [c],ORAL,19.1 Antiulcer medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0300,Latanoprost,Latanoprost,,Solution (eye-drops),0.005%,TOPICAL,22.4 Miotics and Anti-Glaucoma Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0301,Ledipasvir + Sofosbuvir,Ledipasvir + Sofosbuvir,,Tablet,90mg + 400mg,ORAL,7.4.4.2.1 non-pangenotypic direct-acting antiviral combinations,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0302,Leflunomide,Leflunomide,,Tablet,20mg,ORAL,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0303,Lenalidomide,Lenalidomide,,Capsule,10mg,ORAL,9.2.3 Immunomodulators,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0304,Letrozole,Letrozole,,Tablet,2.5mg,ORAL,9.2.4 Hormones and antihormones,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0305,Leuprorelin (Leuprolide),Leuprorelin (Leuprolide),,"Injection (depot, SC)",3.75mg (as acetate),ORAL,23.4 Medicines for treatment of Fibroids,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0306,Levetiracetam,Levetiracetam,,Injection (IV),500mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0307,Levodopa + Carbidopa,Levodopa + Carbidopa,,Tablet,100mg + 10mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0308,Levofloxacin (Lfx),Levofloxacin (Lfx),,Tablet (dispersible),100mg [c],ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0309,Levonorgestrel,Levonorgestrel,,Tablet,30 micrograms,ORAL,23.1.1 Oral hormonal contraceptives,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0310,Levonorgestrel-releasing implant,Levonorgestrel-releasing implant,,Implant,150mg (2 x 75mg rods),ORAL,23.1.4 Contraceptive implants,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0311,Lidocaine (Lignocaine),Lidocaine (Lignocaine),,Spray,10mg/metered dose (actuation),ORAL,27.3 Medicines for the Throat and Mouth,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0312,Lignocaine,Lignocaine,,Injection,2% (as HCl) (30mL vial),IV,1.2 Local Anaesthetics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0313,Linagliptin,Linagliptin,,Tablet (f/c),5mg,ORAL,20.5.2.4 DipeptidyIpeptidase (DPP)-4 inhibitors (Gliptins),5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0314,Linezolid,Linezolid,,Injection (IV),2mg/mL in 300mL bag,ORAL,7.2.3 Reserve group antibiotics,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0315,Lipid emulsion,Lipid emulsion,,Injection,20% (200 to 500mL),IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0316,Liposomal Doxorubicin (Pegylated),Liposomal Doxorubicin (Pegylated),,Solution for Injection,20mg vial,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0317,Liquid paraffin,Liquid paraffin,,Nasal drops,100%,ORAL,27.2 Medicines for the Nose,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0318,Lithium carbonate,Lithium carbonate,,Tablet (scored),400mg,ORAL,25.2.2 Medicines used in bipolar disorders,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0319,Loperamide,Loperamide,,Capsule,2mg,ORAL,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0320,Lopinavir + ritonavir (LPV+r),Lopinavir + ritonavir (LPV+r),,Tablet (heat-stable),100mg + 25mg,ORAL,7.4.2.3 Protease Inhibitors (PI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0321,Loratadine,Loratadine,,Tablet,10mg,ORAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0322,Lorazepam,Lorazepam,,Injection,4mg/1mL amp,IV,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0323,Lugol’s Iodine solution,Lugol’s Iodine solution,,Solution,~130mg total iodine/mL,ORAL,20.7 Thyroid Hormones and Anti-thyroid Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0324,Lutetium-177 oxodotreotide (dotatate),Lutetium-177 oxodotreotide (dotatate),,Injection,370 MBq/mL (10 mCi/mL),IV,34.2 Therapeutic Radiopharmaceuticals,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0325,Magnesium chloride,Magnesium chloride,,Tablet,71.5mg (containing Calcium as carbonate 119mg per Tablet),ORAL,31.1 Oral,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0326,Malaria vaccine,Malaria vaccine,,Injection,1mL vial (2 doses),IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0327,Mannitol,Mannitol,,Solution for Infusion,"20%, 500mL",ORAL,9.2.5 Supportive medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0328,Measles + Rubella vaccine (MR),Measles + Rubella vaccine (MR),,PFI + diluent,5mL vial (10 doses),ORAL,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0329,Mebendazole,Mebendazole,,"Tablet (chewable, dispersible)",500mg,ORAL,7.1.1 Intestinal Anthelminthics,1,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0330,Medical air,Medical air,,Inhalation (medical gas),,ORAL,1.4 Medical gases,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0331,Medroxyprogesterone,Medroxyprogesterone,,Tablet,5mg (as acetate),ORAL,20.4 Progestogens,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0332,Medroxyprogesterone acetate (DMPA),Medroxyprogesterone acetate (DMPA),,Depot Injection (IM),150mg/1mL (prefilled syringe),ORAL,23.1.2 Injectable hormonal contraceptives,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0333,Mefloquine,Mefloquine,,Tablet,250mg (as HCl),ORAL,7.5.3.2 For Prophylaxis,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0334,Melarsoprol,Melarsoprol,,Injection,"3.6% solution (180mg), 5mL amp",IV,7.5.5.1.2 Medicines for the treatment of 2nd stage Human African trypanosomiasis,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0335,Melatonin,Melatonin,,Tablet (dispersible),4mg,ORAL,25.7 Medicines for sleep disorders,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0336,Melphalan,Melphalan,,Tablet,2mg,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0337,Memantine,Memantine,,Tablet,5mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0338,Meningococcal meningitis vaccine,Meningococcal meningitis vaccine,,Injection,Single or multi dose,IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0339,Mercaptoacetyltriglycine (MAG3) (Technetium -99m mertiatide),Mercaptoacetyltriglycine (MAG3) (Technetium -99m mertiatide),,"Injection, prepared from a non-radioactive betiatide kit for radiolabelling with 99mTc prior to administration",,ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0340,Mercaptopurine,Mercaptopurine,,Tablet,50mg,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0341,Meropenem,Meropenem,,PFI,500mg (as trihydrate),IV,7.2.3 Reserve group antibiotics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0342,Mesalazine,Mesalazine,,Tablet (e/c),400mg,RECTAL,19.3 Anti-inflammatory medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0343,Mesna,Mesna,,Injection,100mg/mL (2mL amp),IV,9.2.5 Supportive medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0344,Methadone,Methadone,,Tablet,5mg,ORAL,3.2 Opioid analgesics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0345,Methotrexate,Methotrexate,,PFI (preservative-free),25mg (as sodium salt)/mL (2mL vial),ORAL,9.2.1 Cytotoxic medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0346,Methyl cellulose,Methyl cellulose,,Solution (eye-drops),0.3 - 1%,TOPICAL,22.8 Other medicines for the eye,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0347,Methyldopa,Methyldopa,,Tablet,250mg,ORAL,14.3.6.1 Centrally acting antihypertensive agents,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0348,Methylene diphosphonate (MDP) (Technetium -99m medronate),Methylene diphosphonate (MDP) (Technetium -99m medronate),,"Injection, prepared from a non-radioactive medronate kit for radiolabeling with 99mTc prior to administration",,ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0349,Methylphenidate,Methylphenidate,,Tablet,10mg,ORAL,25.6 Medicines used in attention deficit hyperactivity disorder (ADHD),4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0350,Methylprednisolone,Methylprednisolone,,PFI,125mg (as sodium succinate),IV,9.1 Immunomodulators for non-malignant disease and supportive medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0351,Metolazone,Metolazone,,Tablet,5mg,ORAL,14.4 Medicines used in Heart Failure,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0352,Metoprolol,Metoprolol,,Tablet(e/r),25mg,ORAL,14.3.3 Beta Blockers (BBs),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0353,Miconazole,Miconazole,,Cream,2% (as nitrate),TOPICAL,15.1 Antifungal medicines,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0354,Midazolam,Midazolam,,Injection,1mg (as HCl)/mL (5mL amp),IV,1.1.2 Injectable medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0355,Mifepristone + Misoprostol,Mifepristone + Misoprostol,,Tablet,Mifepristone 200mg (1 Tablet) and Misoprostol 200 micrograms (4 vaginal tablets) in Combi-pack,ORAL,23.6.1 Oxytocics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0356,Milrinone,Milrinone,,Injection (solution),1mg/mL (10mL),ORAL,14.4 Medicines used in Heart Failure,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0357,Mirtazapine,Mirtazapine,,Tablet,15mg,ORAL,25.2.1 Medicines used in Depressive disorders,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0358,Misoprostol,Misoprostol,,Tablet,200 micrograms,ORAL,23.6.1 Oxytocics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0359,Mitomycin C,Mitomycin C,,Injection,10mg,IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0360,Molybdenum-99 / Technetium-99m radionuclide generator,Molybdenum-99 / Technetium-99m radionuclide generator,,Radionuclide generator,"1, 2, 2.5, 3, 4, 4.5, 5, 6, 7.5, 10, 12.5, 15, 18, 20 Ci of 99Mo",ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0361,Mometasone,Mometasone,,Ointment,0.1% (as furoate) (30g),TOPICAL,15.3 Anti-inflammatory and antipruritic medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0362,Montelukast,Montelukast,,Tablet (chewable),5mg (as sodium salt),ORAL,26.1 Antiasthmatic medicines and medicines for chronic obstructive pulmonary disease,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0363,Moxifloxacin (Mfx),Moxifloxacin (Mfx),,Tablet (dispersible),100mg [c],ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0364,Mupirocin,Mupirocin,,Ointment,2% (15g),TOPICAL,15.2 Anti-infective medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0365,Mycophenolate mofetil,Mycophenolate mofetil,,Tablet,250mg,ORAL,9.1 Immunomodulators for non-malignant disease and supportive medicines,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0366,Mycophenolic acid,Mycophenolic acid,,Tablet (e/c),180mg (as mycophenolate sodium),ORAL,9.1 Immunomodulators for non-malignant disease and supportive medicines,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0367,Naloxone,Naloxone,,Injection,400 micrograms (as HCl)/1mL amp,IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0368,Naltrexone,Naltrexone,,Tablet,50mg (as HCl),ORAL,25.5 Medicines for Disorders due to Psychoactive Substance Abuse,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0369,Natamycin,Natamycin,,Eye drops,5%,TOPICAL,22.1 Anti-infective agents,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0370,Nebivolol,Nebivolol,,Tablet,2.5mg,ORAL,14.3.3 Beta Blockers (BBs),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0371,Neomycin + Betamethasone,Neomycin + Betamethasone,,Solution (nasal drops),0.5% (as sulphate) + (0.1% as sodium phosphate),ORAL,27.2 Medicines for the Nose,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0372,Neostigmine,Neostigmine,,Injection,2.5mg (as metasulphate)/1mL amp,IV,2.2 Cholinesterase Inhibitors,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0373,Nevirapine (NVP),Nevirapine (NVP),,Oral liquid,10mg/mL,ORAL,7.4.2.2 Non-nucleoside Reverse Transcriptase Inhibitors (NNRTI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0374,Niacinamide,Niacinamide,,Tablet,500mg,ORAL,unclassified,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0375,Nicotine (NRT),Nicotine (NRT),,Chewing gum,2mg,ORAL,25.5 Medicines for Disorders due to Psychoactive Substance Abuse,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0376,Nifedipine,Nifedipine,,Tablet (s/r),20mg,ORAL,14.3.4 Calcium channel Blockers (CCBs),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0377,Nifurtimox,Nifurtimox,,Tablet,120mg,ORAL,7.5.5.1.2 Medicines for the treatment of 2nd stage Human African trypanosomiasis,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0378,Nilotinib,Nilotinib,,Capsule,200mg,ORAL,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0379,Nintedanib,Nintedanib,,Capsule,150mg,ORAL,26.2 Medicines for Idiopathic Pulmonary Fibrosis,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0380,Nitroglycerin (NTG),Nitroglycerin (NTG),,Injection,2.5mg/mL (10mL) amp,IV,14.4 Medicines used in Heart Failure,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0381,Nitrous oxide,Nitrous oxide,,Inhalation (medical gas),,ORAL,1.4 Medical gases,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0382,Non-ionic low osmolar water-soluble iodinated contrast media,Non-ionic low osmolar water-soluble iodinated contrast media,,Injection,300mg iodine/mL (50mL) [c],IV,16.2 Radiocontrast media,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0383,Norepinephrine (Noradrenaline),Norepinephrine (Noradrenaline),,Injection,1mg/mL,IV,14.4 Medicines used in Heart Failure,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0384,Norethisterone,Norethisterone,,Tablet,5mg,ORAL,23.5 Medicines for treatment of Abnormal uterine bleeding,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0385,Normal immunoglobulin,Normal immunoglobulin,,Injection (IV),5% protein solution (100mL vial),ORAL,13.2.1 Human immunoglobulins,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0386,Nutritionally complete elemental hepatic formula with MCT for oral / tube feeding,Nutritionally complete elemental hepatic formula with MCT for oral / tube feeding,,Liquid,200mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0387,Nutritionally complete glutamine-enriched liquid formula,Nutritionally complete glutamine-enriched liquid formula,,Liquid,500mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0388,"Nutritionally complete High energy, high protein oral / tube feed","Nutritionally complete High energy, high protein oral / tube feed",,Liquid,200mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0389,Nutritionally complete hydrolysed feeds with MCT fibre-free,Nutritionally complete hydrolysed feeds with MCT fibre-free,,Liquid,500mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0390,Nutritionally complete hypercaloric liquid formula feed,Nutritionally complete hypercaloric liquid formula feed,,Liquid,500mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0391,"Nutritionally complete, hypocaloric oral / tube feed liquid diet with fibre","Nutritionally complete, hypocaloric oral / tube feed liquid diet with fibre",,Liquid,200mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0392,Nutritionally complete Iso-caloric paediatric liquid diet for oral / tube feeding,Nutritionally complete Iso-caloric paediatric liquid diet for oral / tube feeding,,Liquid,200mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0393,Nutritionally complete isocaloric liquid diet fibre-free for oral / tube feeding,Nutritionally complete isocaloric liquid diet fibre-free for oral / tube feeding,,Liquid,200mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0394,Nutritionally complete isocaloric liquid diet with fibre for oral / tube feeding,Nutritionally complete isocaloric liquid diet with fibre for oral / tube feeding,,Liquid,200mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0395,Nutritionally complete liquid low sodium formula,Nutritionally complete liquid low sodium formula,,Liquid,500mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0396,Nutritionally complete low glycaemic index formula,Nutritionally complete low glycaemic index formula,,Powder,50g sachet,ORAL,33.1.3 Enteral feeds - powder formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0397,Nutritionally complete semi-elemental peptide-based formula for oral / tube feed,Nutritionally complete semi-elemental peptide-based formula for oral / tube feed,,Liquid,200mL,ORAL,33.1.2 Enteral feeds - liquid formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0398,Nystatin,Nystatin,,Oral liquid (suspension),"100,000 IU/mL [c]",ORAL,7.3 Antifungal Medicines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0399,Octreotide,Octreotide,,Injection kit,20mg,ORAL,9.2.4 Hormones and antihormones,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0400,Ofloxacin,Ofloxacin,,Eye drops,0.3% (as sulphate),TOPICAL,22.1 Anti-infective agents,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0401,Ofloxacin + Dexamethasone,Ofloxacin + Dexamethasone,,Solution (eye-drops),0.3 + 0.1%,TOPICAL,22.1 Anti-infective agents,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0402,Olanzapine,Olanzapine,,Tablet,5mg,ORAL,19.2 Antiemetics,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0403,Olopatadine,Olopatadine,,Solution (eye-drops),0.1% (HCl),TOPICAL,22.7 Anti-allergy medicines for the eye,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0404,Omega 3 fatty acids,Omega 3 fatty acids,,Tablet / Capsule,1g,ORAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0405,Ondansetron,Ondansetron,,Injection,2mg/mL (2mL Ampoule),IV,1.3 Pre-and Intra-Operative Medication and Sedation for Short-Term Procedures and Adjuncts for Spinal and,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0406,Osimertinib,Osimertinib,,Tablet,80mg,ORAL,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0407,Oxaliplatin,Oxaliplatin,,Solution for Injection,2mg/mL (25mL vial),ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0408,Oxcarbazepine,Oxcarbazepine,,SODF,150mg,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0409,Oxycodone,Oxycodone,,Tablet (i/r),5mg (as HCI),ORAL,3.2 Opioid analgesics,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0410,Oxygen,Oxygen,,Inhalation (medical gas),,ORAL,1.4 Medical gases,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0411,p-aminosalicylic acid (PAS),p-aminosalicylic acid (PAS),,Granules,4g sachet,ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0412,Paclitaxel,Paclitaxel,,Concentrate (for IV infusion),6mg/mL (5mL vial),ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0413,Paediatric nutritionally complete isocaloric formula,Paediatric nutritionally complete isocaloric formula,,Powder,400g [c],ORAL,33.1.3 Enteral feeds - powder formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0414,Paediatric nutritionally complete peptide-based formula,Paediatric nutritionally complete peptide-based formula,,Powder,400g [c],ORAL,33.1.3 Enteral feeds - powder formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0415,Palbociclib,Palbociclib,,Tablet,125mg,ORAL,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0416,Paliperidone palmitate,Paliperidone palmitate,,Injection,75mg/mL,IV,25.1 Medicines used in Psychotic disorders,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0417,Palonosetron,Palonosetron,,Injection,"0.05mg/mL, 5mL vial",IV,19.2 Antiemetics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0418,Pantoprazole,Pantoprazole,,Tablet (dispersible),20mg,ORAL,19.1 Antiulcer medicines,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0419,Papain + Urea (Papain-urea topical),Papain + Urea (Papain-urea topical),,Ointment,"521,700 IU + 100mg (15g)",TOPICAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0420,Paromomycin,Paromomycin,,Injection solution (IM),375mg/mL (as sulphate) (2mL amp),ORAL,7.5.2 Antileishmaniasis Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0421,Paroxetine,Paroxetine,,Tablet,20mg,ORAL,25.3 Medicines for Anxiety disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0422,Pazopanib,Pazopanib,,Tablet,200mg,ORAL,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0423,Peg-Filgrastim,Peg-Filgrastim,,Injection (prefilled syringe),6mg/0.6mL,ORAL,9.2.3 Immunomodulators,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0424,Pegaspargase,Pegaspargase,,Injection,3750 Units/5mL vial,IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0425,Pembrolizumab,Pembrolizumab,,Injection,100mg/4mL,IV,9.2.3 Immunomodulators,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0426,Pemetrexed,Pemetrexed,,PFI or solution for injection,500mg,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0427,Pentamidine isethionate,Pentamidine isethionate,,PFI,200mg (as isetionate) vial,IV,7.5.5.1.1 Medicines for the treatment of 1st stage Human African trypanosomiasis,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0428,Phenobarbital (Phenobarbitone) sodium,Phenobarbital (Phenobarbitone) sodium,,Injection,30mg/1mL amp [c],IV,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0429,Phenoxybenzamine,Phenoxybenzamine,,Capsule,10mg,ORAL,14.3.6.5 non-selective alpha adrenoceptor antagonist,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0430,Phenoxymethylpenicillin (Penicillin V),Phenoxymethylpenicillin (Penicillin V),,PFOL,250mg (as potassium salt) /5mL,ORAL,7.2.1 Access Group Antibiotics,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0431,Phenylephrine,Phenylephrine,,Injection,10mg/mL Hydrochloride 1mL,IV,1.3 Pre-and Intra-Operative Medication and Sedation for Short-Term Procedures and Adjuncts for Spinal and,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0432,Phytomenadione (Vit K1),Phytomenadione (Vit K1),,Injection,10mg/mL (1mL amp),IV,5.2 Specific,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0433,Pilocarpine,Pilocarpine,,Solution (eye-drops),4% (as HCl or nitrate),TOPICAL,22.4 Miotics and Anti-Glaucoma Medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0434,Pioglitazone,Pioglitazone,,Tablet,15mg,ORAL,20.5.2.3 Thiazolidinediones,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0435,Piperacillin + Tazobactam,Piperacillin + Tazobactam,,PFI,4g (as sodium salt) + 500mg (as sodium salt),IV,7.2.2 Watch Group antibiotics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0436,Pirfenidone,Pirfenidone,,Tablet,267mg,ORAL,26.2 Medicines for Idiopathic Pulmonary Fibrosis,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0437,"Plasma, fresh-frozen","Plasma, fresh-frozen",,PFI + diluent,,ORAL,13.1 Blood and Blood Components,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0438,Platelets,Platelets,,PFI + diluent,,ORAL,13.1 Blood and Blood Components,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0439,Pneumococcal vaccine (10-valent ads. conjugate),Pneumococcal vaccine (10-valent ads. conjugate),,Injection (suspension),2mL vial (4 doses),ORAL,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0440,Podophyllin resin,Podophyllin resin,,Solution,15% (in benzoin tincture) (15mL),ORAL,15.4 Medicines affecting skin differentiation and proliferation,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0441,Polio vaccine (IPV),Polio vaccine (IPV),,Injection,Multi dose vial,IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0442,"Polio vaccine, oral (OPV) (live attenuated)","Polio vaccine, oral (OPV) (live attenuated)",,Oral drops,10mL vial (20 doses),ORAL,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0443,Polyacrylic acid,Polyacrylic acid,,Eye Gel,0.2%,ORAL,22.8 Other medicines for the eye,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0444,Polygeline,Polygeline,,Infusion (IV),3.5% (500mL pack),ORAL,13.3 Plasma substitutes,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0445,Polymyxin B,Polymyxin B,,PFI,"500,000 IU vial",IV,7.2.3 Reserve group antibiotics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0446,Posaconazole,Posaconazole,,Tablet (Delayed Release),100mg,IV,7.3 Antifungal Medicines,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0447,Potassium acid phosphate,Potassium acid phosphate,,Injection,13.6% w/v sterile aqueous solution,IV,31.2 Parenteral,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0448,Potassium chloride,Potassium chloride,,Tablet (e/r),600mg,ORAL,31.1 Oral,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0449,Povidone iodine,Povidone iodine,,Solution,10% (equiv. to Iodine 1%),ORAL,17.1 Antiseptics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0450,Pralidoxime,Pralidoxime,,PFI,1g (as chloride or mesilate) vial,IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0451,Pramipexole,Pramipexole,,Tablet (scored),180 micrograms base,ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0452,Praziquantel,Praziquantel,,Tablet (scored),600mg,ORAL,7.1.1 Intestinal Anthelminthics,1,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0453,Prazosin,Prazosin,,Capsule,500 micrograms,ORAL,14.3.6.4 Alpha 1 Receptor Blockers,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0454,Pregabalin,Pregabalin,,Capsule,25mg,ORAL,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0455,Pretomanid,Pretomanid,,Tablet,200mg,ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0456,Primaquine,Primaquine,,Tablet,7.5mg (as diphosphate),ORAL,7.5.3.1 For curative treatment,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0457,Probenecid,Probenecid,,Tablet,250mg,ORAL,28.1 Medicines used to treat Gout,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0458,Procarbazine,Procarbazine,,Capsule,50mg (as HCl),ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0459,Proguanil,Proguanil,,Tablet,100mg (as HCl),ORAL,7.5.3.2 For Prophylaxis,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0460,Proparacaine,Proparacaine,,Solution (eye-drops),0.5% (as HCl),TOPICAL,22.3 Local Anaesthetics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0461,Propofol,Propofol,,Injection,10mg/mL (20mL vial),IV,1.1.2 Injectable medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0462,Propranolol,Propranolol,,Tablet,40mg (as HCl),ORAL,8.2 Prophylaxis,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0463,Propylthiouracil,Propylthiouracil,,Tablet,50mg,ORAL,20.7 Thyroid Hormones and Anti-thyroid Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0464,Prostaglandin E2,Prostaglandin E2,,Vaginal Tablet,3mg,ORAL,23.6.1 Oxytocics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0465,Protamine,Protamine,,Injection,10mg/mL (as sulphate) (5mL amp),IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0466,Prothionamide (Pto),Prothionamide (Pto),,Tablet,250mg,ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0467,Pyridostigmine,Pyridostigmine,,Tablet,60mg (as bromide),ORAL,2.2 Cholinesterase Inhibitors,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0468,Pyridoxine (Vit B6),Pyridoxine (Vit B6),,Tablet,25mg (as HCl),ORAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0469,Quetiapine,Quetiapine,,"Tablet (i/r, scored)",100mg,ORAL,25.1 Medicines used in Psychotic disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0470,Quinine,Quinine,,Injection,300mg/mL (as HCl) (2mL amp),IV,7.5.3.1 For curative treatment,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0471,Rabies vaccine (cell culture),Rabies vaccine (cell culture),,Injection,Single dose (Purified Verocell / Human diploid),IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0472,Ranibizumab,Ranibizumab,,Injection,6mg/mL (0.3mg vial),IV,22.6 Anti-vascular endothelial growth factor (VEGF) preparations,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0473,Rasburicase,Rasburicase,,Injection,7.5mg/vial,IV,9.2.5 Supportive medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0474,Ready to use supplemental food (RUSF),Ready to use supplemental food (RUSF),,Oral paste / bar / liquid / powder,Standard formula (minimum 350 Kcal/100g),ORAL,33.2 Nutrition Feeds for managing Severe acute malnutrition (SAM) and Moderate acute malnutrition (MAM),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0475,Ready to use therapeutic food (RUTF),Ready to use therapeutic food (RUTF),,Oral paste / bar / liquid / powder,Standard formula (minimum 500 Kcal/100g),ORAL,33.2 Nutrition Feeds for managing Severe acute malnutrition (SAM) and Moderate acute malnutrition (MAM),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0476,Red blood cells,Red blood cells,,PFI + diluent,,ORAL,13.1 Blood and Blood Components,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0477,Rehydration solution for malnutrition (ReSoMal),Rehydration solution for malnutrition (ReSoMal),,PFOL (to make 1L),Sachet (42g) (WHO formula),ORAL,19.5 Medicines used in Diarrhoea and Oral Rehydration,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0478,Remifentanyl,Remifentanyl,,PFI,2mg/2mL,IV,1.1.2 Injectable medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0479,Reteplase,Reteplase,,PFI,10 Units,IV,14.5.2 Thrombolytic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0480,Ribavirin,Ribavirin,,Injection (IV),800mg in 10mL phosphate buffer solution,ORAL,7.4.3 Other Antivirals,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0481,Riboflavin,Riboflavin,,Solution (eye-drops),0.1% with Dextran,TOPICAL,22.8 Other medicines for the eye,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0482,Risperidone,Risperidone,,Tablet (scored),2mg,ORAL,25.1 Medicines used in Psychotic disorders,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0483,Ritonavir (RTV),Ritonavir (RTV),,Tablet (heat-stable),100mg,ORAL,7.4.2.3 Protease Inhibitors (PI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0484,Rituximab,Rituximab,,Injection (IV),10mg/mL (10mL vial),ORAL,9.1 Immunomodulators for non-malignant disease and supportive medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0485,Rivaroxaban,Rivaroxaban,,Tablet,10mg,ORAL,12.2.2 Anticoagulant medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0486,Rivastigmine,Rivastigmine,,Capsule,1.5mg,ORAL,unclassified,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0487,Rocuronium,Rocuronium,,Injection,"10mg/mL (as bromide), 5mL vial",IV,2.1 Muscle relaxants,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0488,Rotavirus vaccine,Rotavirus vaccine,,Oral suspension,5 dose vial,ORAL,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0489,Sacubitril + Valsartan,Sacubitril + Valsartan,,Tablet (f/c),24mg + 26mg,ORAL,14.4 Medicines used in Heart Failure,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0490,Salicylic acid,Salicylic acid,,Ointment,3%,TOPICAL,15.4 Medicines affecting skin differentiation and proliferation,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0491,Senna,Senna,,Tablet,7.5mg,ORAL,3.3 Adjuncts for pain Management and Medicines for other Symptoms in Palliative Care,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0492,Sesta methoxyisobutylisonitrile (sestamibi) (Technetium -99m Sestamibi),Sesta methoxyisobutylisonitrile (sestamibi) (Technetium -99m Sestamibi),,"Injection, prepared from a non-radioactive sestamibi kit for radiolabeling with 99mTc prior to administration",,ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0493,Sevelamer,Sevelamer,,Tablet,400mg,ORAL,31.1 Oral,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0494,Sevoflurane,Sevoflurane,,Inhalation,250mL,INHALED,1.1.1 Inhalational medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0495,Sildenafil,Sildenafil,,Tablet,25mg,ORAL,14.3.6.6 Others,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0496,Silver ion,Silver ion,,Solution,0.01% (100mL),ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0497,Silver sulphadiazine,Silver sulphadiazine,,Cream,1% (50g),TOPICAL,15.2 Anti-infective medicines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0498,Sitagliptin,Sitagliptin,,Tablet,50mg,ORAL,20.5.2.4 DipeptidyIpeptidase (DPP)-4 inhibitors (Gliptins),4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0499,β-Sitosterol,β-Sitosterol,,Ointment,0.25% w/w (30gm),TOPICAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0500,Sodium acid phosphate,Sodium acid phosphate,,Tablets (effervescent),1.936g (equiv. to phosphorus 500mg),ORAL,31.1 Oral,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0501,Sodium chloride,Sodium chloride,,Solution (nasal drops),0.9%,ORAL,27.2 Medicines for the Nose,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0502,Sodium cromoglicate,Sodium cromoglicate,,Solution (eye-drops),2%,TOPICAL,22.7 Anti-allergy medicines for the eye,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0503,Sodium Hyaluronate,Sodium Hyaluronate,,Solution (eye-drops),1% (preseverative free),TOPICAL,22.8 Other medicines for the eye,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0504,Sodium hydrogen carbonate (Sodium bicarbonate),Sodium hydrogen carbonate (Sodium bicarbonate),,Injectable solution,8.4% (10mL amp),ORAL,5.2 Specific,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0505,Sodium hypochlorite,Sodium hypochlorite,,Solution,4-6% chlorine,ORAL,17.2 Disinfectants,1,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0506,Sodium lactate compound (Hartmann’s /Ringers lactate),Sodium lactate compound (Hartmann’s /Ringers lactate),,Injectable solution (infusion),BP formula (500mL),ORAL,31.2 Parenteral,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0507,Sodium nitrite,Sodium nitrite,,Injection,30mg/mL (10mL amp),IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0508,Sodium polystyrene sulphonate,Sodium polystyrene sulphonate,,Powder,450g,ORAL,31.1 Oral,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0509,Sodium stibogluconate,Sodium stibogluconate,,Injection,100mg/mL (100mL amp),IV,7.5.2 Antileishmaniasis Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0510,Sodium thiosulphate,Sodium thiosulphate,,Injection,250mg/mL (50mL amp),IV,5.2 Specific,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0511,Sofosbuvir+Velpatasvir,Sofosbuvir+Velpatasvir,,Tablet,400mg + 100mg,ORAL,7.4.4.2.2 Pangenotypic direct-acting antiviral combinations,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0512,Somatropin (recombinant human growth hormone),Somatropin (recombinant human growth hormone),,Prefilled pen,12mg,ORAL,20.9 Other endocrine medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0513,Sorafenib,Sorafenib,,Capsule,200mg,ORAL,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0514,Specialized Renal formula,Specialized Renal formula,,Powder,400g,ORAL,33.1.3 Enteral feeds - powder formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0515,Specialized Semi-elemental peptide formula,Specialized Semi-elemental peptide formula,,Powder,400g,ORAL,33.1.3 Enteral feeds - powder formulations,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0516,Spironolactone,Spironolactone,,Tablet (scored),25mg,ORAL,14.3.6.2 Potassium sparing Diuretics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0517,Succimer [Dimercaptosuccinic acid (DMSA)],Succimer [Dimercaptosuccinic acid (DMSA)],,Capsule,100mg,ORAL,5.2 Specific,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0518,Sulfadiazine,Sulfadiazine,,Tablet,500mg,ORAL,7.5.4 Antipneumocystosis & Antitoxoplasmosis Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0519,Sulfasalazine (SSZ),Sulfasalazine (SSZ),,Tablet,500mg,ORAL,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0520,Sumatriptan,Sumatriptan,,Tablet,25mg,ORAL,8.1 For treatment of Acute Attack,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0521,Sun screening agent(s),Sun screening agent(s),,Cream or lotion,SPF 50+,ORAL,15.7 Sunscreen preparations,1,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0522,Suramin sodium,Suramin sodium,,PFI,1g vial,IV,7.5.5.1.1 Medicines for the treatment of 1st stage Human African trypanosomiasis,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0523,Surfactant,Surfactant,,Suspension for intratracheal instillation,25mg/mL [c],ORAL,23.9 Medicines administered to the neonate [c],5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0524,Suxamethonium,Suxamethonium,,Injection,50mg (as chloride)/mL (2mL amp),IV,2.1 Muscle relaxants,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0525,Tacrolimus,Tacrolimus,,Concentrate (for IV infusion),5mg/1mL amp,ORAL,9.1 Immunomodulators for non-malignant disease and supportive medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0526,Tadalafil,Tadalafil,,Tablet,20mg,ORAL,14.3.6.6 Others,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0527,Tamoxifen,Tamoxifen,,Tablet,20mg (as citrate),ORAL,9.2.4 Hormones and antihormones,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0528,Tamsulosin,Tamsulosin,,Capsule,400 micrograms (as HCl),ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0529,Technetium - 99m disofenin (DISIDA),Technetium - 99m disofenin (DISIDA),,"Injection, prepared from a non-radioactive disofenin kit for radiolabelling with 99mTc prior to administration",,ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0530,Technetium - 99m leucocytes,Technetium - 99m leucocytes,,Injection,,IV,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0531,Technetium - 99m mebrofenin (BRIDA),Technetium - 99m mebrofenin (BRIDA),,"Injection, prepared from a non-radioactive mebrofenin kit for radiolabelling with 99mTc prior to administration",,ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0532,Technetium-99m pentetate (DTPA),Technetium-99m pentetate (DTPA),,"Injection, Inhalation, prepared from a non-radioactive pentetate kit for radiolabelling with 99mTc prior to administration",,ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0533,Technetium-99m sodium pertechnetate,Technetium-99m sodium pertechnetate,,"Injection, eluted from approved 99Mo/99mTc radionuclide generator",,ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0534,Technetium Tc- 99m (99m Tc) Succimer (Technetium Tc-99m Dimercaptosuccinic Acid (DMSA),Technetium Tc- 99m (99m Tc) Succimer (Technetium Tc-99m Dimercaptosuccinic Acid (DMSA),,"Injection, prepared from a non-radioactive succimer kit for radiolabelling with 99mTc prior to administration",,ORAL,34.1.1 Radiopharmaceuticals for planar and single photon emission computed tomography (SPECT) imaging,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0535,Teicoplanin,Teicoplanin,,Injection,200mg,IV,7.2.3 Reserve group antibiotics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0536,Telmisartan,Telmisartan,,Tablet,40mg,ORAL,14.3.2 Angiotensin Receptor Blockers (ARBs),4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0537,Temozolomide,Temozolomide,,Capsule,100mg,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0538,Tenecteplase,Tenecteplase,,PFI with prefilled syringe with 10mL water for injection,50mg (10000IU),ORAL,14.5.2 Thrombolytic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0539,Tenofovir Alafenamide (TAF),Tenofovir Alafenamide (TAF),,Tablet,25mg,ORAL,7.4.2.1 Nucleoside/Nucleotide Reverse Transcriptase Inhibitors (NRTI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0540,Tenofovir disoproxil fumarate (TDF),Tenofovir disoproxil fumarate (TDF),,Tablet,300mg,ORAL,7.4.2.1 Nucleoside/Nucleotide Reverse Transcriptase Inhibitors (NRTI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0541,Tenofovir disoproxil fumarate + Emtricitabine (TDF+FTC),Tenofovir disoproxil fumarate + Emtricitabine (TDF+FTC),,Tablet,300mg + 200mg,ORAL,7.4.2.5 Fixed Dose Combinations (FDCs),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0542,Tenofovir disoproxil fumarate + Lamivudine (TDF+3TC),Tenofovir disoproxil fumarate + Lamivudine (TDF+3TC),,Tablet,300mg + 300mg,ORAL,7.4.2.5 Fixed Dose Combinations (FDCs),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0543,Tenofovir disoproxil fumarate + Lamivudine + Efavirenz (TDF+3TC+EFV),Tenofovir disoproxil fumarate + Lamivudine + Efavirenz (TDF+3TC+EFV),,Tablet,300mg + 300mg + 400mg,ORAL,7.4.2.5 Fixed Dose Combinations (FDCs),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0544,Terbinafine,Terbinafine,,Tablet,125mg,ORAL,7.3 Antifungal Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0545,Terbutaline,Terbutaline,,Injection,"0.5mg/mL, 1mL",IV,23.7 Anti-oxytocics (Tocolytics),4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0546,Terizidone (Trd),Terizidone (Trd),,Tablet,300mg,ORAL,7.2.5.3 Medicines for treatment of multi-drug resistant Tuberculosis (MDR-TB),3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0547,Terlipressin,Terlipressin,,Injection,1mg (as acetate) in 8.5ml solution,IV,19.6 Vasoconstrictor Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0548,Testosterone,Testosterone,,Gel,1%,TOPICAL,20.2 Androgens,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0549,Tetanus + Diphtheria + Pertussis (Tdap) vaccine,Tetanus + Diphtheria + Pertussis (Tdap) vaccine,,Injection,0.5mL (single dose),IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0550,Tetanus + Diphtheria (Td) vaccine,Tetanus + Diphtheria (Td) vaccine,,Injection,10mL vial (20 doses),IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0551,Tetracaine,Tetracaine,,Solution (eye-drops),0.5% (as HCl),TOPICAL,22.3 Local Anaesthetics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0552,Thalidomide,Thalidomide,,Capsule,100mg,ORAL,9.2.3 Immunomodulators,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0553,Therapeutic diet feed (F-75),Therapeutic diet feed (F-75),,PFOL (for approx. 600mL),Standard formula (102.5g sachet),ORAL,33.2 Nutrition Feeds for managing Severe acute malnutrition (SAM) and Moderate acute malnutrition (MAM),4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0554,Thiamine (Vit B1),Thiamine (Vit B1),,Tablet,50mg (as HCl),ORAL,unclassified,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0555,Thiopental sodium,Thiopental sodium,,PFI,500mg vial,IV,1.1.2 Injectable medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0556,Tigecycline,Tigecycline,,PFI,50mg vial,IV,7.2.3 Reserve group antibiotics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0557,Timolol,Timolol,,Solution (eye-drops),0.5% (as hyd. maleate),TOPICAL,22.4 Miotics and Anti-Glaucoma Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0558,Tinidazole,Tinidazole,,Tablet (f/c),500mg,ORAL,7.2.1 Access Group Antibiotics,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0559,Tioguanine,Tioguanine,,SODF,40mg [c],ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0560,Tiotropium,Tiotropium,,Powder for inhalation in a Capsule,18 micrograms / Capsule,ORAL,26.1 Antiasthmatic medicines and medicines for chronic obstructive pulmonary disease,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0561,Tobramycin,Tobramycin,,Solution (eye-drops),0.3% (as sulphate),TOPICAL,22.1 Anti-infective agents,3,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0562,Tobramycin + Dexamethasone,Tobramycin + Dexamethasone,,Solution (eye-drops),0.3 + 0.1%,TOPICAL,22.1 Anti-infective agents,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0563,Tocilizumab,Tocilizumab,,(Solution for IV infusion),20mg/mL (4mL vial),ORAL,28.2 Disease-modifying agents used in rheumatic disorders (DMARDs) and Immunosuppressants used in,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0564,Tolvaptan,Tolvaptan,,Tablet,15mg,ORAL,31.1 Oral,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0565,Topiramate,Topiramate,,Tablet,25mg,ORAL,unclassified,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0566,Topotecan,Topotecan,,Injection,2.5mg,IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0567,Torsemide,Torsemide,,Tablet (scored),20mg,ORAL,14.4 Medicines used in Heart Failure,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0568,Trace elements,Trace elements,,"Solution for IV infusion, Adult",10mL,ORAL,33.1.1 Parenteral feeds,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0569,Tranexamic acid,Tranexamic acid,,Injection,100mg/mL (5mL amp),IV,12.2.1 Coagulant medicines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0570,Trastuzumab,Trastuzumab,,PFI,150mg vial,IV,9.2.2 Targeted therapies,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0571,Tretinoin,Tretinoin,,Cream,0.05%,TOPICAL,15.4 Medicines affecting skin differentiation and proliferation,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0572,Triamcinolone,Triamcinolone,,Injection suspension,40mg/1mL amp (as acetonide or hexacetonide),ORAL,22.2 Anti-inflammatory agents,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0573,Trimetazidine,Trimetazidine,,Tablet (m/r),35mg,ORAL,14.1 Antianginal Medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0574,Tropicamide + Phenylephrine,Tropicamide + Phenylephrine,,Eye drops,0.8% + 5% w/v,TOPICAL,16.1 Ophthalmic diagnostics,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0575,Trypan blue,Trypan blue,,Intracameral Solution,0.06%,ORAL,22.8 Other medicines for the eye,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0576,"Tuberculin, purified protein, derivative (PPD)","Tuberculin, purified protein, derivative (PPD)",,Injection (solution),0.1mL vial (single dose),ORAL,21.1 Diagnostic agents,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0577,Typhoid vaccine,Typhoid vaccine,,Injection (solution),Single or multi dose,ORAL,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0578,Valgancyclovir,Valgancyclovir,,Tablet,450mg,ORAL,7.4.3 Other Antivirals,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0579,Vancomycin,Vancomycin,,PFI,500mg vial (as HCl),IV,7.2.3 Reserve group antibiotics,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0580,Vecuronium,Vecuronium,,PFI,10mg (as bromide) vial [c],IV,2.1 Muscle relaxants,6,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0581,Venlafaxine,Venlafaxine,,Tablet,75mg,ORAL,25.2.1 Medicines used in Depressive disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0582,Verapamil,Verapamil,,Tablet (Immediate release),40mg (as HCl),ORAL,14.2 Antiarrhythmic medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0583,Vinblastine,Vinblastine,,Injection,1mg/mL (as sulphate) (10mL vial),IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0584,Vincristine,Vincristine,,PFI or solution for injection,1mg/mL (as sulphate) vial,ORAL,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0585,Vinorelbine,Vinorelbine,,Injection,10mg/mL (1mL vial),IV,9.2.1 Cytotoxic medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0586,Vitamins & Minerals Mix,Vitamins & Minerals Mix,,Powder,1g sachet [c],ORAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0587,Voriconazole,Voriconazole,,Tablet,200mg,ORAL,7.3 Antifungal Medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0588,Warfarin,Warfarin,,Tablet (scored),1mg (as sodium salt),ORAL,12.2.2 Anticoagulant medicines,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0589,Water for injection,Water for injection,,Injection,10mL amp,IV,31.2 Parenteral,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0590,White soft paraffin (Petroleum jelly),White soft paraffin (Petroleum jelly),,Topical application,100g,ORAL,15.6 Medicines for Jiggers,1,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0591,Whole blood,Whole blood,,PFI + diluent,,ORAL,13.1 Blood and Blood Components,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0592,Xylometazoline,Xylometazoline,,Nasal spray,0.05%,ORAL,27.2 Medicines for the Nose,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0593,"Yellow fever vaccine (live, attenuated)","Yellow fever vaccine (live, attenuated)",,Injection,Single or multi dose vial,IV,21.3 Vaccines,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0594,Zidovudine (AZT or ZDV),Zidovudine (AZT or ZDV),,Oral liquid,50mg/5mL,ORAL,7.4.2.1 Nucleoside/Nucleotide Reverse Transcriptase Inhibitors (NRTI),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0595,Zidovudine + Lamivudine (AZT+3TC),Zidovudine + Lamivudine (AZT+3TC),,Tablet,300mg + 150mg,ORAL,7.4.2.5 Fixed Dose Combinations (FDCs),2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0596,Zinc Hyaluronate (zinc-hyaluronan),Zinc Hyaluronate (zinc-hyaluronan),,Gel (water-based),15g,ORAL,unclassified,2,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0597,Zoledronic acid,Zoledronic acid,,Concentrate solution for Infusion,800 micrograms/mL (in 5mL vial),IV,9.2.5 Supportive medicines,5,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0598,Zolpidem,Zolpidem,,Tablet,10mg,ORAL,25.7 Medicines for sleep disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
+KEML-CAT-0599,Zuclopenthixol,Zuclopenthixol,,Injection (aqua),100mg (as acetate)/mL (2mL amp),ORAL,25.1 Medicines used in Psychotic disorders,4,,,,,,,,false,,UNKNOWN,false,false,,CATALOGUE_ONLY
