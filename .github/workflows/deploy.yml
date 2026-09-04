@@ -77,12 +77,21 @@ jobs:
           AUDITOR_ROLE_PASSWORD: ${{ secrets.AUDITOR_ROLE_PASSWORD }}
           ANALYST_ROLE_PASSWORD: ${{ secrets.ANALYST_ROLE_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
+          BLIND_INDEX_PEPPER: ${{ secrets.BLIND_INDEX_PEPPER }}
           CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
           TEST_HOOK_SECRET: ${{ secrets.TEST_HOOK_SECRET }}
           AT_API_KEY: ${{ secrets.AT_API_KEY }}
           AT_USERNAME: ${{ secrets.AT_USERNAME }}
           AT_SENDER_ID: ${{ secrets.AT_SENDER_ID }}
           LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+          # First-run SUPER_ADMIN bootstrap — entrypoint refuses on second run,
+          # so setting these once and leaving them here is safe.
+          NHP_ADMIN_PHONE: ${{ secrets.NHP_ADMIN_PHONE }}
+          NHP_ADMIN_ID: ${{ secrets.NHP_ADMIN_ID }}
+          NHP_ADMIN_GIVEN: ${{ secrets.NHP_ADMIN_GIVEN }}
+          NHP_ADMIN_FAMILY: ${{ secrets.NHP_ADMIN_FAMILY }}
+          NHP_ADMIN_COUNTY: ${{ secrets.NHP_ADMIN_COUNTY }}
           GHCR_PULL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
         with:
@@ -90,7 +99,7 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: 2222
-          envs: IMAGE_TAG,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,APP_ROLE_PASSWORD,AUDIT_WRITER_ROLE_PASSWORD,AUDITOR_ROLE_PASSWORD,ANALYST_ROLE_PASSWORD,JWT_SECRET,CORS_ORIGIN,TEST_HOOK_SECRET,AT_API_KEY,AT_USERNAME,AT_SENDER_ID,LOG_LEVEL,GHCR_PULL_TOKEN,GHCR_USER
+          envs: IMAGE_TAG,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,APP_ROLE_PASSWORD,AUDIT_WRITER_ROLE_PASSWORD,AUDITOR_ROLE_PASSWORD,ANALYST_ROLE_PASSWORD,JWT_SECRET,FIELD_ENCRYPTION_KEY,BLIND_INDEX_PEPPER,CORS_ORIGIN,TEST_HOOK_SECRET,AT_API_KEY,AT_USERNAME,AT_SENDER_ID,LOG_LEVEL,NHP_ADMIN_PHONE,NHP_ADMIN_ID,NHP_ADMIN_GIVEN,NHP_ADMIN_FAMILY,NHP_ADMIN_COUNTY,GHCR_PULL_TOKEN,GHCR_USER
           script: |
             set -euo pipefail
             cd /home/deploy/nhp
@@ -108,12 +117,19 @@ jobs:
             AUDITOR_ROLE_PASSWORD=${AUDITOR_ROLE_PASSWORD}
             ANALYST_ROLE_PASSWORD=${ANALYST_ROLE_PASSWORD}
             JWT_SECRET="${JWT_SECRET}"
+            FIELD_ENCRYPTION_KEY="${FIELD_ENCRYPTION_KEY}"
+            BLIND_INDEX_PEPPER="${BLIND_INDEX_PEPPER}"
             CORS_ORIGIN=${CORS_ORIGIN:-https://nationalhealthportal.com,https://www.nationalhealthportal.com,https://admin.nationalhealthportal.com}
             TEST_HOOK_SECRET=${TEST_HOOK_SECRET:-}
             AT_API_KEY=${AT_API_KEY:-}
             AT_USERNAME=${AT_USERNAME:-}
             AT_SENDER_ID=${AT_SENDER_ID:-}
             LOG_LEVEL=${LOG_LEVEL:-info}
+            NHP_ADMIN_PHONE=${NHP_ADMIN_PHONE:-}
+            NHP_ADMIN_ID=${NHP_ADMIN_ID:-}
+            NHP_ADMIN_GIVEN=${NHP_ADMIN_GIVEN:-}
+            NHP_ADMIN_FAMILY=${NHP_ADMIN_FAMILY:-}
+            NHP_ADMIN_COUNTY=${NHP_ADMIN_COUNTY:-}
             EOF
             mv .env.new .env
 

@@ -56,11 +56,23 @@ services:
       AUDITOR_ROLE_PASSWORD: ${AUDITOR_ROLE_PASSWORD}
       ANALYST_ROLE_PASSWORD: ${ANALYST_ROLE_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      # Field-level crypto. Rotating either after data lands makes existing
+      # encrypted rows unreadable and breaks blind-index lookups — set once,
+      # keep forever.
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      BLIND_INDEX_PEPPER: ${BLIND_INDEX_PEPPER}
       CORS_ORIGIN: ${CORS_ORIGIN:-https://nationalhealthportal.com,https://www.nationalhealthportal.com,https://admin.nationalhealthportal.com}
       TEST_HOOK_SECRET: ${TEST_HOOK_SECRET:-}
       AT_API_KEY: ${AT_API_KEY:-}
       AT_USERNAME: ${AT_USERNAME:-}
       AT_SENDER_ID: ${AT_SENDER_ID:-}
+      # First-run SUPER_ADMIN bootstrap. Absent → entrypoint skips; present →
+      # entrypoint runs `pnpm ministry:bootstrap` once (refuses on second run).
+      NHP_ADMIN_PHONE:  ${NHP_ADMIN_PHONE:-}
+      NHP_ADMIN_ID:     ${NHP_ADMIN_ID:-}
+      NHP_ADMIN_GIVEN:  ${NHP_ADMIN_GIVEN:-}
+      NHP_ADMIN_FAMILY: ${NHP_ADMIN_FAMILY:-}
+      NHP_ADMIN_COUNTY: ${NHP_ADMIN_COUNTY:-}
     healthcheck:
       test: ["CMD-SHELL","node -e \"require('http').get('http://localhost:4400/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s
