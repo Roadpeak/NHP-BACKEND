@@ -23,6 +23,7 @@ import {
   NotifyError,
   type SmsProvider,
   type SmsMessage,
+  AfricasTalkingProvider,
 } from '../src/notify.js';
 import {
   hashPassword,
@@ -471,5 +472,35 @@ describe('break-glass notification', () => {
     expect(event.id).toBeTruthy();
     expect(event.patientNotifiedAt).toBeNull();
     await new Promise((r) => setTimeout(r, 30));
+  });
+});
+
+/**
+ * THE SANDBOX ENDPOINT.
+ *
+ * Africa's Talking runs the sandbox on a different HOST, and signals it by
+ * the reserved username "sandbox". A sandbox key sent to the production
+ * endpoint comes back as an authentication failure — which reads like a bad
+ * key rather than a wrong URL, and sends whoever is debugging it looking in
+ * entirely the wrong place.
+ */
+describe('the Africa\'s Talking endpoint', () => {
+  /** Reads the private field the provider resolved in its constructor. */
+  const urlOf = (p: AfricasTalkingProvider) =>
+    (p as unknown as { baseUrl: string }).baseUrl;
+
+  it('uses the sandbox host for the reserved sandbox username', () => {
+    const p = new AfricasTalkingProvider('sandbox', 'test-key');
+    expect(urlOf(p)).toBe('https://api.sandbox.africastalking.com/version1');
+  });
+
+  it('uses the live host for a real username', () => {
+    const p = new AfricasTalkingProvider('nhp-kenya', 'test-key');
+    expect(urlOf(p)).toBe('https://api.africastalking.com/version1');
+  });
+
+  it('still accepts an explicit override', () => {
+    const p = new AfricasTalkingProvider('sandbox', 'k', undefined, 'https://example.test/v1');
+    expect(urlOf(p)).toBe('https://example.test/v1');
   });
 });

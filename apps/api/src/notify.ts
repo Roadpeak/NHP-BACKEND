@@ -64,8 +64,24 @@ export class AfricasTalkingProvider implements SmsProvider {
     private readonly username: string,
     private readonly apiKey: string,
     private readonly senderId?: string,
-    private readonly baseUrl = 'https://api.africastalking.com/version1',
-  ) {}
+    /**
+     * Sandbox is a different HOST, not a flag on the production one.
+     *
+     * Africa's Talking signals the sandbox by the reserved username
+     * "sandbox", and pointing a sandbox key at the production endpoint
+     * fails as an authentication error — which reads like a bad key rather
+     * than a wrong URL, and sends you looking in the wrong place.
+     */
+    baseUrl?: string,
+  ) {
+    this.baseUrl =
+      baseUrl ??
+      (username === 'sandbox'
+        ? 'https://api.sandbox.africastalking.com/version1'
+        : 'https://api.africastalking.com/version1');
+  }
+
+  private readonly baseUrl: string;
 
   async send(message: SmsMessage): Promise<SmsResult> {
     const body = new URLSearchParams({
