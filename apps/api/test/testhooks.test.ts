@@ -25,6 +25,8 @@ import {
   ConsoleSmsProvider,
   setSmsProvider,
   AfricasTalkingProvider,
+  devVisibleOtp,
+  resolveSmsProvider,
 } from '../src/notify.js';
 
 const prisma = new PrismaClient({
@@ -236,5 +238,74 @@ describe('the route', () => {
     expect(res.statusCode).toBe(200);
 
     await prodApp.close();
+  });
+});
+
+/**
+ * THE OTP SHOWN ON SCREEN.
+ *
+ * A stopgap for a deployment with no SMS gateway: the sign-in code is
+ * returned in the login response and rendered above the code field, so a
+ * clinician can complete the second factor while the gateway is still being
+ * provisioned.
+ *
+ * It is not an authentication bypass — the code still has to be entered and
+ * verified, and it is the same code the console provider already prints to
+ * stdout. What it changes is who can read it.
+ *
+ * The failure that matters is it surviving to production unnoticed, so it
+ * is guarded three separate ways and every one is checked here.
+ */
+describe('the on-screen sign-in code', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env.NODE_ENV = saved.NODE_ENV;
+    process.env.NHP_SHOW_OTP = saved.NHP_SHOW_OTP;
+  });
+
+  it('is returned when explicitly switched on outside production', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.NHP_SHOW_OTP = '1';
+    expect(devVisibleOtp('123456')).toBe('123456');
+  });
+
+  it('NEVER appears in production, even when switched on', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.NHP_SHOW_OTP = '1';
+    expect(devVisibleOtp('123456')).toBeUndefined();
+  });
+
+  it('does not default on', () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.NHP_SHOW_OTP;
+    // A developer running the API locally must not silently get a live
+    // sign-in code echoed into every login response.
+    expect(devVisibleOtp('123456')).toBeUndefined();
+  });
+
+  it('treats any value other than 1 as off', () => {
+    process.env.NODE_ENV = 'development';
+    for (const v of ['0', 'true', 'yes', '']) {
+      process.env.NHP_SHOW_OTP = v;
+      expect(devVisibleOtp('123456')).toBeUndefined();
+    }
+  });
+
+  it('SWITCHES ITSELF OFF once a real SMS provider is configured', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.NHP_SHOW_OTP = '1';
+    const previous = resolveSmsProvider();
+    // A real gateway means the code reached a real handset; echoing it into
+    // an HTTP response then is a disclosure, not a convenience. This is the
+    // guard that means nobody has to remember to turn the flag off.
+    setSmsProvider({
+      name: 'fake-gateway',
+      send: async () => {},
+    } as unknown as Parameters<typeof setSmsProvider>[0]);
+    try {
+      expect(devVisibleOtp('123456')).toBeUndefined();
+    } finally {
+      setSmsProvider(previous);
+    }
   });
 });

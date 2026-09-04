@@ -19,7 +19,7 @@ import { TOTP, Secret } from 'otpauth';
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { blindIndex, encryptField, decryptField, normalisePhone } from './crypto.js';
-import { sendAsync, send, messages, maskPhone } from './notify.js';
+import { sendAsync, send, messages, maskPhone, devVisibleOtp } from './notify.js';
 
 export type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -346,6 +346,14 @@ export interface LoginResult {
   enrolToken?: string;
   /** Masked destination, so the user knows which handset to check. */
   sentTo?: string;
+  /**
+   * The code itself, ONLY while there is no SMS gateway.
+   *
+   * Present only outside production, only when NHP_SHOW_OTP=1, and only
+   * while the console SMS provider is in use — so it disappears on its own
+   * the moment a real gateway is configured. See `devVisibleOtp`.
+   */
+  devCode?: string;
 }
 
 /**
@@ -423,6 +431,7 @@ export async function login(
       .sign(secret());
 
     let sentTo: string | undefined;
+    let devCode: string | undefined;
 
     // An SMS factor needs a code dispatched; TOTP is already on the device.
     if (account.mfaMode === 'SMS') {
@@ -432,6 +441,7 @@ export async function login(
         purpose: 'LOGIN_MFA',
         accountId: account.id,
       });
+      devCode = devVisibleOtp(code);
 
       // Not awaited: a gateway outage must not hold the login response
       // open. The code is already valid, so a resend can follow.
@@ -451,6 +461,7 @@ export async function login(
       mfaToken,
       mfaMode: account.mfaMode as 'SMS' | 'TOTP',
       sentTo,
+      devCode,
     };
   }
 
@@ -666,7 +677,13 @@ export async function enrolSms(db: Db, accountId: string) {
     );
   }
 
-  return { sentTo: maskPhone(normalisePhone(phone)), expiresInMinutes: OTP_MINUTES };
+  // Enrolment needs it too: a brand-new account has no other way to see
+  // the code that confirms its second factor.
+  return {
+    sentTo: maskPhone(normalisePhone(phone)),
+    expiresInMinutes: OTP_MINUTES,
+    devCode: devVisibleOtp(code),
+  };
 }
 
 export async function confirmSms(db: Db, accountId: string, code: string) {
@@ -726,7 +743,13 @@ export async function resendMfaCode(db: Db, mfaToken: string) {
     purpose: 'MFA',
   });
 
-  return { sentTo: maskPhone(normalisePhone(phone)), expiresInMinutes: OTP_MINUTES };
+  // Resend has to carry it too. Without this, tapping "Resend the code"
+  // invalidates the code on screen and replaces it with one nobody can see.
+  return {
+    sentTo: maskPhone(normalisePhone(phone)),
+    expiresInMinutes: OTP_MINUTES,
+    devCode: devVisibleOtp(code),
+  };
 }
 
 // ------------------------------------------------------------- CSRF

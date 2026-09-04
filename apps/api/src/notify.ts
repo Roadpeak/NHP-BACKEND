@@ -243,3 +243,39 @@ export function maskPhone(phone: string): string {
   if (phone.length < 6) return '***';
   return `${phone.slice(0, 5)}***${phone.slice(-3)}`;
 }
+
+/**
+ * The sign-in code, for a deployment that has no SMS gateway yet.
+ *
+ * Returned in the login response and shown above the code field, so a
+ * clinician can complete the second factor while the Africa's Talking
+ * account is still being provisioned. It is a stopgap with an expiry date,
+ * not a feature.
+ *
+ * Every guard the test hooks already enforce applies here, and for the same
+ * reasons:
+ *
+ *   - NEVER in production. Checked first and on its own.
+ *   - Only when the SMS provider is the console one. The instant a real
+ *     gateway is configured this returns undefined and the code goes to the
+ *     handset instead — no code change, no redeploy, no flag to remember to
+ *     turn off. That is the point: this switches itself off.
+ *   - Only when NHP_SHOW_OTP is explicitly set. It does not default on, so
+ *     a developer running the API locally does not silently get an OTP
+ *     printed into every login response.
+ *
+ * It is NOT an authentication bypass: the code is the same one the console
+ * provider already prints to stdout, and the second factor still has to be
+ * entered and verified. What it changes is who can see stdout.
+ */
+export function devVisibleOtp(code: string): string | undefined {
+  if (process.env.NODE_ENV === 'production') return undefined;
+  if (process.env.NHP_SHOW_OTP !== '1') return undefined;
+
+  // A real gateway means the code reached a real handset. Echoing it into
+  // an HTTP response at that point would be a genuine disclosure rather
+  // than a convenience.
+  if (!(resolveSmsProvider() instanceof ConsoleSmsProvider)) return undefined;
+
+  return code;
+}
