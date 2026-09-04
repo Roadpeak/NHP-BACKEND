@@ -113,7 +113,8 @@ async function seedGeography() {
   }
 
   /*
-   * Kenya's real sub-counties, all 293 of them.
+   * Kenya's real sub-counties — the administrative register, not the
+   * 290 electoral constituencies.
    *
    * Every county used to get a single placeholder named "<County> Central",
    * which meant the registration screens offered one meaningless choice and
@@ -217,9 +218,30 @@ async function seedDiagnoses() {
   }
 
   const rows = readCsv(path);
+
+  /*
+   * The WHO import, when it has been run.
+   *
+   * `diagnoses_icd11.csv` is produced by `pnpm icd11:import` and holds real
+   * codes pulled from the WHO release. It is loaded AFTER the curated file
+   * and never overwrites it: a curated row carries three deliberately
+   * written labels, and letting an import replace it would silently strip
+   * the Swahili back out of a row that had it.
+   *
+   * Imported rows carry no Swahili and no plain-language title, so they are
+   * safe to search and code against but must not reach the citizen timeline
+   * until somebody writes those labels.
+   */
+  const curated = new Set(rows.map((r) => r.icd11_code));
+  const importedPath = join(SEED_DIR, 'diagnoses_icd11.csv');
+  let imported: Record<string, string>[] = [];
+  if (existsSync(importedPath)) {
+    imported = readCsv(importedPath).filter((r) => !curated.has(r.icd11_code));
+  }
+
   let unreviewed = 0;
 
-  for (const r of rows) {
+  for (const r of [...rows, ...imported]) {
     if (r.review_status !== 'CLINICALLY_REVIEWED') unreviewed++;
     const data = {
       clinicalTitle: r.clinical_title,
@@ -239,7 +261,7 @@ async function seedDiagnoses() {
       update: data,
     });
   }
-  return { diagnoses: rows.length, unreviewed };
+  return { diagnoses: rows.length + imported.length, unreviewed, imported: imported.length };
 }
 
 async function seedMedications() {
@@ -458,7 +480,10 @@ async function main() {
   console.log(`  capabilities  ${caps.capabilities}`);
 
   const dx = await seedDiagnoses();
-  console.log(`  diagnoses     ${dx.diagnoses}`);
+  console.log(
+    `  diagnoses     ${dx.diagnoses}` +
+      (dx.imported ? `  (${dx.imported} imported from the WHO release)` : ''),
+  );
 
   const meds = await seedMedications();
   console.log(`  medications   ${meds.medications}  (${meds.controlled} controlled)`);

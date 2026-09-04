@@ -193,13 +193,33 @@ export async function citizenSummary(
     where: { icd11Code: { in: codes } },
     select: { icd11Code: true, plainEn: true, plainSw: true, clinicalTitle: true },
   });
-  const plainByCode = new Map(terms.map((t) => [t.icd11Code, lang === 'sw' ? t.plainSw : t.plainEn]));
+  /*
+   * Falls back rather than showing a blank line.
+   *
+   * Codes imported from the WHO release carry no Swahili and no plain
+   * English — WHO ships neither, and machine-translating a diagnosis for
+   * the person who has it is worse than not translating it. So a missing
+   * label degrades to the next most useful thing that is still TRUE:
+   * Swahili to plain English, plain English to the clinical title.
+   *
+   * An empty string here would render as an empty row on somebody's own
+   * health record, which reads as "nothing is wrong" rather than "we have
+   * not translated this yet".
+   */
+  const plainByCode = new Map(
+    terms.map((t) => [
+      t.icd11Code,
+      (lang === 'sw' ? t.plainSw || t.plainEn : t.plainEn) || t.clinicalTitle,
+    ]),
+  );
 
   const medTerms = await db.medicationTerm.findMany({
     where: { kemlCode: { in: medications.map((m) => m.kemlCode) } },
     select: { kemlCode: true, plainEn: true, plainSw: true },
   });
-  const medPlain = new Map(medTerms.map((t) => [t.kemlCode, lang === 'sw' ? t.plainSw : t.plainEn]));
+  const medPlain = new Map(
+    medTerms.map((t) => [t.kemlCode, (lang === 'sw' ? t.plainSw || t.plainEn : t.plainEn) || '']),
+  );
 
   const rightNow: CitizenSummary['rightNow'] = [];
 
@@ -328,7 +348,7 @@ export async function citizenTimeline(
       where: {
         icd11Code: { in: [...new Set(encounters.flatMap((e) => e.conditions.map((c) => c.icd11Code)))] },
       },
-      select: { icd11Code: true, plainEn: true, plainSw: true },
+      select: { icd11Code: true, plainEn: true, plainSw: true, clinicalTitle: true },
     }),
     db.medicationTerm.findMany({
       where: {
@@ -340,8 +360,18 @@ export async function citizenTimeline(
 
   const facilityById = new Map(facilities.map((f) => [f.id, f.name]));
   const practitionerById = new Map(practitioners.map((p) => [p.id, p]));
-  const plainByCode = new Map(terms.map((t) => [t.icd11Code, lang === 'sw' ? t.plainSw : t.plainEn]));
-  const medPlainByCode = new Map(medTerms.map((t) => [t.kemlCode, lang === 'sw' ? t.plainSw : t.plainEn]));
+  // Same fallback as the summary: a WHO-imported code has no Swahili and
+  // no plain English, and a blank line on a health record reads as
+  // "nothing is wrong".
+  const plainByCode = new Map(
+    terms.map((t) => [
+      t.icd11Code,
+      (lang === 'sw' ? t.plainSw || t.plainEn : t.plainEn) || t.clinicalTitle,
+    ]),
+  );
+  const medPlainByCode = new Map(
+    medTerms.map((t) => [t.kemlCode, (lang === 'sw' ? t.plainSw || t.plainEn : t.plainEn) || '']),
+  );
 
   return encounters.map((e) => {
     const condition = e.conditions[0];

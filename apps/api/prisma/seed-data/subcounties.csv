@@ -27,18 +27,22 @@ county_code,subcounty_name,kind
 006,Wundanyi,HEALTH_ADMIN
 007,Balambala,HEALTH_ADMIN
 007,Dadaab,HEALTH_ADMIN
+007,Dadaab Refugee,HEALTH_ADMIN
 007,Fafi,HEALTH_ADMIN
 007,Garissa Township,HEALTH_ADMIN
 007,Hulugho,HEALTH_ADMIN
 007,Ijara,HEALTH_ADMIN
 007,Lagdera,HEALTH_ADMIN
+008,Buna,HEALTH_ADMIN
 008,Eldas,HEALTH_ADMIN
+008,Habaswein,HEALTH_ADMIN
 008,Tarbaj,HEALTH_ADMIN
 008,Wajir East,HEALTH_ADMIN
 008,Wajir North,HEALTH_ADMIN
 008,Wajir South,HEALTH_ADMIN
 008,Wajir West,HEALTH_ADMIN
 009,Banissa,HEALTH_ADMIN
+009,Kutulo,HEALTH_ADMIN
 009,Lafey,HEALTH_ADMIN
 009,Mandera East,HEALTH_ADMIN
 009,Mandera North,HEALTH_ADMIN
@@ -52,16 +56,19 @@ county_code,subcounty_name,kind
 011,Isiolo South,HEALTH_ADMIN
 012,Buuri,HEALTH_ADMIN
 012,Igembe Central,HEALTH_ADMIN
+012,Igembe East,HEALTH_ADMIN
 012,Igembe North,HEALTH_ADMIN
 012,Igembe South,HEALTH_ADMIN
 012,Imenti Central,HEALTH_ADMIN
 012,Imenti North,HEALTH_ADMIN
 012,Imenti South,HEALTH_ADMIN
+012,Tigania Central,HEALTH_ADMIN
 012,Tigania East,HEALTH_ADMIN
 012,Tigania West,HEALTH_ADMIN
 013,Chuka Igambang'ombe,HEALTH_ADMIN
 013,Maara,HEALTH_ADMIN
 013,Tharaka,HEALTH_ADMIN
+013,Tharaka North,HEALTH_ADMIN
 014,Manyatta,HEALTH_ADMIN
 014,Mbeere North,HEALTH_ADMIN
 014,Mbeere South,HEALTH_ADMIN
@@ -72,6 +79,7 @@ county_code,subcounty_name,kind
 015,Kitui South,HEALTH_ADMIN
 015,Kitui West,HEALTH_ADMIN
 015,Mwingi Central,HEALTH_ADMIN
+015,Mwingi East,HEALTH_ADMIN
 015,Mwingi North,HEALTH_ADMIN
 015,Mwingi West,HEALTH_ADMIN
 016,Kangundo,HEALTH_ADMIN
@@ -123,6 +131,7 @@ county_code,subcounty_name,kind
 022,Limuru,HEALTH_ADMIN
 022,Ruiru,HEALTH_ADMIN
 022,Thika Town,HEALTH_ADMIN
+023,Kibish,HEALTH_ADMIN
 023,Loima,HEALTH_ADMIN
 023,Turkana Central,HEALTH_ADMIN
 023,Turkana East,HEALTH_ADMIN
@@ -163,6 +172,7 @@ county_code,subcounty_name,kind
 030,Eldama Ravine,HEALTH_ADMIN
 030,Mogotio,HEALTH_ADMIN
 030,Tiaty,HEALTH_ADMIN
+030,Tiaty East,HEALTH_ADMIN
 031,Laikipia East,HEALTH_ADMIN
 031,Laikipia North,HEALTH_ADMIN
 031,Laikipia West,HEALTH_ADMIN
@@ -183,6 +193,8 @@ county_code,subcounty_name,kind
 033,Narok North,HEALTH_ADMIN
 033,Narok South,HEALTH_ADMIN
 033,Narok West,HEALTH_ADMIN
+033,Trans Mara East,HEALTH_ADMIN
+033,Trans Mara West,HEALTH_ADMIN
 034,Kajiado Central,HEALTH_ADMIN
 034,Kajiado East,HEALTH_ADMIN
 034,Kajiado North,HEALTH_ADMIN
@@ -207,6 +219,7 @@ county_code,subcounty_name,kind
 037,Lurambi,HEALTH_ADMIN
 037,Malava,HEALTH_ADMIN
 037,Matungu,HEALTH_ADMIN
+037,Mumias,HEALTH_ADMIN
 037,Mumias East,HEALTH_ADMIN
 037,Mumias West,HEALTH_ADMIN
 037,Navakholo,HEALTH_ADMIN
@@ -217,6 +230,7 @@ county_code,subcounty_name,kind
 038,Sabatia,HEALTH_ADMIN
 038,Vihiga,HEALTH_ADMIN
 039,Bumula,HEALTH_ADMIN
+039,Bungoma Central,HEALTH_ADMIN
 039,Kabuchai,HEALTH_ADMIN
 039,Kanduyi,HEALTH_ADMIN
 039,Kimilili,HEALTH_ADMIN
