@@ -2581,7 +2581,12 @@ export async function buildApp(prismaOverride?: PrismaClient) {
   app.post<{
     Params: { id: string };
     Body: {
+      /** A KEML code, or 'UNCODED' for a medicine not on the list. */
       kemlCode: string;
+      /** Required when kemlCode is 'UNCODED'; ignored otherwise. */
+      genericName?: string;
+      /** Only read for an uncoded medicine; a coded one uses the formulary route. */
+      route?: 'ORAL' | 'IV' | 'IM' | 'SC' | 'TOPICAL' | 'INHALED' | 'RECTAL';
       doseAmount: number;
       doseUnit: string;
       frequency: string;

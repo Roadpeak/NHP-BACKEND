@@ -16,6 +16,19 @@ import { ageAt } from './identity.js';
 
 export type Db = PrismaClient | Prisma.TransactionClient;
 
+/**
+ * The sentinel code for a medicine that is not on the KEML.
+ *
+ * A real value rather than null or the typed text, for two reasons. Every
+ * query that groups or counts by KEML code keeps working unchanged, and an
+ * uncoded medicine is visibly uncoded wherever it surfaces instead of
+ * masquerading as a code nobody can look up.
+ *
+ * It is deliberately not a valid KEML code shape, so it can never collide
+ * with one the list adds later.
+ */
+export const UNCODED_MEDICATION = 'UNCODED';
+
 export class ClinicalError extends Error {
   constructor(
     message: string,
@@ -168,6 +181,34 @@ export async function checkPrescribing(
   },
   depth = 0,
 ): Promise<PrescribingCheck> {
+  /*
+   * An uncoded medicine.
+   *
+   * The KEML is what Kenyan facilities stock, but it is not everything a
+   * clinician may legitimately prescribe — imports, specials, trial drugs,
+   * and anything the list has not caught up with. Refusing outright pushed
+   * that prescription onto paper, where the record cannot see it at all,
+   * and a medicine missing from the record is exactly what the allergy
+   * interrupt exists to prevent.
+   *
+   * So it is allowed, and it WARNS. The warning is the honest statement of
+   * what was lost: with no KEML row there is no allergy class, no
+   * pregnancy category and no renal flag, so none of the checks below can
+   * run. The clinician is told that, rather than being given a silent
+   * ALLOW that looks identical to a drug that passed every check.
+   */
+  if (input.kemlCode === UNCODED_MEDICATION) {
+    return {
+      verdict: 'WARN',
+      reasons: [
+        'This medicine is not on the Kenya Essential Medicines List, so no ' +
+          'allergy, pregnancy or kidney-function check could be run against it. ' +
+          'Check the patient’s allergies yourself before prescribing.',
+      ],
+      alternatives: [],
+    };
+  }
+
   const drug = await db.medicationTerm.findUnique({ where: { kemlCode: input.kemlCode } });
   if (!drug) {
     throw new ClinicalError(`Unknown medication '${input.kemlCode}'`, 'UNKNOWN_MEDICATION');
@@ -469,8 +510,16 @@ export async function prescribe(
     practitionerId: string;
     encounterId: string;
     kemlCode: string;
+    /**
+     * The medicine's name, when `kemlCode` is UNCODED. Ignored otherwise —
+     * a coded prescription takes its name from the formulary, so a typo in
+     * a client cannot rename a drug in somebody's record.
+     */
+    genericName?: string;
     doseAmount: number;
     doseUnit: string;
+    /** Only read for an UNCODED medicine; a coded one uses the formulary route. */
+    route?: 'ORAL' | 'IV' | 'IM' | 'SC' | 'TOPICAL' | 'INHALED' | 'RECTAL';
     frequency: string;
     durationDays?: number;
     indicationCode?: string;
@@ -490,8 +539,28 @@ export async function prescribe(
   });
   if (!encounter) throw new ClinicalError('Encounter not found', 'ENCOUNTER_NOT_FOUND');
 
-  const drug = await db.medicationTerm.findUnique({ where: { kemlCode: input.kemlCode } });
-  if (!drug) {
+  /*
+   * Uncoded, and recorded as such.
+   *
+   * `kemlCode` stays the UNCODED sentinel rather than being left blank or
+   * filled with the typed text: every existing query that groups or counts
+   * by KEML code keeps working, and an uncoded medicine is visibly uncoded
+   * wherever it appears instead of masquerading as a code nobody can
+   * resolve. The name the clinician typed goes in `genericName`, which is
+   * where a reader looks anyway.
+   */
+  const uncoded = input.kemlCode === UNCODED_MEDICATION;
+  if (uncoded && !input.genericName?.trim()) {
+    throw new ClinicalError(
+      'An uncoded medicine must be named.',
+      'MEDICATION_NAME_REQUIRED',
+    );
+  }
+
+  const drug = uncoded
+    ? null
+    : await db.medicationTerm.findUnique({ where: { kemlCode: input.kemlCode } });
+  if (!uncoded && !drug) {
     throw new ClinicalError(
       `'${input.kemlCode}' is not in the formulary`,
       'UNKNOWN_MEDICATION',
@@ -518,7 +587,9 @@ export async function prescribe(
     );
   }
 
-  if (drug.maxDailyMg) {
+  // No formulary row means no maximum to check against. Said plainly in
+  // the WARN above rather than silently skipped here.
+  if (drug?.maxDailyMg) {
     const perDay = input.doseAmount * frequencyPerDay(input.frequency);
     if (perDay > Number(drug.maxDailyMg)) {
       throw new ClinicalError(
@@ -544,13 +615,16 @@ export async function prescribe(
       licenceNumber: gate.licenceNumber,
       recordedAt: new Date(),
       encounterId: encounter.id,
-      kemlCode: drug.kemlCode,
-      genericName: drug.genericName,
+      kemlCode: uncoded ? UNCODED_MEDICATION : drug!.kemlCode,
+      genericName: uncoded ? input.genericName!.trim() : drug!.genericName,
       doseAmount: input.doseAmount,
       doseUnit: input.doseUnit,
-      route: drug.route,
+      // A coded medicine takes its route from the formulary, so a client
+      // cannot contradict it. An uncoded one has no formulary row, so the
+      // prescriber states the route and it defaults to oral.
+      route: uncoded ? (input.route ?? 'ORAL') : drug!.route,
       frequency: input.frequency,
-      durationDays: input.durationDays ?? drug.adultDurationDays ?? null,
+      durationDays: input.durationDays ?? drug?.adultDurationDays ?? null,
       indicationCode: input.indicationCode ?? null,
       status: 'PRESCRIBED',
       stoppedReason: notes,

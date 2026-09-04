@@ -27,6 +27,7 @@ import {
   procedureHistory,
   resolvePersonId,
   frequencyPerDay,
+  UNCODED_MEDICATION,
 } from '../src/clinical.js';
 import { registerAdult } from '../src/identity.js';
 import { registerFacility, approveFacility } from '../src/facility.js';
@@ -882,5 +883,133 @@ describe('the NHP number a clinician actually types', () => {
     // An allergy banner that silently fails to load is the exact failure
     // this system exists to prevent.
     expect(summary.allergies).toHaveLength(1);
+  });
+});
+
+/**
+ * MEDICINES THAT ARE NOT ON THE LIST.
+ *
+ * The KEML is what Kenyan facilities stock; it is not everything a
+ * clinician may legitimately prescribe. Refusing an off-list medicine
+ * outright does not prevent the prescription — it pushes it onto paper,
+ * where the record cannot see it, and a medicine missing from the record
+ * is exactly what the allergy interrupt exists to catch.
+ *
+ * So it is allowed, and it is allowed WORSE: marked uncoded, warned about
+ * in terms that say what was lost, and never mistakable for a drug that
+ * passed every check.
+ */
+describe('an uncoded medicine', () => {
+  it('is recorded rather than refused', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'referred on an imported regimen',
+    });
+
+    const rx = await prescribe(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      kemlCode: UNCODED_MEDICATION,
+      genericName: 'Bedaquiline',
+      doseAmount: 400,
+      doseUnit: 'mg',
+      frequency: 'OD',
+      durationDays: 14,
+    });
+
+    expect(rx.genericName).toBe('Bedaquiline');
+    // Visibly uncoded, not masquerading as a code nobody can resolve.
+    expect(rx.kemlCode).toBe(UNCODED_MEDICATION);
+  });
+
+  it('THE HONEST WARNING — says which checks could not run', async () => {
+    const patient = await makePerson();
+    const check = await checkPrescribing(prisma, {
+      personId: patient.id,
+      kemlCode: UNCODED_MEDICATION,
+    });
+
+    // Not a silent ALLOW. An uncoded medicine that looked identical to one
+    // which passed every check is the failure this whole design avoids.
+    expect(check.verdict).toBe('WARN');
+    expect(check.reasons.join(' ')).toMatch(/allergy/i);
+    expect(check.reasons.join(' ')).toMatch(/Essential Medicines List/i);
+  });
+
+  it('must be named', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'test',
+    });
+
+    // "UNCODED" with no name is a row nobody can act on later.
+    await expect(
+      prescribe(prisma, {
+        practitionerId: practitioner.id,
+        encounterId: encounter.id,
+        kemlCode: UNCODED_MEDICATION,
+        doseAmount: 1,
+        doseUnit: 'tablet',
+        frequency: 'OD',
+      }),
+    ).rejects.toThrow(/must be named/i);
+  });
+
+  it('still refuses a code that is simply wrong', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'test',
+    });
+
+    // The escape hatch is explicit. A typo'd KEML code must NOT silently
+    // become an uncoded prescription — that would turn every mistake into
+    // a permanent unresolvable row.
+    await expect(
+      prescribe(prisma, {
+        practitionerId: practitioner.id,
+        encounterId: encounter.id,
+        kemlCode: 'KEML-XX-999',
+        doseAmount: 1,
+        doseUnit: 'tablet',
+        frequency: 'OD',
+      }),
+    ).rejects.toThrow(/not in the formulary/i);
+  });
+
+  it('appears on the citizen timeline under the name that was typed', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'test',
+    });
+    await prescribe(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      kemlCode: UNCODED_MEDICATION,
+      genericName: 'Imported antiviral',
+      doseAmount: 1,
+      doseUnit: 'tablet',
+      frequency: 'OD',
+    });
+
+    // A patient reading their own record must see the medicine they were
+    // actually given, not a blank where the formulary lookup failed.
+    const summary = await patientSummary(prisma, patient.id);
+    expect(JSON.stringify(summary)).toMatch(/Imported antiviral/);
   });
 });
