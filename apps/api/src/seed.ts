@@ -14,7 +14,28 @@ import { PrismaClient } from '@prisma/client';
 import 'dotenv/config';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SEED_DIR = resolve(__dirname, '../../../../nhp-seed/data');
+
+/**
+ * Where the vocabularies live.
+ *
+ * `prisma/seed-data` is a vendored copy that ships inside the Docker image.
+ * It has to be: the canonical CSVs live in the sibling `nhp-seed` repo,
+ * which is not part of this build context and therefore does not exist in
+ * a deployed container — production could not seed at all, and came up
+ * with no counties, no diagnoses and no triage rules.
+ *
+ * The sibling repo still wins when it is present, so local development
+ * edits data in one place and sees it immediately. `pnpm seed:sync` copies
+ * it across; CI checks the two have not drifted apart.
+ *
+ * SEED_DATA_DIR overrides both, for a deployment that mounts the
+ * vocabularies from somewhere else entirely.
+ */
+const SIBLING_SEED = resolve(__dirname, '../../../../nhp-seed/data');
+const VENDORED_SEED = resolve(__dirname, '../prisma/seed-data');
+const SEED_DIR =
+  process.env.SEED_DATA_DIR ??
+  (existsSync(SIBLING_SEED) ? SIBLING_SEED : VENDORED_SEED);
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -81,26 +102,62 @@ const COUNTIES: Array<[string, string]> = [
 ];
 
 async function seedGeography() {
-  let created = 0;
+  const idFor = new Map<string, string>();
   for (const [code, name] of COUNTIES) {
     const county = await prisma.county.upsert({
       where: { code },
       create: { code, name },
       update: { name },
     });
-    // One placeholder health sub-county per county so facilities can be
-    // registered before the full 300+ list is loaded.
+    idFor.set(code, county.id);
+  }
+
+  /*
+   * Kenya's real sub-counties, all 293 of them.
+   *
+   * Every county used to get a single placeholder named "<County> Central",
+   * which meant the registration screens offered one meaningless choice and
+   * nobody could record where they actually live. Facilities and people are
+   * both scoped to a sub-county, so the placeholder quietly made every
+   * address in the system wrong.
+   *
+   * Keyed on (county, name) rather than a code: sub-counties have no
+   * national numbering the way counties do, and inventing one would create
+   * an identifier that means nothing outside this database.
+   */
+  const path = join(SEED_DIR, 'subcounties.csv');
+  if (!existsSync(path)) {
+    console.warn('  subcounties.csv not found — skipping');
+    return { counties: COUNTIES.length, subcounties: 0, unmatched: 0 };
+  }
+
+  const rows = readCsv(path);
+  let created = 0;
+  let unmatched = 0;
+  for (const r of rows) {
+    const countyId = idFor.get(r.county_code);
+    if (!countyId) {
+      // A sub-county naming a county that does not exist is a data error,
+      // not something to insert against a guessed parent.
+      unmatched++;
+      continue;
+    }
     const existing = await prisma.subCounty.findFirst({
-      where: { countyId: county.id, name: `${name} Central` },
+      where: { countyId, name: r.subcounty_name },
+      select: { id: true },
     });
     if (!existing) {
       await prisma.subCounty.create({
-        data: { countyId: county.id, name: `${name} Central`, kind: 'HEALTH_ADMIN' },
+        data: {
+          countyId,
+          name: r.subcounty_name,
+          kind: (r.kind || 'HEALTH_ADMIN') as 'HEALTH_ADMIN',
+        },
       });
       created++;
     }
   }
-  return { counties: COUNTIES.length, subcounties: created };
+  return { counties: COUNTIES.length, subcounties: created, unmatched };
 }
 
 async function seedCapabilities() {
@@ -389,6 +446,13 @@ async function main() {
   const geo = await seedGeography();
   console.log(`  counties      ${geo.counties}`);
   console.log(`  subcounties   ${geo.subcounties} created`);
+  if (geo.unmatched) {
+    // Loud, because the rows were silently dropped: a sub-county naming a
+    // county that does not exist means the two files have drifted apart.
+    console.warn(
+      `  WARNING: ${geo.unmatched} subcounty row(s) named an unknown county and were skipped`,
+    );
+  }
 
   const caps = await seedCapabilities();
   console.log(`  capabilities  ${caps.capabilities}`);

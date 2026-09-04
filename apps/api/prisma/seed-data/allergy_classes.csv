@@ -1,0 +1,23 @@
+allergy_class,label_en,label_sw,cross_reacts_with,severity_default,alternatives,clinical_note,review_status
+PENICILLIN,Penicillin family,Familia ya penicillin,CEPHALOSPORIN,SEVERE,KEML-AB-004|KEML-AB-005|KEML-AB-006,Cross-reaction with cephalosporins is real but lower than historically taught. A severe or anaphylactic penicillin reaction should avoid cephalosporins; a mild rash may not need to.,NEEDS_CLINICAL_REVIEW
+CEPHALOSPORIN,Cephalosporin family,Familia ya cephalosporin,PENICILLIN,SEVERE,KEML-AB-004|KEML-AB-005|KEML-AB-009,,NEEDS_CLINICAL_REVIEW
+SULFONAMIDE,Sulfa medicines,Dawa za sulfa,THIAZIDE|SULFONYLUREA,SEVERE,KEML-AB-001|KEML-AB-004|KEML-AB-009,Includes cotrimoxazole and sulfadoxine-pyrimethamine. Furosemide hydrochlorothiazide and sulfonylureas carry a sulfonamide group but cross-reaction is uncommon — flagged for clinician judgement rather than hard block.,NEEDS_CLINICAL_REVIEW
+MACROLIDE,Macrolide antibiotics,Antibiotiki za macrolide,,MODERATE,KEML-AB-001|KEML-AB-006|KEML-AB-009,,NEEDS_CLINICAL_REVIEW
+TETRACYCLINE,Tetracycline family,Familia ya tetracycline,,MODERATE,KEML-AB-001|KEML-AB-004|KEML-AB-005,,NEEDS_CLINICAL_REVIEW
+QUINOLONE,Quinolone antibiotics,Antibiotiki za quinolone,,MODERATE,KEML-AB-001|KEML-AB-008|KEML-AB-010,,NEEDS_CLINICAL_REVIEW
+AMINOGLYCOSIDE,Aminoglycoside antibiotics,Antibiotiki za aminoglycoside,,SEVERE,KEML-AB-008|KEML-AB-003,,NEEDS_CLINICAL_REVIEW
+NITROIMIDAZOLE,Metronidazole family,Familia ya metronidazole,,MODERATE,KEML-AB-001|KEML-AB-008,,NEEDS_CLINICAL_REVIEW
+NITROFURAN,Nitrofurantoin family,Familia ya nitrofurantoin,,MODERATE,KEML-AB-007|KEML-AB-010,,NEEDS_CLINICAL_REVIEW
+NSAID,Anti-inflammatory painkillers,Dawa za maumivu na uvimbe,,MODERATE,KEML-AN-001|KEML-AN-005,Aspirin ibuprofen and diclofenac cross-react. Paracetamol is safe in NSAID allergy.,NEEDS_CLINICAL_REVIEW
+OPIATE,Opioid painkillers,Dawa kali za maumivu,,MODERATE,KEML-AN-001|KEML-AN-002,,NEEDS_CLINICAL_REVIEW
+AZOLE,Antifungal azoles,Dawa za fangasi za azole,,MODERATE,KEML-SK-001,,NEEDS_CLINICAL_REVIEW
+BENZODIAZEPINE,Benzodiazepine sedatives,Dawa za usingizi za benzodiazepine,,MODERATE,KEML-OB-002,,NEEDS_CLINICAL_REVIEW
+ACE_INHIBITOR,ACE inhibitor blood pressure medicines,Dawa za shinikizo za ACE,ARB,MODERATE,KEML-CV-001|KEML-CV-004,Angioedema with an ACE inhibitor should avoid ARBs.,NEEDS_CLINICAL_REVIEW
+ARB,ARB blood pressure medicines,Dawa za shinikizo za ARB,ACE_INHIBITOR,MODERATE,KEML-CV-001|KEML-CV-004,,NEEDS_CLINICAL_REVIEW
+STATIN,Cholesterol medicines,Dawa za lehemu,,MILD,,,NEEDS_CLINICAL_REVIEW
+THIAZIDE,Thiazide water tablets,Dawa za mkojo za thiazide,SULFONAMIDE,MODERATE,KEML-CV-001|KEML-CV-003,,NEEDS_CLINICAL_REVIEW
+BETA_BLOCKER,Beta blocker medicines,Dawa za beta blocker,,MODERATE,KEML-CV-001|KEML-CV-003,,NEEDS_CLINICAL_REVIEW
+BIGUANIDE,Metformin family,Familia ya metformin,,MILD,KEML-EN-002,,NEEDS_CLINICAL_REVIEW
+SULFONYLUREA,Sulfonylurea diabetes medicines,Dawa za kisukari za sulfonylurea,SULFONAMIDE,MODERATE,KEML-EN-001|KEML-EN-003,,NEEDS_CLINICAL_REVIEW
+STEROID,Corticosteroid medicines,Dawa za steroid,,MILD,,True corticosteroid allergy is rare. Verify before recording.,NEEDS_CLINICAL_REVIEW
+PPI,Acid reducing medicines,Dawa za kupunguza asidi,,MILD,,,NEEDS_CLINICAL_REVIEW

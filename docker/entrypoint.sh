@@ -4,9 +4,12 @@
 # On every start:
 #   1. prisma migrate deploy  (idempotent — noop when up-to-date)
 #   2. prisma harden          (roles + triggers, guarded IF NOT EXISTS — re-runnable)
-#   3. prisma seed            (reference data — counties+subcounties always;
-#                              ICD-11/KEML CSVs upserted if present, warned+skipped
-#                              if the nhp-seed data folder isn't in the image)
+#   3. prisma seed            (reference data — counties, all 293 sub-counties,
+#                              ICD-11 diagnoses, KEML medications, symptoms and
+#                              triage rules. The CSVs are vendored into
+#                              apps/api/prisma/seed-data, so they ship in the
+#                              image; the loader no longer depends on a sibling
+#                              repo that a container does not have.)
 #   4. ministry:bootstrap     (first SUPER_ADMIN — only when NHP_ADMIN_* env vars
 #                              are set; refuses on second run, so re-running is
 #                              a noop after the first success)
@@ -27,9 +30,10 @@ echo "[entrypoint] prisma harden (roles + guarantees)"
 pnpm --filter @nhp/api harden
 
 echo "[entrypoint] prisma seed (reference data)"
-# Non-fatal: if the CSV bundle isn't in the image the loader warns and skips
-# rows it can't find, and the hardcoded county table still lands. A cold DB
-# with no reference data is a much worse failure than a partial seed.
+# Non-fatal, and kept that way deliberately. The CSVs now ship in the image,
+# so the common cause of a partial seed is gone — but a cold DB with no
+# reference data is still a much worse failure than a partial one, and a
+# crash-loop on a bad row would take the whole API down with it.
 if ! pnpm --filter @nhp/api seed; then
   echo "[entrypoint] seed exited non-zero — continuing (partial seed is preferable to crash-loop)"
 fi

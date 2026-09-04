@@ -1,0 +1,21 @@
+keml_code,band_min_kg,band_max_kg,dose_amount,dose_unit,dose_form,frequency,duration_days,notes
+KEML-AM-001,5,15,1,tablet,20mg/120mg dispersible,BD,3,WHO band 5-14kg. Six doses total at 0 8 24 36 48 60 hours. Give with fatty food or breast milk. Not for infants under 5kg.
+KEML-AM-001,15,25,2,tablet,20mg/120mg dispersible,BD,3,WHO band 15-24kg. Six doses total.
+KEML-AM-001,25,35,3,tablet,20mg/120mg,BD,3,WHO band 25-34kg. Six doses total.
+KEML-AM-001,35,200,4,tablet,20mg/120mg,BD,3,WHO band 35kg and above. Same as adult dose. Six doses total.
+KEML-AM-003,5,8,0.5,tablet,20mg/160mg paediatric,OD,3,Paediatric strength 20mg/160mg. Half tablet once daily for three days. Not for infants under 5kg.
+KEML-AM-003,8,11,0.75,tablet,20mg/160mg paediatric,OD,3,Paediatric strength 20mg/160mg. Three quarter tablet once daily.
+KEML-AM-003,11,17,1,tablet,20mg/160mg paediatric,OD,3,Paediatric strength 20mg/160mg.
+KEML-AM-003,17,25,1.5,tablet,20mg/160mg paediatric,OD,3,Paediatric strength 20mg/160mg.
+KEML-AM-003,25,36,1,tablet,40mg/320mg,OD,3,Adult strength tablet from this band upward.
+KEML-AM-003,36,60,1.5,tablet,40mg/320mg,OD,3,Adult strength 40mg/320mg.
+KEML-AM-003,60,80,2,tablet,40mg/320mg,OD,3,Adult strength 40mg/320mg.
+KEML-AM-003,80,200,2.5,tablet,40mg/320mg,OD,3,Adult strength 40mg/320mg. Upper band for heavy adults.
+KEML-TB-001,4,8,1,tablet,RHZ 75/50/150 paediatric dispersible,OD,56,Intensive phase paediatric FDC. Add ethambutol 100mg one tablet daily where indicated. Continuation phase uses RH 75/50 one tablet daily for 16 weeks.
+KEML-TB-001,8,12,2,tablet,RHZ 75/50/150 paediatric dispersible,OD,56,Intensive phase. Add ethambutol 100mg two tablets daily where indicated. Continuation RH 75/50 two tablets daily.
+KEML-TB-001,12,16,3,tablet,RHZ 75/50/150 paediatric dispersible,OD,56,Intensive phase. Add ethambutol 100mg three tablets daily where indicated. Continuation RH 75/50 three tablets daily.
+KEML-TB-001,16,25,4,tablet,RHZ 75/50/150 paediatric dispersible,OD,56,Intensive phase. Add ethambutol 100mg four tablets daily where indicated. Continuation RH 75/50 four tablets daily.
+KEML-TB-001,25,38,2,tablet,RHZE 150/75/400/275,OD,56,Adult FDC from 25kg. Continuation phase RH 150/75 two tablets daily for 16 weeks.
+KEML-TB-001,38,55,3,tablet,RHZE 150/75/400/275,OD,56,Adult FDC. Continuation phase RH 150/75 three tablets daily.
+KEML-TB-001,55,70,4,tablet,RHZE 150/75/400/275,OD,56,Adult FDC. Continuation phase RH 150/75 four tablets daily.
+KEML-TB-001,70,200,5,tablet,RHZE 150/75/400/275,OD,56,Adult FDC 70kg and above. Continuation phase RH 150/75 five tablets daily.

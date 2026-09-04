@@ -1,0 +1,77 @@
+code,label_en,label_sw,question_en,question_sw,body_system,kind,severity_marker,min_age,max_age,sex,duration_relevant,review_status
+fever,Fever,Homa,Do you have a fever or feel hot?,Una homa au unahisi joto?,general,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+headache,Headache,Maumivu ya kichwa,Do you have a headache?,Una maumivu ya kichwa?,neurological,SYMPTOM,false,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+fatigue,Tiredness or weakness,Uchovu au udhaifu,Do you feel unusually tired or weak?,Unahisi uchovu au udhaifu usio wa kawaida?,general,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+weight_loss,Losing weight without trying,Kupungua uzito bila kujaribu,Have you been losing weight without trying?,Umekuwa ukipungua uzito bila kujaribu?,general,SYMPTOM,false,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+night_sweats,Sweating heavily at night,Kutokwa jasho jingi usiku,Do you sweat heavily at night?,Unatokwa na jasho jingi usiku?,general,SYMPTOM,false,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+cough,Cough,Kikohozi,Do you have a cough?,Una kikohozi?,respiratory,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+cough_over_2_weeks,Cough lasting more than two weeks,Kikohozi cha zaidi ya wiki mbili,Has your cough lasted more than two weeks?,Kikohozi chako kimedumu zaidi ya wiki mbili?,respiratory,SYMPTOM,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+coughing_blood,Coughing up blood,Kukohoa damu,Have you coughed up blood?,Umekohoa damu?,respiratory,SYMPTOM,true,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+breathlessness,Shortness of breath,Kukosa pumzi,Do you feel short of breath?,Unahisi kukosa pumzi?,respiratory,SYMPTOM,true,5,120,ANY,true,NEEDS_CLINICAL_REVIEW
+breathing_difficulty,Struggling to breathe,Kushindwa kupumua,Is the child struggling to breathe or breathing very fast?,Mtoto anashindwa kupumua au anapumua haraka sana?,respiratory,RED_FLAG,true,0,12,ANY,false,NEEDS_CLINICAL_REVIEW
+chest_pain,Chest pain,Maumivu ya kifua,Do you have pain in your chest?,Una maumivu ya kifua?,cardiovascular,SYMPTOM,true,12,120,ANY,true,NEEDS_CLINICAL_REVIEW
+palpitations,Heart beating fast or irregularly,Moyo kupiga haraka au vibaya,Does your heart feel like it is racing or skipping?,Moyo wako unapiga haraka au kwa mruko?,cardiovascular,SYMPTOM,false,12,120,ANY,true,NEEDS_CLINICAL_REVIEW
+leg_swelling,Swollen legs or ankles,Kuvimba miguu au vifundo,Are your legs or ankles swollen?,Miguu au vifundo vyako vimevimba?,cardiovascular,SYMPTOM,false,12,120,ANY,true,NEEDS_CLINICAL_REVIEW
+high_blood_pressure_known,Known high blood pressure,Shinikizo la damu linalojulikana,Have you been told you have high blood pressure?,Umeambiwa una shinikizo la damu?,cardiovascular,HISTORY,false,12,120,ANY,false,NEEDS_CLINICAL_REVIEW
+abdominal_pain,Stomach pain,Maumivu ya tumbo,Do you have pain in your stomach?,Una maumivu ya tumbo?,digestive,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+severe_abdominal_pain,Severe stomach pain,Maumivu makali ya tumbo,Is the stomach pain severe or getting worse quickly?,Maumivu ya tumbo ni makali au yanazidi haraka?,digestive,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+rigid_abdomen,Hard or rigid stomach,Tumbo gumu,Is the stomach hard and painful to touch?,Tumbo ni gumu na linauma likiguswa?,digestive,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+vomiting,Vomiting,Kutapika,Have you been vomiting?,Umekuwa ukitapika?,digestive,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+vomiting_blood,Vomiting blood,Kutapika damu,Have you vomited blood?,Umetapika damu?,digestive,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+diarrhoea,Diarrhoea,Kuhara,Have you had loose or watery stools?,Umekuwa na choo cha maji?,digestive,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+blood_in_stool,Blood in stool,Damu kwenye choo,Have you seen blood in your stool?,Umeona damu kwenye choo?,digestive,SYMPTOM,true,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+constipation,Not passing stool,Kushindwa kupata choo,Have you been unable to pass stool?,Umeshindwa kupata choo?,digestive,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+loss_of_appetite,Not wanting to eat,Kukosa hamu ya kula,Have you lost your appetite?,Umepoteza hamu ya kula?,digestive,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+yellow_eyes,Yellow eyes or skin,Macho au ngozi ya njano,Have your eyes or skin turned yellow?,Macho au ngozi yako imekuwa ya njano?,digestive,SYMPTOM,true,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+painful_urination,Pain when passing urine,Maumivu wakati wa kukojoa,Does it hurt when you pass urine?,Inauma unapokojoa?,genitourinary,SYMPTOM,false,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+frequent_urination,Passing urine very often,Kukojoa mara kwa mara,Are you passing urine much more often than usual?,Unakojoa mara nyingi kuliko kawaida?,genitourinary,SYMPTOM,false,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+blood_in_urine,Blood in urine,Damu kwenye mkojo,Have you seen blood in your urine?,Umeona damu kwenye mkojo?,genitourinary,SYMPTOM,true,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+unable_to_urinate,Unable to pass urine,Kushindwa kukojoa,Have you been unable to pass urine at all?,Umeshindwa kabisa kukojoa?,genitourinary,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+convulsions,Fits or convulsions,Kifafa au mtukutiko,Have you or the patient had a fit or convulsion?,Wewe au mgonjwa amepata kifafa?,neurological,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+unconscious,Unconscious,Kupoteza fahamu,Is the person unconscious?,Mtu amepoteza fahamu?,neurological,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+unresponsive,Not responding when spoken to,Kutoitikia anapoongeleshwa,Is the person not responding when spoken to?,Mtu haitikii anapoongeleshwa?,neurological,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+face_drooping,One side of the face drooping,Upande mmoja wa uso kulegea,Is one side of the face drooping?,Upande mmoja wa uso umelegea?,neurological,RED_FLAG,true,16,120,ANY,false,NEEDS_CLINICAL_REVIEW
+arm_weakness,Weakness in one arm or leg,Udhaifu wa mkono au mguu mmoja,Is one arm or leg suddenly weak?,Mkono au mguu mmoja umedhoofika ghafla?,neurological,RED_FLAG,true,16,120,ANY,false,NEEDS_CLINICAL_REVIEW
+speech_difficulty,Sudden difficulty speaking,Kushindwa kuongea ghafla,Has speech suddenly become slurred or difficult?,Kuongea kumekuwa vigumu ghafla?,neurological,RED_FLAG,true,16,120,ANY,false,NEEDS_CLINICAL_REVIEW
+dizziness,Dizziness,Kizunguzungu,Do you feel dizzy?,Unahisi kizunguzungu?,neurological,SYMPTOM,false,5,120,ANY,true,NEEDS_CLINICAL_REVIEW
+neck_stiffness,Stiff neck,Shingo ngumu,Is your neck stiff and painful to bend?,Shingo yako ni ngumu na inauma kuinama?,neurological,SYMPTOM,true,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+confusion,Sudden confusion,Kuchanganyikiwa ghafla,Has the person suddenly become confused?,Mtu amechanganyikiwa ghafla?,neurological,SYMPTOM,true,5,120,ANY,false,NEEDS_CLINICAL_REVIEW
+skin_rash,Skin rash,Upele,Do you have a rash on your skin?,Una upele kwenye ngozi?,skin,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+itching,Itching,Kuwashwa,Is your skin itching?,Ngozi yako inawashwa?,skin,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+skin_wound,Wound or sore on the skin,Jeraha au kidonda,Do you have a wound or sore that is not healing?,Una jeraha au kidonda kisichopona?,skin,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+foot_wound,Wound on the foot,Jeraha la mguu,Do you have a wound or sore on your foot?,Una jeraha au kidonda mguuni?,skin,SYMPTOM,true,12,120,ANY,true,NEEDS_CLINICAL_REVIEW
+joint_pain,Joint pain,Maumivu ya viungo,Do your joints hurt?,Viungo vyako vinauma?,musculoskeletal,SYMPTOM,false,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+joint_swelling,Swollen joints,Viungo vilivyovimba,Are any of your joints swollen?,Kuna kiungo chochote kilichovimba?,musculoskeletal,SYMPTOM,false,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+back_pain,Back pain,Maumivu ya mgongo,Do you have back pain?,Una maumivu ya mgongo?,musculoskeletal,SYMPTOM,false,10,120,ANY,true,NEEDS_CLINICAL_REVIEW
+eye_redness,Red eye,Jicho jekundu,Is your eye red?,Jicho lako ni jekundu?,eye,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+eye_discharge,Discharge from the eye,Uchafu unaotoka jichoni,Is there discharge coming from your eye?,Kuna uchafu unaotoka jichoni?,eye,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+vision_loss,Sudden loss of vision,Kupoteza kuona ghafla,Have you suddenly lost vision in one or both eyes?,Umepoteza kuona ghafla jicho moja au yote?,eye,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+eye_pain,Eye pain,Maumivu ya jicho,Does your eye hurt?,Jicho lako linauma?,eye,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+ear_pain,Ear pain,Maumivu ya sikio,Does your ear hurt?,Sikio lako linauma?,ear,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+ear_discharge,Discharge from the ear,Uchafu unaotoka sikioni,Is there discharge coming from your ear?,Kuna uchafu unaotoka sikioni?,ear,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+hearing_loss,Difficulty hearing,Kushindwa kusikia,Are you having difficulty hearing?,Unashindwa kusikia?,ear,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+sore_throat,Sore throat,Koo linalouma,Does your throat hurt?,Koo lako linauma?,respiratory,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+toothache,Toothache,Maumivu ya jino,Do you have a toothache?,Una maumivu ya jino?,dental,SYMPTOM,false,2,120,ANY,true,NEEDS_CLINICAL_REVIEW
+mouth_sores,Sores in the mouth,Vidonda mdomoni,Do you have sores in your mouth?,Una vidonda mdomoni?,dental,SYMPTOM,false,0,120,ANY,true,NEEDS_CLINICAL_REVIEW
+bleeding_uncontrolled,Bleeding that will not stop,Damu isiyoacha kutoka,Is there bleeding that will not stop?,Kuna damu isiyoacha kutoka?,injury,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+injury_limb,Injury to an arm or leg,Jeraha la mkono au mguu,Have you injured an arm or a leg?,Umejeruhi mkono au mguu?,injury,SYMPTOM,false,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+head_injury,Head injury,Jeraha la kichwa,Have you had a blow to the head?,Umepigwa kichwani?,injury,SYMPTOM,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+burn,Burn,Kuungua,Have you been burned?,Umeungua?,injury,SYMPTOM,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+snakebite,Snake bite,Kuumwa na nyoka,Have you been bitten by a snake?,Umeumwa na nyoka?,injury,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+animal_bite,Animal or dog bite,Kuumwa na mnyama au mbwa,Have you been bitten by an animal?,Umeumwa na mnyama?,injury,SYMPTOM,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+pregnancy_routine,Pregnancy check-up,Kliniki ya ujauzito,Are you pregnant and due for a check-up?,Una mimba na unahitaji kliniki?,pregnancy,CONTEXT,false,10,60,FEMALE,false,NEEDS_CLINICAL_REVIEW
+pregnancy_labour,In labour,Uchungu wa kuzaa,Have your labour pains started?,Uchungu wa kuzaa umeanza?,pregnancy,CONTEXT,true,10,60,FEMALE,false,NEEDS_CLINICAL_REVIEW
+pregnancy_bleeding,Bleeding during pregnancy,Kutokwa damu ukiwa mjamzito,Are you pregnant and bleeding?,Una mimba na unatokwa damu?,pregnancy,RED_FLAG,true,10,60,FEMALE,false,NEEDS_CLINICAL_REVIEW
+pregnancy_no_movement,Baby not moving,Mtoto hasogei,Have you noticed the baby has stopped moving?,Umegundua mtoto ameacha kusogea?,pregnancy,RED_FLAG,true,10,60,FEMALE,false,NEEDS_CLINICAL_REVIEW
+pregnancy_severe_headache,Severe headache in pregnancy,Maumivu makali ya kichwa ukiwa mjamzito,Are you pregnant with a severe headache or blurred vision?,Una mimba na maumivu makali ya kichwa au kutoona vizuri?,pregnancy,RED_FLAG,true,10,60,FEMALE,false,NEEDS_CLINICAL_REVIEW
+child_not_feeding,Child not feeding,Mtoto hanyonyi wala kula,Has the child stopped feeding or drinking?,Mtoto ameacha kunyonya au kunywa?,paediatric,RED_FLAG,true,0,5,ANY,false,NEEDS_CLINICAL_REVIEW
+child_very_sleepy,Child unusually sleepy,Mtoto analala kupita kiasi,Is the child unusually sleepy or hard to wake?,Mtoto analala sana au ni vigumu kumwamsha?,paediatric,RED_FLAG,true,0,5,ANY,false,NEEDS_CLINICAL_REVIEW
+child_immunisation_due,Child due for immunisation,Mtoto anahitaji chanjo,Is your child due for a vaccine?,Mtoto wako anahitaji chanjo?,paediatric,CONTEXT,false,0,15,ANY,false,NEEDS_CLINICAL_REVIEW
+child_not_growing,Child not growing well,Mtoto hakui vizuri,Is your child not growing or gaining weight?,Mtoto wako hakui au haongezeki uzito?,paediatric,SYMPTOM,false,0,5,ANY,true,NEEDS_CLINICAL_REVIEW
+diabetes_known,Known diabetes,Kisukari kinachojulikana,Have you been told you have diabetes?,Umeambiwa una kisukari?,endocrine,HISTORY,false,2,120,ANY,false,NEEDS_CLINICAL_REVIEW
+hiv_known,Living with HIV,Kuishi na HIV,Are you living with HIV?,Unaishi na HIV?,infectious,HISTORY,false,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+tb_contact,Contact with someone with TB,Kuwa karibu na mwenye kifua kikuu,Have you been in close contact with someone with TB?,Umekuwa karibu na mtu mwenye kifua kikuu?,infectious,HISTORY,false,0,120,ANY,false,NEEDS_CLINICAL_REVIEW
+mental_health_concern,Feeling low or overwhelmed,Kuhisi huzuni au kulemewa,Have you been feeling low or unable to cope?,Umekuwa ukihisi huzuni au kushindwa kumudu?,mental_health,SYMPTOM,false,10,120,ANY,true,NEEDS_CLINICAL_REVIEW
+self_harm_thoughts,Thoughts of harming yourself,Mawazo ya kujidhuru,Have you had thoughts of harming yourself?,Umekuwa na mawazo ya kujidhuru?,mental_health,RED_FLAG,true,10,120,ANY,false,NEEDS_CLINICAL_REVIEW
+sleep_problems,Trouble sleeping,Shida ya kulala,Are you having trouble sleeping?,Una shida ya kulala?,mental_health,SYMPTOM,false,5,120,ANY,true,NEEDS_CLINICAL_REVIEW
+gbv_disclosure,Someone has hurt me,Kuna mtu amenidhuru,Has someone hurt you or made you feel unsafe?,Kuna mtu amekudhuru au kukufanya usijisikie salama?,safeguarding,RED_FLAG,true,0,120,ANY,false,NEEDS_CLINICAL_REVIEW

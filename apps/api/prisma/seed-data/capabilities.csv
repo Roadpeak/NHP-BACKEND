@@ -1,0 +1,177 @@
+code,label_en,label_sw,domain,min_keph_level,notes
+OPD_GENERAL,General outpatient care,Huduma za wagonjwa wa nje,SERVICE,2,Baseline for any facility
+INPATIENT_GENERAL,General inpatient beds,Vitanda vya kulazwa,SERVICE,4,
+EMERGENCY_24H,24-hour emergency department,Huduma ya dharura saa 24,SERVICE,4,Red-flag routing target
+CASUALTY,Casualty / minor injuries,Huduma ya majeraha madogo,SERVICE,3,
+MATERNITY_NORMAL,Normal delivery,Uzazi wa kawaida,SERVICE,3,
+MATERNITY_CEMONC,Comprehensive emergency obstetric care,Huduma kamili ya dharura ya uzazi,SERVICE,4,Requires theatre and blood
+ANTENATAL,Antenatal care,Huduma ya wajawazito,SERVICE,2,
+NEWBORN_UNIT,Newborn special care unit,Kitengo cha watoto wachanga,SERVICE,4,
+SURGERY_MINOR,Minor surgery,Upasuaji mdogo,SERVICE,3,
+SURGERY_GENERAL,General surgery,Upasuaji wa kawaida,SERVICE,4,
+SURGERY_SPECIALIST,Specialist surgery,Upasuaji wa kibingwa,SERVICE,5,
+THEATRE,Operating theatre,Chumba cha upasuaji,EQUIPMENT,4,
+ICU,Intensive care unit,Kitengo cha uangalizi maalum,SERVICE,5,
+HDU,High dependency unit,Kitengo cha uangalizi wa hali ya juu,SERVICE,4,
+DIALYSIS,Renal dialysis,Kusafisha figo,SERVICE,5,
+ONCOLOGY,Cancer treatment,Matibabu ya saratani,SERVICE,5,
+CHEMOTHERAPY,Chemotherapy,Tiba ya kemikali,SERVICE,5,
+RADIOTHERAPY,Radiotherapy,Tiba ya mionzi,SERVICE,6,Very few facilities nationally
+MENTAL_HEALTH,Mental health services,Huduma za afya ya akili,SERVICE,3,Tier 3 sensitivity applies
+PSYCHIATRY_INPATIENT,Inpatient psychiatric care,Kulazwa kwa matibabu ya akili,SERVICE,5,
+HIV_CARE,HIV care and treatment,Huduma na matibabu ya HIV,SERVICE,2,Tier 3 sensitivity applies
+TB_TREATMENT,Tuberculosis treatment,Matibabu ya kifua kikuu,SERVICE,2,Notifiable condition
+IMMUNISATION,Immunisation services,Huduma za chanjo,SERVICE,2,KEPI schedule
+FAMILY_PLANNING,Family planning,Uzazi wa mpango,SERVICE,2,
+NUTRITION,Nutrition services,Huduma za lishe,SERVICE,2,
+DENTAL,Dental services,Huduma za meno,SERVICE,3,
+EYE_CARE,Eye care,Huduma za macho,SERVICE,3,
+EYE_SURGERY,Eye surgery,Upasuaji wa macho,SERVICE,4,
+ENT,Ear nose and throat,Huduma za sikio pua na koo,SERVICE,4,
+PHYSIOTHERAPY,Physiotherapy,Tiba ya viungo,SERVICE,3,
+ORTHOPAEDIC,Orthopaedic services,Huduma za mifupa,SERVICE,4,
+PAEDIATRIC,Paediatric services,Huduma za watoto,SERVICE,3,
+GERIATRIC,Care of older people,Huduma za wazee,SERVICE,4,
+PALLIATIVE,Palliative care,Huduma za kutuliza maumivu,SERVICE,4,
+GBV_CARE,Gender-based violence care,Huduma za manusura wa ukatili,SERVICE,3,Tier 3 sensitivity applies
+SNAKEBITE,Snakebite treatment,Matibabu ya kuumwa na nyoka,SERVICE,3,Antivenom stock matters
+XRAY,X-ray,Picha ya X-ray,DIAGNOSTIC,3,
+ULTRASOUND,Ultrasound,Ultrasound,DIAGNOSTIC,3,
+CT_SCAN,CT scan,Picha ya CT,DIAGNOSTIC,5,
+MRI,MRI scan,Picha ya MRI,DIAGNOSTIC,5,
+ECHO,Echocardiogram,Kipimo cha moyo,DIAGNOSTIC,5,
+ECG,Electrocardiogram,Kipimo cha mapigo ya moyo,DIAGNOSTIC,4,
+ENDOSCOPY,Endoscopy,Uchunguzi wa ndani,DIAGNOSTIC,5,
+LAB_BASIC,Basic laboratory,Maabara ya kawaida,DIAGNOSTIC,2,Malaria RDT and basic tests
+LAB_INTERMEDIATE,Intermediate laboratory,Maabara ya kati,DIAGNOSTIC,4,
+LAB_ADVANCED,Advanced laboratory,Maabara ya hali ya juu,DIAGNOSTIC,5,
+BLOOD_BANK,Blood transfusion services,Huduma za damu,SERVICE,4,Critical for obstetric emergency
+MALARIA_RDT,Malaria rapid test,Kipimo cha haraka cha malaria,DIAGNOSTIC,2,
+HIV_TESTING,HIV testing,Kipimo cha HIV,DIAGNOSTIC,2,
+TB_DIAGNOSIS,Tuberculosis diagnosis,Uchunguzi wa kifua kikuu,DIAGNOSTIC,3,GeneXpert or microscopy
+PHARMACY,Pharmacy,Duka la dawa,SERVICE,2,
+AMBULANCE,Ambulance service,Huduma ya gari la wagonjwa,SERVICE,3,
+OXYGEN,Oxygen supply,Hewa ya oksijeni,EQUIPMENT,3,
+VENTILATOR,Mechanical ventilation,Mashine ya kupumua,EQUIPMENT,5,
+INCUBATOR,Newborn incubator,Mashine ya watoto wachanga,EQUIPMENT,4,
+SPEC_PHYSICIAN,Physician on staff,Daktari bingwa wa magonjwa,SPECIALTY,4,Derived from affiliations
+SPEC_SURGEON,Surgeon on staff,Daktari bingwa wa upasuaji,SPECIALTY,4,Derived from affiliations
+SPEC_OBGYN,Obstetrician gynaecologist on staff,Daktari bingwa wa uzazi,SPECIALTY,4,Derived from affiliations
+SPEC_PAEDIATRICIAN,Paediatrician on staff,Daktari bingwa wa watoto,SPECIALTY,4,Derived from affiliations
+SPEC_ANAESTHETIST,Anaesthetist on staff,Daktari bingwa wa usingizi,SPECIALTY,4,Required for safe theatre
+SPEC_PSYCHIATRIST,Psychiatrist on staff,Daktari bingwa wa akili,SPECIALTY,5,Derived from affiliations
+SPEC_RADIOLOGIST,Radiologist on staff,Daktari bingwa wa picha,SPECIALTY,5,Derived from affiliations
+SPEC_ONCOLOGIST,Oncologist on staff,Daktari bingwa wa saratani,SPECIALTY,5,Derived from affiliations
+SPEC_CARDIOLOGIST,Cardiologist on staff,Daktari bingwa wa moyo,SPECIALTY,5,Derived from affiliations
+SPEC_NEPHROLOGIST,Nephrologist on staff,Daktari bingwa wa figo,SPECIALTY,5,Derived from affiliations
+RESUSCITATION,Resuscitation room,Chumba cha kufufua wagonjwa,SERVICE,4,Adjacent to emergency department
+TRIAGE_SERVICE,Formal triage at entry,Upangaji wa wagonjwa kwa uzito wa hali,SERVICE,3,
+TRAUMA_CARE,Trauma and injury care,Huduma za majeraha makubwa,SERVICE,4,
+BURNS_UNIT,Burns unit,Kitengo cha waliochomeka moto,SERVICE,5,
+POISONING_CARE,Poisoning and overdose care,Huduma za sumu na dawa kupita kiasi,SERVICE,4,
+ISOLATION_WARD,Isolation ward,Wodi ya kutenga wagonjwa,SERVICE,4,Airborne and contact isolation
+CRITICAL_CARE_PAED,Paediatric intensive care,Uangalizi maalum wa watoto,SERVICE,6,
+XRAY_PORTABLE,Portable X-ray,Mashine ya X-ray inayohamishika,EQUIPMENT,4,
+XRAY_CHEST,Chest X-ray,Picha ya X-ray ya kifua,DIAGNOSTIC,3,
+XRAY_CONTRAST,Contrast X-ray studies,Picha ya X-ray yenye rangi ya kupima,DIAGNOSTIC,5,
+ULTRASOUND_OBSTETRIC,Obstetric ultrasound,Ultrasound ya wajawazito,DIAGNOSTIC,3,
+ULTRASOUND_ABDOMINAL,Abdominal ultrasound,Ultrasound ya tumbo,DIAGNOSTIC,3,
+DOPPLER,Doppler ultrasound,Ultrasound ya mtiririko wa damu,DIAGNOSTIC,5,
+CT_CONTRAST,CT with contrast,Picha ya CT yenye rangi ya kupima,DIAGNOSTIC,5,
+FLUOROSCOPY,Fluoroscopy,Picha ya X-ray ya mwendo,DIAGNOSTIC,5,
+MAMMOGRAPHY,Mammography,Picha ya matiti,DIAGNOSTIC,5,
+BONE_DENSITY,Bone density scan,Kipimo cha uzito wa mifupa,DIAGNOSTIC,6,
+EEG,Electroencephalogram,Kipimo cha mawimbi ya ubongo,DIAGNOSTIC,5,
+SPIROMETRY,Lung function testing,Kipimo cha uwezo wa mapafu,DIAGNOSTIC,4,
+PULSE_OXIMETRY,Pulse oximetry,Kipimo cha hewa safi katika damu,EQUIPMENT,2,
+LAB_HAEMATOLOGY,Haematology laboratory,Maabara ya kupima damu,DIAGNOSTIC,3,Full blood count and film
+LAB_BIOCHEMISTRY,Clinical chemistry laboratory,Maabara ya kemikali za mwili,DIAGNOSTIC,4,Renal and liver function
+LAB_MICROBIOLOGY,Microbiology laboratory,Maabara ya vijidudu,DIAGNOSTIC,5,Culture and sensitivity
+LAB_HISTOPATHOLOGY,Histopathology laboratory,Maabara ya uchunguzi wa vipande vya mwili,DIAGNOSTIC,5,
+BLOOD_CULTURE,Blood culture,Kupima vijidudu katika damu,DIAGNOSTIC,5,
+GENEXPERT,GeneXpert TB testing,Kipimo cha GeneXpert cha kifua kikuu,DIAGNOSTIC,3,TB and rifampicin resistance
+TB_MICROSCOPY,Sputum smear microscopy,Kupima makohozi kwa darubini,DIAGNOSTIC,3,
+TB_CULTURE,Tuberculosis culture,Kuotesha vijidudu vya kifua kikuu,DIAGNOSTIC,6,
+HIV_VIRAL_LOAD,HIV viral load testing,Kipimo cha wingi wa virusi vya HIV,DIAGNOSTIC,5,Tier 3 sensitivity applies
+CD4_COUNT,CD4 count testing,Kipimo cha CD4,DIAGNOSTIC,4,Tier 3 sensitivity applies
+HIV_EID,Early infant HIV diagnosis,Kipimo cha HIV kwa watoto wachanga,DIAGNOSTIC,3,Tier 3 sensitivity applies
+BLOOD_SUGAR,Blood sugar testing,Kipimo cha sukari kwenye damu,DIAGNOSTIC,2,
+HBA1C,HbA1c testing,Kipimo cha sukari cha miezi mitatu,DIAGNOSTIC,4,
+URINALYSIS,Urine testing,Kipimo cha mkojo,DIAGNOSTIC,2,
+PREGNANCY_TEST,Pregnancy testing,Kipimo cha ujauzito,DIAGNOSTIC,2,
+STOOL_MICROSCOPY,Stool microscopy,Kupima kinyesi kwa darubini,DIAGNOSTIC,2,
+BLOOD_GROUPING,Blood grouping and cross-match,Kupima aina ya damu na ulinganifu,DIAGNOSTIC,4,
+BLOOD_DONATION,Blood donation centre,Kituo cha kuchangia damu,SERVICE,5,
+BLOOD_STORAGE,Blood storage fridge,Friji ya kuhifadhi damu,EQUIPMENT,4,
+SURGERY_ORTHOPAEDIC,Orthopaedic surgery,Upasuaji wa mifupa,SERVICE,5,
+SURGERY_OBSTETRIC,Obstetric surgery,Upasuaji wa uzazi,SERVICE,4,
+SURGERY_PAEDIATRIC,Paediatric surgery,Upasuaji wa watoto,SERVICE,6,
+SURGERY_NEURO,Neurosurgery,Upasuaji wa ubongo na uti wa mgongo,SERVICE,6,
+SURGERY_CARDIOTHORACIC,Cardiothoracic surgery,Upasuaji wa moyo na kifua,SERVICE,6,
+SURGERY_UROLOGY,Urological surgery,Upasuaji wa njia ya mkojo,SERVICE,5,
+CAESAREAN,Caesarean section,Upasuaji wa kutoa mtoto,SERVICE,4,Requires theatre blood and anaesthesia
+ANAESTHESIA_GENERAL,General anaesthesia,Usingizi wa upasuaji mkubwa,SERVICE,4,
+ANAESTHESIA_SPINAL,Spinal anaesthesia,Sindano ya kufa ganzi ya uti wa mgongo,SERVICE,4,
+STERILISATION_CSSD,Sterile supply department,Kitengo cha kusafisha vifaa vya upasuaji,SERVICE,4,
+MATERNITY_BEMONC,Basic emergency obstetric care,Huduma ya msingi ya dharura ya uzazi,SERVICE,3,Seven signal functions without theatre
+DELIVERY_ASSISTED,Assisted vaginal delivery,Uzazi wa kusaidiwa kwa vifaa,SERVICE,4,Vacuum or forceps
+POSTNATAL_CARE,Postnatal care,Huduma baada ya kujifungua,SERVICE,2,
+NEONATAL_ICU,Newborn intensive care,Uangalizi maalum wa watoto wachanga,SERVICE,5,
+KANGAROO_CARE,Kangaroo mother care,Utunzaji wa mtoto kifuani mwa mama,SERVICE,3,For low birth weight babies
+NEONATAL_RESUSCITATION,Newborn resuscitation,Kufufua mtoto mchanga,SERVICE,3,Bag and mask at every delivery
+PHOTOTHERAPY,Newborn jaundice phototherapy,Tiba ya mwanga kwa manjano ya mtoto,EQUIPMENT,4,
+PMTCT,Prevention of mother to child HIV transmission,Kuzuia HIV kutoka mama kwenda mtoto,SERVICE,2,Tier 3 sensitivity applies
+CCC_CLINIC,Comprehensive care clinic for HIV,Kliniki kamili ya huduma za HIV,SERVICE,3,Tier 3 sensitivity applies
+ART_DISPENSING,Antiretroviral dispensing,Utoaji wa dawa za HIV,SERVICE,2,Tier 3 sensitivity applies
+TB_DOTS,Directly observed TB treatment,Matibabu ya kifua kikuu yanayosimamiwa,SERVICE,2,
+TB_MDR_CARE,Drug-resistant TB treatment,Matibabu ya kifua kikuu sugu,SERVICE,5,
+DIABETES_CLINIC,Diabetes clinic,Kliniki ya kisukari,SERVICE,3,
+HYPERTENSION_CLINIC,Blood pressure clinic,Kliniki ya shinikizo la damu,SERVICE,2,
+CARDIAC_CLINIC,Heart clinic,Kliniki ya moyo,SERVICE,5,
+CARDIAC_CATH_LAB,Cardiac catheterisation laboratory,Kitengo cha kupima mishipa ya moyo,SERVICE,6,
+RENAL_CLINIC,Kidney clinic,Kliniki ya figo,SERVICE,5,
+PERITONEAL_DIALYSIS,Peritoneal dialysis,Kusafisha figo kupitia tumbo,SERVICE,5,
+EPILEPSY_CLINIC,Epilepsy clinic,Kliniki ya kifafa,SERVICE,3,
+DERMATOLOGY,Skin clinic,Kliniki ya ngozi,SERVICE,4,
+OPHTHALMOLOGY,Specialist eye clinic,Kliniki ya kibingwa ya macho,SERVICE,4,
+OPTICAL_SERVICES,Spectacles and refraction,Huduma za miwani na kupima macho,SERVICE,3,
+AUDIOLOGY,Hearing testing,Kipimo cha usikivu,SERVICE,5,
+SPEECH_THERAPY,Speech and language therapy,Tiba ya matatizo ya kuongea,SERVICE,5,
+OCCUPATIONAL_THERAPY,Occupational therapy,Tiba ya kurudisha ujuzi wa maisha ya kila siku,SERVICE,4,
+REHABILITATION,Rehabilitation services,Huduma za kurudisha afya na uwezo,SERVICE,4,
+ORTHOTICS_PROSTHETICS,Artificial limbs and supports,Viungo bandia na vifaa vya kusaidia,SERVICE,5,
+NUTRITION_THERAPEUTIC,Therapeutic feeding for malnutrition,Lishe tiba kwa utapiamlo mkali,SERVICE,3,
+PSYCHOSOCIAL_SUPPORT,Counselling and psychosocial support,Ushauri nasaha na msaada wa kihisia,SERVICE,2,Tier 3 sensitivity applies
+SUBSTANCE_USE_CARE,Substance use treatment,Matibabu ya uraibu wa dawa za kulevya,SERVICE,4,Tier 3 sensitivity applies
+PHARMACY_SPECIALIST,Specialist pharmacy dispensing,Utoaji wa dawa za kibingwa,SERVICE,5,Chemotherapy and restricted medicines
+MORTUARY,Mortuary services,Huduma za kuhifadhi maiti,SERVICE,4,
+AMBULANCE_ADVANCED,Advanced life support ambulance,Gari la wagonjwa lenye vifaa vya uhai,SERVICE,5,
+REFERRAL_COORDINATION,Referral coordination desk,Dawati la kuratibu rufaa,SERVICE,3,
+TELEMEDICINE,Telemedicine consultation,Ushauri wa daktari kwa njia ya mtandao,SERVICE,2,
+OXYGEN_PLANT,Oxygen generating plant,Kiwanda cha kutengeneza hewa ya oksijeni,EQUIPMENT,5,
+OXYGEN_CONCENTRATOR,Oxygen concentrator,Mashine ya kuzalisha hewa ya oksijeni,EQUIPMENT,3,
+CPAP,Continuous positive airway pressure,Mashine ya kusaidia kupumua kwa shinikizo,EQUIPMENT,4,
+DEFIBRILLATOR,Defibrillator,Mashine ya kurudisha mapigo ya moyo,EQUIPMENT,4,
+INFUSION_PUMP,Infusion pump,Mashine ya kudhibiti mtiririko wa dripu,EQUIPMENT,4,
+COLD_CHAIN,Vaccine cold chain,Mfumo wa kuhifadhi chanjo kwenye baridi,EQUIPMENT,2,
+AUTOCLAVE,Autoclave steriliser,Mashine ya kusafisha vifaa kwa mvuke,EQUIPMENT,3,
+GENERATOR_BACKUP,Backup power generator,Jenereta ya umeme wa akiba,EQUIPMENT,3,
+WATER_SUPPLY,Reliable water supply,Maji ya kutosha na ya uhakika,EQUIPMENT,2,
+WASTE_MANAGEMENT,Medical waste management,Utupaji salama wa taka za hospitali,SERVICE,2,
+SPEC_CLINICAL_OFFICER,Clinical officer on staff,Afisa wa kliniki,SPECIALTY,2,Derived from affiliations
+SPEC_NURSE,Registered nurse on staff,Muuguzi aliyesajiliwa,SPECIALTY,2,Derived from affiliations
+SPEC_MEDICAL_OFFICER,Medical officer on staff,Daktari wa kawaida,SPECIALTY,3,Derived from affiliations
+SPEC_PHARMACIST,Pharmacist on staff,Mfamasia,SPECIALTY,3,Derived from affiliations
+SPEC_LAB_TECHNOLOGIST,Laboratory technologist on staff,Mtaalamu wa maabara,SPECIALTY,2,Derived from affiliations
+SPEC_RADIOGRAPHER,Radiographer on staff,Mtaalamu wa kupiga picha za mwili,SPECIALTY,3,Derived from affiliations
+SPEC_PHYSIOTHERAPIST,Physiotherapist on staff,Mtaalamu wa tiba ya viungo,SPECIALTY,3,Derived from affiliations
+SPEC_NUTRITIONIST,Nutritionist on staff,Mtaalamu wa lishe,SPECIALTY,3,Derived from affiliations
+SPEC_COUNSELLOR,Counsellor on staff,Mshauri nasaha,SPECIALTY,2,Derived from affiliations
+SPEC_MIDWIFE,Midwife on staff,Mkunga,SPECIALTY,2,Derived from affiliations
+SPEC_ORTHOPAEDIC_SURGEON,Orthopaedic surgeon on staff,Daktari bingwa wa mifupa,SPECIALTY,5,Derived from affiliations
+SPEC_NEUROSURGEON,Neurosurgeon on staff,Daktari bingwa wa ubongo,SPECIALTY,6,Derived from affiliations
+SPEC_DERMATOLOGIST,Dermatologist on staff,Daktari bingwa wa ngozi,SPECIALTY,5,Derived from affiliations
+SPEC_OPHTHALMOLOGIST,Ophthalmologist on staff,Daktari bingwa wa macho,SPECIALTY,4,Derived from affiliations
+SPEC_ENT_SURGEON,ENT surgeon on staff,Daktari bingwa wa sikio pua na koo,SPECIALTY,5,Derived from affiliations
+SPEC_PATHOLOGIST,Pathologist on staff,Daktari bingwa wa uchunguzi wa maabara,SPECIALTY,5,Derived from affiliations
+SPEC_DENTIST,Dentist on staff,Daktari wa meno,SPECIALTY,3,Derived from affiliations

@@ -10,6 +10,8 @@
     "generate": "prisma generate",
     "harden": "tsx src/harden.ts",
     "seed": "tsx src/seed.ts",
+    "seed:sync": "cp ../../../nhp-seed/data/*.csv prisma/seed-data/",
+    "seed:check": "diff -r ../../../nhp-seed/data prisma/seed-data --exclude=*.md",
     "test": "vitest run",
     "test:watch": "vitest",
     "studio": "prisma studio",
