@@ -71,6 +71,7 @@ import {
   FacilityAdminError,
   requireFacilityAdmin,
   requireFacilityScope,
+  requireFacilityDirector,
   listStaff,
   registerArrival,
   listQueue,
@@ -1399,7 +1400,39 @@ export async function buildApp(prismaOverride?: PrismaClient) {
    * hold no licence, and `canWriteClinical` refuses without one.
    */
   async function receptionScope(req: { headers: Record<string, unknown> }) {
-    const practitionerId = await practitionerFrom(req);
+    const ctx = await contextFrom(req);
+    if (!ctx.mfa) {
+      throw new AuthError(
+        'Your second factor has not been presented in this session',
+        'MFA_REQUIRED',
+        403,
+      );
+    }
+
+    /*
+     * A director has exactly one desk.
+     *
+     * The ambiguity this function exists to resolve is a clinician's: they
+     * work at several facilities and the queue must not guess which. A
+     * director runs one facility, so there is nothing to disambiguate —
+     * and requiring a licence here was what left an owner staring at
+     * "this endpoint requires a clinical account" on their own reception
+     * desk.
+     */
+    if (!ctx.practitionerId && ctx.personId) {
+      const scope = await requireFacilityDirector(prisma, ctx.personId);
+      return {
+        facilityId: scope.facilityId,
+        facilityName: scope.facilityName,
+        // The column records WHO registered the arrival, and a director is
+        // a legitimate who. It is not a licence claim — arrivals are
+        // administrative, which is the whole reason reception can write
+        // them at all.
+        practitionerId: ctx.personId,
+      };
+    }
+
+    const practitionerId = requirePractitioner(ctx);
 
     /*
      * WHICH desk this is.
