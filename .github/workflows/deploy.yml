@@ -144,6 +144,22 @@ jobs:
             sudo docker compose -f docker-compose.prod.yml pull $SERVICES
             sudo docker compose -f docker-compose.prod.yml up -d $SERVICES
             sudo docker compose -f docker-compose.prod.yml restart nginx
+
+            # Prune old backend images. Keep the two newest by CreatedAt —
+            # the just-deployed image (currently running) and the previous
+            # one (rollback candidate). Everything older gets its layers
+            # reclaimed. GHCR keeps the full history remotely; the droplet
+            # does not need to.
+            IMAGE_REPO="ghcr.io/roadpeak/nhp-backend"
+            KEEP_IDS=$(sudo docker images "$IMAGE_REPO" --format '{{.CreatedAt}} {{.ID}}' \
+              | sort -r \
+              | awk '!seen[$NF]++ {print $NF}' \
+              | head -2)
+            sudo docker images "$IMAGE_REPO" --format '{{.ID}}' \
+              | awk '!seen[$0]++' \
+              | grep -vFx "$KEEP_IDS" \
+              | xargs -r sudo docker rmi -f 2>&1 | tail -5 || true
+            # dangling layers left by the tagged removals above
             sudo docker image prune -f
 
       - name: Verify running containers
