@@ -443,3 +443,60 @@ describe('distance', () => {
     expect(km).toBeLessThan(70);
   });
 });
+
+/**
+ * THE FACILITY'S OWN CONTACT DETAILS.
+ *
+ * Not the registrant's. A Ministry registrar has to be able to ask about
+ * the ownership evidence before approving, and a referral has to reach the
+ * place it names — neither is served by the personal number of whoever
+ * filled in the form.
+ *
+ * The service accepted `phone` and the HTTP route dropped it, so the field
+ * existed in the schema, was never collected, and nothing failed.
+ */
+describe('facility contact details', () => {
+  it('records the phone and email the facility was registered with', async () => {
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-CONTACT-${Date.now()}`,
+      name: 'Contactable Health Centre',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Ngara',
+      latitude: -1.2795,
+      longitude: 36.8305,
+      phone: '0733111222',
+      email: 'admin@contactable.example',
+    });
+
+    const saved = await prisma.facility.findUniqueOrThrow({
+      where: { id: f.id },
+      select: { phone: true, email: true },
+    });
+    expect(saved.phone).toBe('0733111222');
+    expect(saved.email).toBe('admin@contactable.example');
+  });
+
+  it('leaves them null rather than empty strings when not given', async () => {
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-NOCONTACT-${Date.now()}`,
+      name: 'Quiet Dispensary',
+      kephLevel: 2,
+      ownership: 'PUBLIC_MOH',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Ngara',
+      latitude: -1.2795,
+      longitude: 36.8305,
+    });
+
+    const saved = await prisma.facility.findUniqueOrThrow({
+      where: { id: f.id },
+      select: { phone: true, email: true },
+    });
+    expect(saved.phone).toBeNull();
+    expect(saved.email).toBeNull();
+  });
+});

@@ -554,6 +554,15 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       locality?: string;
       latitude: number;
       longitude: number;
+      /**
+       * How the facility itself is reached.
+       *
+       * Not the registrant's number — the facility's. A registrar has to
+       * be able to ask about the ownership evidence before approving, and
+       * a referral has to reach the place it names.
+       */
+      phone?: string;
+      email?: string;
       businessRegNo?: string;
       kraPin?: string;
       practiceLicenceNo?: string;
@@ -587,6 +596,8 @@ export async function buildApp(prismaOverride?: PrismaClient) {
             locality: { type: 'string', maxLength: 120 },
             latitude: { type: 'number' },
             longitude: { type: 'number' },
+            phone: { type: 'string', maxLength: 32 },
+            email: { type: 'string', maxLength: 160 },
             // Ownership evidence for a private facility. Reference numbers,
             // not scans: a registrar checks these against the Business
             // Registry, KRA and the MOH register, which is stronger than a
@@ -629,6 +640,8 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         locality: b.locality?.trim() || b.name,
         latitude: b.latitude,
         longitude: b.longitude,
+        phone: b.phone?.trim() || undefined,
+        email: b.email?.trim() || undefined,
       });
 
       if (!isPublic) {

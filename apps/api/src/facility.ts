@@ -82,6 +82,7 @@ export interface RegisterFacilityInput {
   icuBeds?: number;
   maternityBeds?: number;
   phone?: string;
+  email?: string;
   licensedUntil?: Date;
 }
 
@@ -162,6 +163,7 @@ export async function registerFacility(db: Db, input: RegisterFacilityInput) {
       icuBeds: input.icuBeds ?? null,
       maternityBeds: input.maternityBeds ?? null,
       phone: input.phone ?? null,
+      email: input.email ?? null,
       licensedUntil: input.licensedUntil ?? null,
       registrationStatus: 'PENDING',
     },

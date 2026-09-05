@@ -646,7 +646,15 @@ model Facility {
   bedCapacity        Int?      @map("bed_capacity")
   icuBeds            Int?      @map("icu_beds")
   maternityBeds      Int?      @map("maternity_beds")
+  /**
+   * How the facility itself is reached — not whoever registered it.
+   *
+   * A registrar has to be able to ask about the ownership evidence before
+   * approving, and a referral has to reach the place it names. Neither of
+   * those is served by the registrant's personal number.
+   */
   phone              String?
+  email              String?
   registrationStatus FacStatus @default(PENDING) @map("registration_status")
   licensedUntil      DateTime? @map("licensed_until") @db.Date
   /**
