@@ -43,6 +43,13 @@ export interface AdminScope {
   facilityName: string;
   ownership: string;
   isPublic: boolean;
+  /**
+   * Who the caller turned out to be. Grants are attributed to a person, and
+   * "you cannot remove your own access" needs to know which row is yours —
+   * neither works if the route has thrown the identity away.
+   */
+  actorPractitionerId?: string;
+  actorPersonId?: string;
 }
 
 /**
@@ -94,6 +101,7 @@ export async function requireFacilityAdmin(
     facilityName: f.name,
     ownership: f.ownership,
     isPublic: f.ownership === 'PUBLIC_MOH' || f.ownership === 'PUBLIC_OTHER',
+    actorPractitionerId: practitionerId,
   };
 }
 
@@ -329,4 +337,96 @@ export async function closeArrival(
     data: { status, closedAt: new Date() },
     select: { id: true, status: true },
   });
+}
+
+/**
+ * The same scope, reached as a DIRECTOR rather than as a practitioner.
+ *
+ * A hospital owner is usually a businessperson, so the person who runs a
+ * facility often holds no clinical licence at all. They are a Person with
+ * their own account, linked through `FacilityDirector`.
+ *
+ * This grants the ADMINISTRATIVE surface and nothing else. Clinical writes
+ * are gated separately by `requirePractitioner` and by the licence check in
+ * the append-only triggers, neither of which this touches — so a
+ * non-clinical director can run a roster and a reception desk and still
+ * cannot record a single clinical row.
+ */
+export async function requireFacilityDirector(
+  db: Db,
+  personId: string,
+  facilityId?: string,
+): Promise<AdminScope> {
+  // Status checked in the query rather than after it, so an ended
+  // directorship cannot be read back and waved through by a mistaken
+  // comparison.
+  const directorship = await db.facilityDirector.findFirst({
+    where: {
+      personId,
+      status: 'ACTIVE',
+      endedAt: null,
+      ...(facilityId ? { facilityId } : {}),
+    },
+    select: {
+      facility: {
+        select: { id: true, name: true, ownership: true, registrationStatus: true },
+      },
+    },
+  });
+
+  if (!directorship) {
+    throw new FacilityAdminError(
+      facilityId
+        ? 'You do not direct that facility.'
+        : 'This account does not direct a facility.',
+      'NOT_A_FACILITY_ADMIN',
+    );
+  }
+
+  const f = directorship.facility;
+  if (f.registrationStatus !== 'ACTIVE') {
+    throw new FacilityAdminError(
+      `${f.name} is ${f.registrationStatus}. It cannot be administered until the Ministry approves it.`,
+      'FACILITY_NOT_ACTIVE',
+    );
+  }
+
+  return {
+    facilityId: f.id,
+    facilityName: f.name,
+    ownership: f.ownership,
+    isPublic: f.ownership === 'PUBLIC_MOH' || f.ownership === 'PUBLIC_OTHER',
+    actorPersonId: personId,
+  };
+}
+
+/**
+ * Whichever of the two the caller actually is.
+ *
+ * Routes should not have to know: the reception queue is the reception
+ * queue whether a clinician-administrator or a non-clinical director opens
+ * it. Tries the practitioner path first only because it is the one that
+ * existed, and reports the director's refusal when neither matches — a
+ * caller with a personId and no practitionerId is far more likely to be a
+ * director who is not linked than a practitioner who is missing.
+ */
+export async function requireFacilityScope(
+  db: Db,
+  who: { practitionerId?: string; personId?: string },
+  facilityId?: string,
+): Promise<AdminScope> {
+  if (who.practitionerId) {
+    try {
+      return await requireFacilityAdmin(db, who.practitionerId, facilityId);
+    } catch (err) {
+      // A practitioner who is also a director falls through to the second
+      // check rather than being refused on the first.
+      if (!who.personId) throw err;
+    }
+  }
+  if (who.personId) return requireFacilityDirector(db, who.personId, facilityId);
+  throw new FacilityAdminError(
+    'This account does not administer a facility.',
+    'NOT_A_FACILITY_ADMIN',
+  );
 }

@@ -178,6 +178,7 @@ export async function approveFacility(db: Db, facilityId: string, ministryUserId
       id: true,
       registrationStatus: true,
       pendingAdminPractitionerId: true,
+      pendingDirectorPersonId: true,
     },
   });
   if (!facility) throw new FacilityError('Facility not found', 'FACILITY_NOT_FOUND');
@@ -206,6 +207,40 @@ export async function approveFacility(db: Db, facilityId: string, ministryUserId
    * administers a facility the Ministry has not verified. Approval is
    * exactly the moment that verification happens.
    */
+  /*
+   * The director, made real at the same moment and for the same reason.
+   *
+   * Held as PENDING since registration because nobody administers a
+   * facility the Ministry has not verified. Upserted rather than created:
+   * a re-approval of a facility that was suspended and reinstated must not
+   * fail on the unique (facility, person) pair.
+   */
+  if (facility.pendingDirectorPersonId) {
+    await db.facilityDirector.upsert({
+      where: {
+        facilityId_personId: {
+          facilityId,
+          personId: facility.pendingDirectorPersonId,
+        },
+      },
+      create: {
+        facilityId,
+        personId: facility.pendingDirectorPersonId,
+        role: 'DIRECTOR',
+        status: 'ACTIVE',
+        // Attributed to the approving registrar. The applicant named
+        // themselves; the Ministry is what made it true.
+        appointedBy: ministryUserId,
+        appointedByKind: 'MINISTRY',
+      },
+      update: { status: 'ACTIVE', endedAt: null },
+    });
+    await db.facility.update({
+      where: { id: facilityId },
+      data: { pendingDirectorPersonId: null },
+    });
+  }
+
   if (facility.pendingAdminPractitionerId) {
     await db.affiliation.create({
       data: {

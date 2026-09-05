@@ -70,6 +70,7 @@ import {
 import {
   FacilityAdminError,
   requireFacilityAdmin,
+  requireFacilityScope,
   listStaff,
   registerArrival,
   listQueue,
@@ -569,6 +570,21 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       ownerNationalId?: string;
       ownerName?: string;
       adminLicenceNumber?: string;
+      /**
+       * The director, one of three ways.
+       *
+       * A hospital owner is usually a businessperson. Requiring a clinical
+       * licence to register a facility you own excluded the people who
+       * actually own most private hospitals in Kenya.
+       */
+      directorNationalId?: string;
+      directorName?: string;
+      directorPhone?: string;
+      directorPassword?: string;
+      directorSex?: string;
+      directorDateOfBirth?: string;
+      /** An account already found through the director search. */
+      directorPersonId?: string;
     };
   }>(
     `${v1}/facilities/register`,
@@ -610,6 +626,13 @@ export async function buildApp(prismaOverride?: PrismaClient) {
             // The person registering a PRIVATE facility becomes its first
             // administrator, by licence number.
             adminLicenceNumber: { type: 'string', maxLength: 64 },
+            directorNationalId: { type: 'string', maxLength: 32 },
+            directorName: { type: 'string', maxLength: 160 },
+            directorPhone: { type: 'string', maxLength: 32 },
+            directorPassword: { type: 'string', minLength: 12, maxLength: 256 },
+            directorSex: { type: 'string', maxLength: 16 },
+            directorDateOfBirth: { type: 'string', maxLength: 32 },
+            directorPersonId: { type: 'string', maxLength: 64 },
           },
         },
       },
@@ -667,6 +690,71 @@ export async function buildApp(prismaOverride?: PrismaClient) {
        * now but the facility is PENDING, so it confers nothing until a
        * registrar has verified who they are.
        */
+      /*
+       * The director, however they identified themselves.
+       *
+       * A hospital owner is usually a businessperson, so requiring a
+       * clinical licence to register a facility you own excluded the people
+       * who actually own most private hospitals in Kenya. Three ways in, and
+       * exactly one may be used:
+       *
+       *   - a new person, who sets their own password here;
+       *   - an existing person, found by the director search;
+       *   - a licence, for a clinician-owner, which also keeps the
+       *     FACILITY_ADMIN affiliation the previous design created.
+       *
+       * All three are recorded as PENDING. Nobody administers a facility
+       * the Ministry has not verified, which is the rule approval enforces.
+       */
+      const ways = [
+        b.directorNationalId ? 'new' : null,
+        b.directorPersonId ? 'existing' : null,
+        b.adminLicenceNumber ? 'licence' : null,
+      ].filter(Boolean);
+      if (ways.length > 1) {
+        throw new FacilityError(
+          'Name the director once: as a new person, an existing account, or a ' +
+            'licence number — not more than one.',
+          'AMBIGUOUS_DIRECTOR',
+        );
+      }
+
+      let directorPersonId: string | null = null;
+
+      if (b.directorNationalId) {
+        if (!b.directorName || !b.directorPhone || !b.directorPassword) {
+          throw new FacilityError(
+            'A new director needs a name, a phone number and a password.',
+            'DIRECTOR_DETAILS_REQUIRED',
+          );
+        }
+        const [given, ...rest] = b.directorName.trim().split(/\s+/);
+        // Through registerAdult, so the director gets the same Person, the
+        // same encrypted identifiers and the same account every citizen
+        // gets. There is no fourth kind of credential to keep secure.
+        const person = await registerAdult(prisma, {
+          nationalId: b.directorNationalId,
+          phone: b.directorPhone,
+          givenName: given,
+          familyName: rest.join(' ') || given,
+          sexAtBirth: (b.directorSex ?? 'MALE') as never,
+          dateOfBirth: new Date(b.directorDateOfBirth ?? '1980-01-01'),
+          countyId: b.countyId,
+          subcountyId: b.subcountyId,
+          passwordHash: await hashPassword(b.directorPassword),
+        });
+        directorPersonId = person.id;
+      } else if (b.directorPersonId) {
+        const person = await prisma.person.findUnique({
+          where: { id: b.directorPersonId },
+          select: { id: true },
+        });
+        if (!person) {
+          throw new FacilityError('That person was not found.', 'DIRECTOR_NOT_FOUND');
+        }
+        directorPersonId = person.id;
+      }
+
       let firstAdmin: string | null = null;
       if (!isPublic && b.adminLicenceNumber) {
         const licence = await prisma.licence.findFirst({
@@ -688,6 +776,22 @@ export async function buildApp(prismaOverride?: PrismaClient) {
           data: { pendingAdminPractitionerId: licence.practitionerId },
         });
         firstAdmin = licence.practitionerId;
+
+        // A clinician-owner is also a director. Linking the Person behind
+        // their practitioner record keeps one human as one identity, rather
+        // than two half-accounts that drift apart.
+        const prac = await prisma.practitioner.findUnique({
+          where: { id: licence.practitionerId },
+          select: { personId: true },
+        });
+        directorPersonId = prac?.personId ?? null;
+      }
+
+      if (directorPersonId) {
+        await prisma.facility.update({
+          where: { id: facility.id },
+          data: { pendingDirectorPersonId: directorPersonId },
+        });
       }
 
       // PENDING until a Ministry registrar approves it. An unapproved
@@ -839,6 +943,37 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     return requirePractitioner(await contextFrom(req));
   }
 
+  /**
+   * Whoever is running a facility, clinician or not.
+   *
+   * A hospital owner is usually a businessperson, so the person
+   * administering a facility often holds no licence at all. Routes should
+   * not have to care: the roster is the roster and the reception queue is
+   * the reception queue either way.
+   *
+   * The second factor is still demanded of both. This is the administrative
+   * surface of a facility that reaches patient names, so a session that
+   * never presented its second factor must not open it.
+   */
+  async function facilityScopeFrom(
+    req: { headers: Record<string, unknown> },
+    facilityId?: string,
+  ) {
+    const ctx = await contextFrom(req);
+    if (!ctx.mfa) {
+      throw new AuthError(
+        'Your second factor has not been presented in this session',
+        'MFA_REQUIRED',
+        403,
+      );
+    }
+    return requireFacilityScope(
+      prisma,
+      { practitionerId: ctx.practitionerId, personId: ctx.personId },
+      facilityId,
+    );
+  }
+
   // -------------------------------------------------------------------- auth
 
   /**
@@ -968,6 +1103,25 @@ export async function buildApp(prismaOverride?: PrismaClient) {
      * could not tell them apart and sent every administrator to the
      * clinical portal.
      */
+    /*
+     * A directorship, for someone who runs a facility without a licence.
+     *
+     * Kept beside `adminOf` rather than folded into it: the two are
+     * genuinely different facts, and a screen that needs to know whether
+     * the person can also treat patients must be able to tell them apart.
+     */
+    const directorOf = ctx.personId
+      ? await prisma.facilityDirector.findFirst({
+          where: {
+            personId: ctx.personId,
+            status: 'ACTIVE',
+            endedAt: null,
+            facility: { registrationStatus: 'ACTIVE' },
+          },
+          select: { facilityId: true, role: true, facility: { select: { name: true } } },
+        })
+      : null;
+
     const adminOf = ctx.practitionerId
       ? await prisma.affiliation.findFirst({
           where: {
@@ -1000,8 +1154,13 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       personId: ctx.personId ?? null,
       mfaSatisfied: ctx.mfa,
       checkedInAt: session?.facility.name ?? null,
-      facilityAdminOf: adminOf?.facilityId ?? null,
-      facilityAdminOfName: adminOf?.facility.name ?? null,
+      // Either route into the facility portal answers the same question:
+      // does this account run a facility? A director with no licence must
+      // resolve here or they land on the citizen portal.
+      facilityAdminOf: adminOf?.facilityId ?? directorOf?.facilityId ?? null,
+      facilityAdminOfName: adminOf?.facility.name ?? directorOf?.facility.name ?? null,
+      facilityDirectorOf: directorOf?.facilityId ?? null,
+      facilityDirectorRole: directorOf?.role ?? null,
     };
   });
 
@@ -1088,8 +1247,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
    * NOT_A_FACILITY_ADMIN, not somebody else's roster.
    */
   app.get(`${v1}/facility/me`, async (req) => {
-    const practitionerId = await practitionerFrom(req);
-    const scope = await requireFacilityAdmin(prisma, practitionerId);
+    const scope = await facilityScopeFrom(req);
     const facility = await prisma.facility.findUniqueOrThrow({
       where: { id: scope.facilityId },
       select: {
@@ -1125,8 +1283,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
   });
 
   app.get<{ Querystring: { includeEnded?: string } }>(`${v1}/facility/staff`, async (req) => {
-    const practitionerId = await practitionerFrom(req);
-    const scope = await requireFacilityAdmin(prisma, practitionerId);
+    const scope = await facilityScopeFrom(req);
     return {
       facilityName: scope.facilityName,
       isPublic: scope.isPublic,
@@ -1156,8 +1313,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       },
     },
     async (req) => {
-      const practitionerId = await practitionerFrom(req);
-      const scope = await requireFacilityAdmin(prisma, practitionerId);
+      const scope = await facilityScopeFrom(req);
 
       const licence = await prisma.licence.findFirst({
         where: { licenceNumber: req.body.licenceNumber.trim().toUpperCase() },
@@ -1187,7 +1343,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         practitionerId: licence.practitionerId,
         facilityId: scope.facilityId,
         role: (req.body.role ?? 'ATTENDING') as never,
-        grantedBy: practitionerId,
+        grantedBy: scope.actorPractitionerId ?? scope.actorPersonId!,
         grantedByKind: 'FACILITY',
       });
 
@@ -1204,8 +1360,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
   app.delete<{ Params: { affiliationId: string } }>(
     `${v1}/facility/staff/:affiliationId`,
     async (req) => {
-      const practitionerId = await practitionerFrom(req);
-      const scope = await requireFacilityAdmin(prisma, practitionerId);
+      const scope = await facilityScopeFrom(req);
 
       const affiliation = await prisma.affiliation.findUnique({
         where: { id: req.params.affiliationId },
@@ -1216,7 +1371,10 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       if (!affiliation || affiliation.facilityId !== scope.facilityId) {
         throw new FacilityAdminError('Affiliation not found', 'AFFILIATION_NOT_FOUND');
       }
-      if (affiliation.practitionerId === practitionerId) {
+      if (
+        scope.actorPractitionerId &&
+        affiliation.practitionerId === scope.actorPractitionerId
+      ) {
         throw new FacilityAdminError(
           'You cannot remove your own administrator access. Ask the Ministry, ' +
             'or appoint another administrator first.',
@@ -1714,6 +1872,130 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         createdAt: true,
       },
     });
+  });
+
+  /**
+   * Find the person who will direct a facility.
+   *
+   * Answers one question — does this identifier belong to somebody already
+   * registered — and returns a name and nothing else. No clinical data, no
+   * contact details, one match at most: a register that answers "who is
+   * 12345678" in bulk is a register that leaks.
+   *
+   * Unauthenticated because facility registration is, but deliberately
+   * narrow for the same reason.
+   */
+  app.get<{ Querystring: { identifier?: string } }>(
+    `${v1}/facilities/directors/search`,
+    async (req) => {
+      const identifier = (req.query.identifier ?? '').trim();
+      if (identifier.length < 6) {
+        throw new FacilityError(
+          'Give a full National ID or licence number.',
+          'IDENTIFIER_TOO_SHORT',
+        );
+      }
+
+      // A licence number first, since that is what a clinician-owner knows.
+      const licence = await prisma.licence.findFirst({
+        where: { licenceNumber: identifier.toUpperCase() },
+        select: { practitioner: { select: { personId: true } } },
+      });
+
+      let personId = licence?.practitioner?.personId ?? null;
+      if (!personId) {
+        const match = await prisma.identifier.findFirst({
+          where: {
+            type: 'NATIONAL_ID',
+            valueIndex: blindIndex(identifier),
+            status: 'ACTIVE',
+          },
+          select: { personId: true },
+        });
+        personId = match?.personId ?? null;
+      }
+
+      if (!personId) return { match: null };
+
+      const person = await prisma.person.findUnique({
+        where: { id: personId },
+        select: { id: true, givenName: true, familyName: true },
+      });
+      if (!person) return { match: null };
+
+      return {
+        match: {
+          personId: person.id,
+          givenName: decryptField(person.givenName),
+          familyName: decryptField(person.familyName),
+        },
+      };
+    },
+  );
+
+  /**
+   * Correcting a public facility's details.
+   *
+   * PUBLIC ONLY, and that restriction is the point. A public facility is
+   * the Ministry's own, so it is theirs to correct. A private one's details
+   * belong to the people who run it, and letting the Ministry silently
+   * rewrite them would make the register unreliable in the other direction
+   * — nobody could tell whether what they filed is what is stored.
+   */
+  app.patch<{
+    Params: { facilityId: string };
+    Body: {
+      name?: string;
+      phone?: string;
+      email?: string;
+      locality?: string;
+      kephLevel?: number;
+    };
+  }>(`${v1}/admin/facilities/:facilityId`, async (req) => {
+    const ctx = await contextFrom(req);
+    const ministryUserId = requireMinistry(ctx, ['REGISTRAR']);
+
+    const facility = await prisma.facility.findUnique({
+      where: { id: req.params.facilityId },
+      select: { id: true, name: true, ownership: true },
+    });
+    if (!facility) throw new FacilityError('Facility not found', 'FACILITY_NOT_FOUND');
+
+    const isPublicFacility =
+      facility.ownership === 'PUBLIC_MOH' || facility.ownership === 'PUBLIC_OTHER';
+    if (!isPublicFacility) {
+      throw new FacilityError(
+        `${facility.name} is ${facility.ownership}. The Ministry may correct a ` +
+          'public facility; a private one is corrected by the people who run it.',
+        'NOT_A_PUBLIC_FACILITY',
+      );
+    }
+
+    const b = req.body;
+    const updated = await prisma.facility.update({
+      where: { id: facility.id },
+      data: {
+        ...(b.name !== undefined ? { name: b.name.trim() } : {}),
+        ...(b.phone !== undefined ? { phone: b.phone.trim() || null } : {}),
+        ...(b.email !== undefined ? { email: b.email.trim() || null } : {}),
+        ...(b.locality !== undefined ? { locality: b.locality.trim() } : {}),
+        ...(b.kephLevel !== undefined ? { kephLevel: b.kephLevel } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        locality: true,
+        kephLevel: true,
+      },
+    });
+
+    req.log.info(
+      { facilityId: facility.id, ministryUserId },
+      'ministry updated a public facility',
+    );
+    return updated;
   });
 
   app.post<{ Params: { facilityId: string } }>(

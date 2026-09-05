@@ -235,6 +235,32 @@ enum AffStatus {
   ENDED
 }
 
+/// What a director is to the facility they run.
+enum DirectorRole {
+  /// Owns it. Usually the person whose National ID is on the ownership
+  /// evidence, and usually not a clinician.
+  OWNER
+  /// Runs it day to day. A public facility's Ministry-posted manager, or a
+  /// private one's appointed director.
+  DIRECTOR
+  /// Delegated administration without ownership.
+  MANAGER
+}
+
+enum DirectorStatus {
+  /// Named at registration, not yet real. Nobody administers a facility the
+  /// Ministry has not verified.
+  PENDING
+  ACTIVE
+  ENDED
+}
+
+/// Who appointed a director — themselves at registration, or the Ministry.
+enum AppointedByKind {
+  SELF
+  MINISTRY
+}
+
 enum EndReason {
   MANUAL
   EXPIRED
@@ -494,38 +520,39 @@ model Ward {
 // ------------------------------------------------------------- identity
 
 model Person {
-  id                String      @id @default(uuid(7))
-  displayNumber     String      @unique @map("display_number")
-  givenName         String      @map("given_name")
-  middleName        String?     @map("middle_name")
-  familyName        String      @map("family_name")
-  sexAtBirth        Sex         @map("sex_at_birth")
-  dateOfBirth       DateTime    @map("date_of_birth") @db.Date
-  dobPrecision      Precision   @default(EXACT) @map("dob_precision")
-  bloodGroup        BloodGroup? @map("blood_group")
+  id                String             @id @default(uuid(7))
+  displayNumber     String             @unique @map("display_number")
+  givenName         String             @map("given_name")
+  middleName        String?            @map("middle_name")
+  familyName        String             @map("family_name")
+  sexAtBirth        Sex                @map("sex_at_birth")
+  dateOfBirth       DateTime           @map("date_of_birth") @db.Date
+  dobPrecision      Precision          @default(EXACT) @map("dob_precision")
+  bloodGroup        BloodGroup?        @map("blood_group")
   /**
    * Passport photo, encrypted at rest like every other identifier.
    * A face is biometric data under the Data Protection Act, so it gets the
    * same AES-256-GCM treatment as a National ID rather than a public URL —
    * there is no object store to leak from and nothing a CDN can cache.
    */
-  photo             String?     @map("photo_enc")
+  photo             String?            @map("photo_enc")
   arrivals          Arrival[]
-  lifeStatus        LifeStatus  @default(ALIVE) @map("life_status")
-  deceasedAt        DateTime?   @map("deceased_at")
-  countyId          String      @map("county_id")
-  county            County      @relation(fields: [countyId], references: [id])
-  subcountyId       String      @map("subcounty_id")
-  subcounty         SubCounty   @relation(fields: [subcountyId], references: [id])
-  wardId            String?     @map("ward_id")
-  residenceNote     String?     @map("residence_note")
-  maturity          Maturity    @default(ADULT)
-  registeredBy      String      @map("registered_by")
-  registrationRoute RegRoute    @map("registration_route")
-  verificationState VerState    @default(UNVERIFIED) @map("verification_state")
-  mergedIntoId      String?     @map("merged_into_id")
-  createdAt         DateTime    @default(now()) @map("created_at")
-  updatedAt         DateTime    @updatedAt @map("updated_at")
+  directorships     FacilityDirector[]
+  lifeStatus        LifeStatus         @default(ALIVE) @map("life_status")
+  deceasedAt        DateTime?          @map("deceased_at")
+  countyId          String             @map("county_id")
+  county            County             @relation(fields: [countyId], references: [id])
+  subcountyId       String             @map("subcounty_id")
+  subcounty         SubCounty          @relation(fields: [subcountyId], references: [id])
+  wardId            String?            @map("ward_id")
+  residenceNote     String?            @map("residence_note")
+  maturity          Maturity           @default(ADULT)
+  registeredBy      String             @map("registered_by")
+  registrationRoute RegRoute           @map("registration_route")
+  verificationState VerState           @default(UNVERIFIED) @map("verification_state")
+  mergedIntoId      String?            @map("merged_into_id")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
 
   identifiers  Identifier[]
   account      Account?
@@ -648,7 +675,6 @@ model Facility {
   maternityBeds      Int?      @map("maternity_beds")
   /**
    * How the facility itself is reached — not whoever registered it.
-   *
    * A registrar has to be able to ask about the ownership evidence before
    * approving, and a referral has to reach the place it names. Neither of
    * those is served by the registrant's personal number.
@@ -679,6 +705,14 @@ model Facility {
   /// administers a facility the Ministry has not yet verified.
   pendingAdminPractitionerId String? @map("pending_admin_practitioner_id")
 
+  /// Who becomes the first DIRECTOR once a registrar approves this facility.
+  ///
+  /// Separate from the practitioner above because a hospital owner is
+  /// usually a businessperson, not a clinician. Requiring a KMPDC licence
+  /// to register a facility you own excluded the people who actually own
+  /// most private hospitals in Kenya.
+  pendingDirectorPersonId String? @map("pending_director_person_id")
+
   /// Who approved this facility, and when. `approveFacility` took a
   /// ministryUserId and discarded it, so an approval was unattributable —
   /// the one decision in the system that turns unverified ownership
@@ -692,6 +726,7 @@ model Facility {
   affiliations Affiliation[]
   checkIns     CheckIn[]
   arrivals     Arrival[]
+  directors    FacilityDirector[]
 
   @@index([countyId, kephLevel, registrationStatus])
   @@index([name])
@@ -766,6 +801,50 @@ model Licence {
   @@index([practitionerId])
   @@index([expiresOn])
   @@map("licence")
+}
+
+/// Who runs a facility.
+///
+/// Deliberately NOT an Affiliation. `Affiliation.practitionerId` is
+/// non-nullable and drives the clinical check-in gate and the append-only
+/// triggers: making it nullable so it could hold a director would weaken the
+/// guarantee that every clinical write cites a licensed practitioner.
+///
+/// A director is a Person, which means they already have an account, a
+/// password they chose and a phone for their second factor — and it means
+/// authentication needed no new owner kind, so `account_one_owner_ck` is
+/// untouched. A director who IS a clinician is linked through the Person
+/// behind their practitioner record, so one human stays one identity.
+///
+/// The facility deliberately has no password of its own. A shared credential
+/// walks out with whoever leaves, and every action taken through it would be
+/// attributable to "the facility" rather than a person.
+model FacilityDirector {
+  id         String   @id @default(uuid(7))
+  facilityId String   @map("facility_id")
+  facility   Facility @relation(fields: [facilityId], references: [id])
+  personId   String   @map("person_id")
+  person     Person   @relation(fields: [personId], references: [id])
+
+  role   DirectorRole   @default(DIRECTOR)
+  status DirectorStatus @default(PENDING)
+
+  /// Attributed, like every other grant in the system. A director who
+  /// appointed themselves at registration is a different fact from one the
+  /// Ministry posted, and an approval nobody is answerable for is the one
+  /// thing this register cannot afford.
+  appointedBy     String          @map("appointed_by")
+  appointedByKind AppointedByKind @map("appointed_by_kind")
+
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+
+  /// One person holds one directorship per facility. A second row would let
+  /// an ENDED appointment sit beside an ACTIVE one for the same human.
+  @@unique([facilityId, personId])
+  @@index([facilityId, status])
+  @@index([personId, status])
+  @@map("facility_director")
 }
 
 model Affiliation {

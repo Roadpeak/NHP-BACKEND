@@ -22,6 +22,8 @@ import {
   haversineKm,
   KEPH_LEVELS,
 } from '../src/facility.js';
+import { registerAdult } from '../src/identity.js';
+import { requireFacilityDirector } from '../src/facility-admin.js';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -498,5 +500,162 @@ describe('facility contact details', () => {
     });
     expect(saved.phone).toBeNull();
     expect(saved.email).toBeNull();
+  });
+});
+
+/**
+ * DIRECTORS WHO ARE NOT CLINICIANS.
+ *
+ * A private hospital in Kenya is usually owned by a businessperson. The
+ * system used to require a KMPDC licence to register a facility you own,
+ * which excluded the people who actually own most private hospitals.
+ *
+ * A director is a Person — so they already have an account, a password they
+ * chose and a second factor, and authentication needed no new owner kind.
+ * What they must NOT have is any route to a clinical record.
+ */
+describe('a facility director who holds no licence', () => {
+  async function makeDirector(nationalId: string) {
+    const person = await registerAdult(prisma, {
+      nationalId,
+      phone: `07${nationalId.slice(0, 8)}`,
+      givenName: 'Grace',
+      familyName: 'Owner',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: new Date(Date.UTC(1975, 3, 2)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+    return person;
+  }
+
+  it('becomes a real director only once the Ministry approves', async () => {
+    const person = await makeDirector(`61${Date.now().toString().slice(-6)}`);
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-DIR-${Date.now()}`,
+      name: 'Owner-run Nursing Home',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    await prisma.facility.update({
+      where: { id: f.id },
+      data: { pendingDirectorPersonId: person.id },
+    });
+
+    // Nobody administers a facility the Ministry has not verified.
+    expect(
+      await prisma.facilityDirector.findFirst({ where: { facilityId: f.id } }),
+    ).toBeNull();
+
+    await approveFacility(prisma, f.id, 'ministry-test');
+
+    const director = await prisma.facilityDirector.findFirstOrThrow({
+      where: { facilityId: f.id },
+    });
+    expect(director.personId).toBe(person.id);
+    expect(director.status).toBe('ACTIVE');
+    // Attributed to the registrar, not the applicant: the applicant named
+    // themselves, the Ministry is what made it true.
+    expect(director.appointedBy).toBe('ministry-test');
+    expect(director.appointedByKind).toBe('MINISTRY');
+  });
+
+  it('THE SAFETY PROPERTY — reaches the facility surface, never a clinical one', async () => {
+    const person = await makeDirector(`62${Date.now().toString().slice(-6)}`);
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-SAFE-${Date.now()}`,
+      name: 'Directed Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    await prisma.facility.update({
+      where: { id: f.id },
+      data: { pendingDirectorPersonId: person.id },
+    });
+    await approveFacility(prisma, f.id, 'ministry-test');
+
+    // The administrative surface opens.
+    const scope = await requireFacilityDirector(prisma, person.id);
+    expect(scope.facilityId).toBe(f.id);
+    expect(scope.actorPersonId).toBe(person.id);
+
+    // And there is no practitioner behind them at all, which is what every
+    // clinical write demands. A director can run a roster and a reception
+    // desk and still cannot record a single clinical row.
+    const practitioner = await prisma.practitioner.findFirst({
+      where: { personId: person.id },
+    });
+    expect(practitioner).toBeNull();
+  });
+
+  it('is refused while the facility is still PENDING', async () => {
+    const person = await makeDirector(`63${Date.now().toString().slice(-6)}`);
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-PEND-${Date.now()}`,
+      name: 'Unapproved Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    await prisma.facilityDirector.create({
+      data: {
+        facilityId: f.id,
+        personId: person.id,
+        status: 'ACTIVE',
+        appointedBy: 'test',
+        appointedByKind: 'SELF',
+      },
+    });
+
+    await expect(requireFacilityDirector(prisma, person.id)).rejects.toThrow(
+      /cannot be administered until the Ministry approves/i,
+    );
+  });
+
+  it('is refused once the directorship has ended', async () => {
+    const person = await makeDirector(`64${Date.now().toString().slice(-6)}`);
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-END-${Date.now()}`,
+      name: 'Former Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    await approveFacility(prisma, f.id, 'ministry-test');
+    await prisma.facilityDirector.create({
+      data: {
+        facilityId: f.id,
+        personId: person.id,
+        status: 'ENDED',
+        endedAt: new Date(),
+        appointedBy: 'test',
+        appointedByKind: 'SELF',
+      },
+    });
+
+    // A director who has left keeps their account and loses the facility —
+    // which is the whole reason the facility has no password of its own.
+    await expect(requireFacilityDirector(prisma, person.id)).rejects.toThrow(
+      /does not direct a facility/i,
+    );
   });
 });
