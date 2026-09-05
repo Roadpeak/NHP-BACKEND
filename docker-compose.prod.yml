@@ -66,6 +66,11 @@ services:
       AT_API_KEY: ${AT_API_KEY:-}
       AT_USERNAME: ${AT_USERNAME:-}
       AT_SENDER_ID: ${AT_SENDER_ID:-}
+      # WHO ICD-11 API OAuth2 client creds (for `pnpm --filter @nhp/api tsx
+      # src/import-icd11.ts` — pulls the real reviewed diagnosis vocabulary
+      # into the DB). Optional at runtime; the API doesn't need them to boot.
+      ICD_CLIENT_ID: ${ICD_CLIENT_ID:-}
+      ICD_CLIENT_SECRET: ${ICD_CLIENT_SECRET:-}
       # First-run SUPER_ADMIN bootstrap. Absent → entrypoint skips; present →
       # entrypoint runs `pnpm ministry:bootstrap` once (refuses on second run).
       NHP_ADMIN_PHONE:  ${NHP_ADMIN_PHONE:-}
