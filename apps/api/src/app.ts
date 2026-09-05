@@ -1157,6 +1157,26 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         })
       : null;
 
+    /*
+     * A facility they are the named owner of, still waiting for the Ministry.
+     *
+     * Only looked up when there is no live directorship, because that is
+     * the one case where the refusal is otherwise misleading: somebody who
+     * has just registered a facility and named themselves its owner was
+     * told to "ask whoever runs the facility to add you". They ARE whoever
+     * runs it — the facility simply has not been approved yet.
+     */
+    const awaitingApproval =
+      !directorOf && actingPerson
+        ? await prisma.facility.findFirst({
+            where: {
+              pendingDirectorPersonId: actingPerson,
+              registrationStatus: 'PENDING',
+            },
+            select: { name: true },
+          })
+        : null;
+
     const adminOf = ctx.practitionerId
       ? await prisma.affiliation.findFirst({
           where: {
@@ -1208,6 +1228,16 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       // of a screen they were just given access to is worse than a
       // prominent prompt, and the flag is what makes it visible either way.
       mustChangePassword: account?.mustChangePassword ?? false,
+      /*
+       * A facility they were named on, still waiting for the Ministry.
+       *
+       * Sent so the sign-in can say what is actually true. Before this,
+       * somebody who had just registered a facility and named themselves
+       * its owner was told "ask whoever runs the facility to add you" —
+       * they ARE whoever runs it, and the real answer is that the Ministry
+       * has not approved it yet.
+       */
+      facilityAwaitingApproval: awaitingApproval?.name ?? null,
       canAdministerFacility: adminOf
         ? true
         : directorOf
