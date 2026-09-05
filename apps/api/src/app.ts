@@ -574,19 +574,13 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       ownerName?: string;
       adminLicenceNumber?: string;
       /**
-       * The director, one of three ways.
+       * The director, found rather than created.
        *
-       * A hospital owner is usually a businessperson. Requiring a clinical
-       * licence to register a facility you own excluded the people who
-       * actually own most private hospitals in Kenya.
+       * A hospital owner is usually a businessperson, so a clinical licence
+       * cannot be the only way in — but they must already hold an account,
+       * because registering an identity is not something a facility form
+       * should be able to do.
        */
-      directorNationalId?: string;
-      directorName?: string;
-      directorPhone?: string;
-      directorPassword?: string;
-      directorSex?: string;
-      directorDateOfBirth?: string;
-      /** An account already found through the director search. */
       directorPersonId?: string;
     };
   }>(
@@ -629,12 +623,6 @@ export async function buildApp(prismaOverride?: PrismaClient) {
             // The person registering a PRIVATE facility becomes its first
             // administrator, by licence number.
             adminLicenceNumber: { type: 'string', maxLength: 64 },
-            directorNationalId: { type: 'string', maxLength: 32 },
-            directorName: { type: 'string', maxLength: 160 },
-            directorPhone: { type: 'string', maxLength: 32 },
-            directorPassword: { type: 'string', minLength: 12, maxLength: 256 },
-            directorSex: { type: 'string', maxLength: 16 },
-            directorDateOfBirth: { type: 'string', maxLength: 32 },
             directorPersonId: { type: 'string', maxLength: 64 },
           },
         },
@@ -706,48 +694,31 @@ export async function buildApp(prismaOverride?: PrismaClient) {
        *   - a licence, for a clinician-owner, which also keeps the
        *     FACILITY_ADMIN affiliation the previous design created.
        *
-       * All three are recorded as PENDING. Nobody administers a facility
-       * the Ministry has not verified, which is the rule approval enforces.
+       * Both are recorded as PENDING. Nobody administers a facility the
+       * Ministry has not verified, which is the rule approval enforces.
+       *
+       * Creating an account HERE is deliberately not one of the ways.
+       * Somebody registering a facility already has an identity in this
+       * country's health system, or should get one the same way everybody
+       * else does — through the citizen or health worker portal, where the
+       * identity checks live. A second registration path would be a second
+       * place for those checks to be weaker.
        */
       const ways = [
-        b.directorNationalId ? 'new' : null,
         b.directorPersonId ? 'existing' : null,
         b.adminLicenceNumber ? 'licence' : null,
       ].filter(Boolean);
       if (ways.length > 1) {
         throw new FacilityError(
-          'Name the director once: as a new person, an existing account, or a ' +
-            'licence number — not more than one.',
+          'Name the director once: as an existing account or a licence ' +
+            'number — not both.',
           'AMBIGUOUS_DIRECTOR',
         );
       }
 
       let directorPersonId: string | null = null;
 
-      if (b.directorNationalId) {
-        if (!b.directorName || !b.directorPhone || !b.directorPassword) {
-          throw new FacilityError(
-            'A new director needs a name, a phone number and a password.',
-            'DIRECTOR_DETAILS_REQUIRED',
-          );
-        }
-        const [given, ...rest] = b.directorName.trim().split(/\s+/);
-        // Through registerAdult, so the director gets the same Person, the
-        // same encrypted identifiers and the same account every citizen
-        // gets. There is no fourth kind of credential to keep secure.
-        const person = await registerAdult(prisma, {
-          nationalId: b.directorNationalId,
-          phone: b.directorPhone,
-          givenName: given,
-          familyName: rest.join(' ') || given,
-          sexAtBirth: (b.directorSex ?? 'MALE') as never,
-          dateOfBirth: new Date(b.directorDateOfBirth ?? '1980-01-01'),
-          countyId: b.countyId,
-          subcountyId: b.subcountyId,
-          passwordHash: await hashPassword(b.directorPassword),
-        });
-        directorPersonId = person.id;
-      } else if (b.directorPersonId) {
+      if (b.directorPersonId) {
         const person = await prisma.person.findUnique({
           where: { id: b.directorPersonId },
           select: { id: true },
@@ -1510,6 +1481,16 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         select: { practitioner: { select: { personId: true } } },
       });
       let personId = licence?.practitioner?.personId ?? null;
+
+      // An NHP number, which is what a citizen carries and the only one of
+      // the three they can read off their own record.
+      if (!personId && /^NHP-/i.test(identifier)) {
+        const byNhp = await prisma.person.findUnique({
+          where: { displayNumber: identifier.toUpperCase() },
+          select: { id: true },
+        });
+        personId = byNhp?.id ?? null;
+      }
       if (!personId) {
         const match = await prisma.identifier.findFirst({
           where: {
@@ -2353,7 +2334,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       const identifier = (req.query.identifier ?? '').trim();
       if (identifier.length < 6) {
         throw new FacilityError(
-          'Give a full National ID or licence number.',
+          'Give a full National ID, NHP number or licence number.',
           'IDENTIFIER_TOO_SHORT',
         );
       }
@@ -2365,6 +2346,17 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       });
 
       let personId = licence?.practitioner?.personId ?? null;
+
+      // An NHP number — the one identifier a citizen can read off their own
+      // record, and so the one a non-clinical owner is most likely to have.
+      if (!personId && /^NHP-/i.test(identifier)) {
+        const byNhp = await prisma.person.findUnique({
+          where: { displayNumber: identifier.toUpperCase() },
+          select: { id: true },
+        });
+        personId = byNhp?.id ?? null;
+      }
+
       if (!personId) {
         const match = await prisma.identifier.findFirst({
           where: {

@@ -1193,3 +1193,48 @@ describe('changing your own password', () => {
     ).rejects.toThrow(/must be different/i);
   });
 });
+
+/**
+ * FINDING THE PERSON WHO WILL RUN A FACILITY.
+ *
+ * Three identifiers, because three different people carry three different
+ * numbers: a clinician knows their licence, a citizen knows the NHP number
+ * printed on their own record, and everybody has a National ID.
+ *
+ * The NHP number matters most for the case this feature exists to serve —
+ * a non-clinical owner, who has no licence and may not have their ID to
+ * hand, but does have their own health record.
+ */
+describe('the director search', () => {
+  it('finds a person by their NHP number', async () => {
+    const nationalId = `95${Date.now().toString().slice(-6)}`;
+    const person = await registerAdult(prisma, {
+      nationalId,
+      phone: `07${nationalId.slice(0, 8)}`,
+      givenName: 'Findable',
+      familyName: 'Owner',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: new Date(Date.UTC(1979, 1, 1)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+
+    const found = await prisma.person.findUnique({
+      where: { displayNumber: person.displayNumber },
+      select: { id: true },
+    });
+    expect(found?.id).toBe(person.id);
+    expect(person.displayNumber).toMatch(/^NHP-/);
+  });
+
+  it('finds nobody for a number nobody holds', async () => {
+    // Returning a match here would let somebody confirm whether an
+    // arbitrary ID belongs to a real person.
+    const found = await prisma.person.findUnique({
+      where: { displayNumber: 'NHP-ZZZZ-ZZZZ' },
+      select: { id: true },
+    });
+    expect(found).toBeNull();
+  });
+});
