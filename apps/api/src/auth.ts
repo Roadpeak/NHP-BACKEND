@@ -363,6 +363,55 @@ export interface LoginResult {
  * unknown phone number produce the same error, or this endpoint becomes a
  * way to discover who holds an account.
  */
+/**
+ * Change your own password.
+ *
+ * The current one is required, so a stolen session cannot lock the owner
+ * out of their own account — and so somebody who walked up to an unlocked
+ * screen cannot take it over.
+ *
+ * Clearing `mustChangePassword` is the point of the flag: a facility owner
+ * currently issues the first password for their reception staff, which
+ * means the employer knows it and anything done on that account is
+ * deniable until this runs.
+ */
+export async function changePassword(
+  db: Db,
+  accountId: string,
+  input: { currentPassword: string; newPassword: string },
+) {
+  const account = await db.account.findUnique({
+    where: { id: accountId },
+    select: { id: true, passwordHash: true },
+  });
+  if (!account) throw new AuthError('Account not found', 'ACCOUNT_NOT_FOUND', 404);
+
+  if (!(await verifyPassword(account.passwordHash, input.currentPassword))) {
+    throw new AuthError('That current password is not right', 'INVALID_CREDENTIALS', 401);
+  }
+
+  if (input.currentPassword === input.newPassword) {
+    throw new AuthError(
+      'The new password must be different from the current one.',
+      'PASSWORD_UNCHANGED',
+      400,
+    );
+  }
+
+  await db.account.update({
+    where: { id: account.id },
+    data: {
+      // hashPassword enforces the minimum length, so a short new password
+      // is refused here rather than silently accepted.
+      passwordHash: await hashPassword(input.newPassword),
+      passwordSetAt: new Date(),
+      mustChangePassword: false,
+    },
+  });
+
+  return { changed: true };
+}
+
 export async function login(
   db: Db,
   input: { phone: string; password: string; deviceHint?: string },

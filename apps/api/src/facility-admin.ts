@@ -50,6 +50,21 @@ export interface AdminScope {
    */
   actorPractitionerId?: string;
   actorPersonId?: string;
+  /**
+   * What this person is to the facility. Present only when they reached it
+   * as a director or staff member; a FACILITY_ADMIN practitioner has no
+   * DirectorRole.
+   */
+  role?: 'OWNER' | 'DIRECTOR' | 'MANAGER' | 'RECEPTION';
+  /**
+   * Whether they may see the roster, the facility record and the list of
+   * directors — everything except the waiting room.
+   *
+   * Routes ask this rather than comparing roles, so adding a role later is
+   * one line here instead of an audit of every call site. Reception is the
+   * only role for which it is false.
+   */
+  canAdminister: boolean;
 }
 
 /**
@@ -102,6 +117,8 @@ export async function requireFacilityAdmin(
     ownership: f.ownership,
     isPublic: f.ownership === 'PUBLIC_MOH' || f.ownership === 'PUBLIC_OTHER',
     actorPractitionerId: practitionerId,
+    // A FACILITY_ADMIN affiliation is by definition administrative.
+    canAdminister: true,
   };
 }
 
@@ -368,6 +385,7 @@ export async function requireFacilityDirector(
       ...(facilityId ? { facilityId } : {}),
     },
     select: {
+      role: true,
       facility: {
         select: { id: true, name: true, ownership: true, registrationStatus: true },
       },
@@ -397,6 +415,11 @@ export async function requireFacilityDirector(
     ownership: f.ownership,
     isPublic: f.ownership === 'PUBLIC_MOH' || f.ownership === 'PUBLIC_OTHER',
     actorPersonId: personId,
+    role: directorship.role,
+    // Reception registers arrivals and sees the waiting room. Everything
+    // else — the roster, the ownership evidence, appointing people — is
+    // administration, and refusing it here means no route has to remember.
+    canAdminister: directorship.role !== 'RECEPTION',
   };
 }
 

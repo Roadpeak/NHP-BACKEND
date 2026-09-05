@@ -105,6 +105,7 @@ import {
   login,
   completeMfa,
   rotateRefreshToken,
+  changePassword,
   revokeAllSessions,
   verifyAccessToken,
   contextFromClaims,
@@ -960,6 +961,15 @@ export async function buildApp(prismaOverride?: PrismaClient) {
   async function facilityScopeFrom(
     req: { headers: Record<string, unknown> },
     facilityId?: string,
+    /**
+     * Whether this route is administration.
+     *
+     * Defaults to true because most of the facility portal is: the roster,
+     * the facility record, the list of directors. Only the waiting room is
+     * not, and it passes false. Refusing here rather than in the UI means a
+     * receptionist who types the URL is refused too.
+     */
+    requireAdmin = true,
   ) {
     const ctx = await contextFrom(req);
     if (!ctx.mfa) {
@@ -969,11 +979,21 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         403,
       );
     }
-    return requireFacilityScope(
+    const scope = await requireFacilityScope(
       prisma,
       { practitionerId: ctx.practitionerId, personId: ctx.personId },
       facilityId,
     );
+
+    if (requireAdmin && !scope.canAdminister) {
+      throw new FacilityAdminError(
+        'Reception can register arrivals and see the waiting room. The staff ' +
+          'roster, the facility record and its directors are for whoever runs ' +
+          'the facility.',
+        'NOT_A_FACILITY_ADMIN',
+      );
+    }
+    return scope;
   }
 
   // -------------------------------------------------------------------- auth
@@ -1069,6 +1089,33 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     return result;
   });
 
+  /**
+   * Change your own password.
+   *
+   * Needed because a facility owner currently issues the first password
+   * for their reception staff: without this, that staff member could never
+   * stop using a credential their employer knows.
+   */
+  app.post<{ Body: { currentPassword: string; newPassword: string } }>(
+    `${v1}/auth/password`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['currentPassword', 'newPassword'],
+          properties: {
+            currentPassword: { type: 'string', minLength: 1, maxLength: 256 },
+            newPassword: { type: 'string', minLength: 10, maxLength: 256 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const ctx = await contextFrom(req);
+      return changePassword(prisma, ctx.accountId, req.body);
+    },
+  );
+
   app.get(`${v1}/auth/me`, async (req) => {
     const ctx = await contextFrom(req);
     const session = ctx.practitionerId
@@ -1112,6 +1159,13 @@ export async function buildApp(prismaOverride?: PrismaClient) {
      * genuinely different facts, and a screen that needs to know whether
      * the person can also treat patients must be able to tell them apart.
      */
+    // The flag lives on the account, not the token: a password changed in
+    // another tab must stop prompting here without a fresh sign-in.
+    const account = await prisma.account.findUnique({
+      where: { id: ctx.accountId },
+      select: { mustChangePassword: true },
+    });
+
     // Either session resolves to the same human: a clinician's licence
     // account carries no personId, so a directorship hangs off a Person the
     // clinical token never mentions.
@@ -1171,6 +1225,23 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       facilityAdminOfName: adminOf?.facility.name ?? directorOf?.facility.name ?? null,
       facilityDirectorOf: directorOf?.facilityId ?? null,
       facilityDirectorRole: directorOf?.role ?? null,
+      /*
+       * Whether they may see anything beyond the waiting room.
+       *
+       * Sent so the portal can render the nav a reception account can
+       * actually use, rather than showing tabs that will refuse them. The
+       * refusal still lives on the server — this only stops the UI lying.
+       */
+      // So the portal can insist on a change before the account is used
+      // in earnest. The server does not block on it: locking somebody out
+      // of a screen they were just given access to is worse than a
+      // prominent prompt, and the flag is what makes it visible either way.
+      mustChangePassword: account?.mustChangePassword ?? false,
+      canAdministerFacility: adminOf
+        ? true
+        : directorOf
+          ? directorOf.role !== 'RECEPTION'
+          : false,
     };
   });
 
@@ -1491,6 +1562,182 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         role: director.role,
         status: director.status,
       };
+    },
+  );
+
+  /**
+   * The people who work the reception desk.
+   *
+   * Staff are Persons, like directors, and reach the facility through the
+   * same table with a RECEPTION role. They see the waiting room and nothing
+   * else — the guard refuses them the roster, the facility record and the
+   * directors list, so a receptionist who types the URL is refused too.
+   */
+  app.get(`${v1}/facility/staff-accounts`, async (req) => {
+    const scope = await facilityScopeFrom(req);
+    const rows = await prisma.facilityDirector.findMany({
+      where: { facilityId: scope.facilityId, role: 'RECEPTION', endedAt: null },
+      select: {
+        id: true,
+        status: true,
+        startedAt: true,
+        person: { select: { id: true, givenName: true, familyName: true } },
+      },
+      orderBy: { startedAt: 'asc' },
+    });
+    const accounts = await prisma.account.findMany({
+      where: { personId: { in: rows.map((r) => r.person.id) } },
+      select: { personId: true, mustChangePassword: true },
+    });
+    const pending = new Map(accounts.map((a) => [a.personId, a.mustChangePassword]));
+
+    return {
+      facilityName: scope.facilityName,
+      staff: rows.map((r) => ({
+        id: r.id,
+        personId: r.person.id,
+        displayName: `${decryptField(r.person.givenName)} ${decryptField(r.person.familyName)}`,
+        status: r.status,
+        startedAt: r.startedAt,
+        // Surfaced so the owner can see who is still using the password
+        // they were handed — the state this stopgap must not leave behind.
+        mustChangePassword: pending.get(r.person.id) ?? false,
+      })),
+    };
+  });
+
+  /**
+   * Add a receptionist.
+   *
+   * TEMPORARY: the owner chooses the first password, so the employer knows
+   * it and anything done on that account is deniable until it is changed.
+   * This is accepted for a pre-launch system holding no real patient data,
+   * and `mustChangePassword` marks every account issued this way. When
+   * email is available, only this credential step changes — an invite token
+   * instead of an owner-chosen password. Nothing else here moves.
+   */
+  app.post<{
+    Body: { nationalId: string; name: string; phone: string; password?: string };
+  }>(
+    `${v1}/facility/staff-accounts`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['nationalId', 'name', 'phone'],
+          properties: {
+            nationalId: { type: 'string', minLength: 4, maxLength: 32 },
+            name: { type: 'string', minLength: 2, maxLength: 160 },
+            phone: { type: 'string', minLength: 6, maxLength: 32 },
+            password: { type: 'string', minLength: 10, maxLength: 256 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const scope = await facilityScopeFrom(req);
+      const b = req.body;
+
+      /*
+       * Somebody already registered keeps their own password.
+       *
+       * Without this, an owner who knows any citizen's National ID could
+       * overwrite that person's password and take their account — a way in
+       * to somebody's health record, granted by a staff form. Existing
+       * people gain the role and nothing else.
+       */
+      const existing = await prisma.identifier.findFirst({
+        where: {
+          type: 'NATIONAL_ID',
+          valueIndex: blindIndex(b.nationalId.trim()),
+          status: 'ACTIVE',
+        },
+        select: { personId: true },
+      });
+
+      let personId: string;
+      if (existing) {
+        personId = existing.personId;
+      } else {
+        if (!b.password) {
+          throw new FacilityAdminError(
+            'Nobody with that National ID is registered yet, so give them a ' +
+              'first password. They should change it once they sign in.',
+            'STAFF_PASSWORD_REQUIRED',
+          );
+        }
+        const [given, ...rest] = b.name.trim().split(/\s+/);
+        const person = await registerAdult(prisma, {
+          nationalId: b.nationalId.trim(),
+          phone: b.phone.trim(),
+          givenName: given,
+          familyName: rest.join(' ') || given,
+          sexAtBirth: 'FEMALE',
+          dateOfBirth: new Date('1990-01-01'),
+          countyId: (await prisma.facility.findUniqueOrThrow({
+            where: { id: scope.facilityId },
+            select: { countyId: true },
+          })).countyId,
+          subcountyId: (await prisma.facility.findUniqueOrThrow({
+            where: { id: scope.facilityId },
+            select: { subcountyId: true },
+          })).subcountyId,
+          passwordHash: await hashPassword(b.password),
+        });
+        personId = person.id;
+        await prisma.account.updateMany({
+          where: { personId },
+          data: { mustChangePassword: true },
+        });
+      }
+
+      const staff = await prisma.facilityDirector.upsert({
+        where: { facilityId_personId: { facilityId: scope.facilityId, personId } },
+        create: {
+          facilityId: scope.facilityId,
+          personId,
+          role: 'RECEPTION',
+          status: 'ACTIVE',
+          appointedBy: scope.actorPersonId ?? scope.actorPractitionerId ?? 'facility',
+          appointedByKind: 'SELF',
+        },
+        update: { status: 'ACTIVE', endedAt: null, role: 'RECEPTION' },
+      });
+
+      const person = await prisma.person.findUniqueOrThrow({
+        where: { id: personId },
+        select: { givenName: true, familyName: true },
+      });
+      req.log.info({ facilityId: scope.facilityId, personId }, 'facility added reception staff');
+      return {
+        id: staff.id,
+        personId,
+        displayName: `${decryptField(person.givenName)} ${decryptField(person.familyName)}`,
+        status: staff.status,
+        // Says plainly when nothing was issued, so the owner does not go
+        // looking for a password to hand over.
+        credentialIssued: !existing,
+      };
+    },
+  );
+
+  /** Remove a receptionist. */
+  app.delete<{ Params: { staffId: string } }>(
+    `${v1}/facility/staff-accounts/:staffId`,
+    async (req) => {
+      const scope = await facilityScopeFrom(req);
+      const staff = await prisma.facilityDirector.findUnique({
+        where: { id: req.params.staffId },
+        select: { id: true, facilityId: true, role: true },
+      });
+      if (!staff || staff.facilityId !== scope.facilityId || staff.role !== 'RECEPTION') {
+        throw new FacilityAdminError('Staff member not found', 'STAFF_NOT_FOUND');
+      }
+      await prisma.facilityDirector.update({
+        where: { id: staff.id },
+        data: { status: 'ENDED', endedAt: new Date() },
+      });
+      return { ended: true };
     },
   );
 

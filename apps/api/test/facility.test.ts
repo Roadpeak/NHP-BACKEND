@@ -26,7 +26,7 @@ import { registerAdult } from '../src/identity.js';
 import { registerPractitioner } from '../src/practitioner.js';
 import { blindIndex, normalisePhone } from '../src/crypto.js';
 import { requireFacilityDirector, requireFacilityScope } from '../src/facility-admin.js';
-import { login, hashPassword } from '../src/auth.js';
+import { login, hashPassword, changePassword } from '../src/auth.js';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -947,5 +947,249 @@ describe('appointing a second director', () => {
 
     const scope = await requireFacilityDirector(prisma, first.id);
     expect(scope.facilityId).toBe(facility.id);
+  });
+});
+
+/**
+ * RECEPTION SEES THE WAITING ROOM AND NOTHING ELSE.
+ *
+ * A real clinic has a receptionist who registers arrivals. Before this, the
+ * only way to give somebody that was to make them a director — which handed
+ * them the roster, the ownership evidence and the power to appoint other
+ * directors.
+ */
+describe('a reception staff member', () => {
+  async function receptionAt() {
+    const nationalId = `91${Date.now().toString().slice(-6)}`;
+    const person = await registerAdult(prisma, {
+      nationalId,
+      phone: `07${nationalId.slice(0, 8)}`,
+      givenName: 'Ruth',
+      familyName: 'Desk',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: new Date(Date.UTC(1990, 5, 5)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-RCP-${Date.now()}`,
+      name: 'Reception Test Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    await approveFacility(prisma, f.id, 'ministry-test');
+    await prisma.facilityDirector.create({
+      data: {
+        facilityId: f.id,
+        personId: person.id,
+        role: 'RECEPTION',
+        status: 'ACTIVE',
+        appointedBy: 'owner-test',
+        appointedByKind: 'SELF',
+      },
+    });
+    return { person, facility: f };
+  }
+
+  it('reaches the facility, so the waiting room is open to them', async () => {
+    const { person, facility } = await receptionAt();
+    const scope = await requireFacilityDirector(prisma, person.id);
+    expect(scope.facilityId).toBe(facility.id);
+  });
+
+  it('THE LIMIT — cannot administer, so the roster and record are refused', async () => {
+    const { person } = await receptionAt();
+    const scope = await requireFacilityScope(prisma, { personId: person.id });
+
+    // Routes ask this rather than comparing roles. If it is ever true for
+    // RECEPTION, a receptionist can read the ownership evidence and appoint
+    // other people to the facility.
+    expect(scope.canAdminister).toBe(false);
+    expect(scope.role).toBe('RECEPTION');
+  });
+
+  it('a director, by contrast, may administer', async () => {
+    const nationalId = `92${Date.now().toString().slice(-6)}`;
+    const person = await registerAdult(prisma, {
+      nationalId,
+      phone: `07${nationalId.slice(0, 8)}`,
+      givenName: 'Dora',
+      familyName: 'Director',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: new Date(Date.UTC(1980, 5, 5)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-DIRA-${Date.now()}`,
+      name: 'Director Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    await approveFacility(prisma, f.id, 'ministry-test');
+    await prisma.facilityDirector.create({
+      data: {
+        facilityId: f.id,
+        personId: person.id,
+        role: 'DIRECTOR',
+        status: 'ACTIVE',
+        appointedBy: 'test',
+        appointedByKind: 'SELF',
+      },
+    });
+
+    const scope = await requireFacilityScope(prisma, { personId: person.id });
+    expect(scope.canAdminister).toBe(true);
+  });
+});
+
+/**
+ * THE OWNER MUST NOT BE ABLE TO TAKE OVER AN EXISTING ACCOUNT.
+ *
+ * Adding staff creates a Person and sets their first password. If that path
+ * also overwrote the password of somebody who is ALREADY registered, then
+ * knowing any citizen's National ID would be enough to seize their account
+ * — and with it their own health record. This is the sharpest edge in the
+ * feature.
+ */
+describe('adding staff who already have an account', () => {
+  it('leaves an existing person\'s password untouched', async () => {
+    const nationalId = `93${Date.now().toString().slice(-6)}`;
+    const theirOwnPassword = 'their-own-password-1';
+    const person = await registerAdult(prisma, {
+      nationalId,
+      phone: `07${nationalId.slice(0, 8)}`,
+      givenName: 'Existing',
+      familyName: 'Citizen',
+      sexAtBirth: 'MALE',
+      dateOfBirth: new Date(Date.UTC(1988, 2, 2)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: await hashPassword(theirOwnPassword),
+    });
+    const before = await prisma.account.findFirstOrThrow({
+      where: { personId: person.id },
+      select: { passwordHash: true },
+    });
+
+    // What the endpoint does for an existing person: attach the role, and
+    // nothing else. No account write at all.
+    await prisma.facilityDirector.create({
+      data: {
+        facilityId: (
+          await (async () => {
+            const f = await registerFacility(prisma, {
+              mflCode: `MFL-TAKE-${Date.now()}`,
+              name: 'Takeover Test Clinic',
+              kephLevel: 3,
+              ownership: 'PRIVATE_FOR_PROFIT',
+              countyId: ctx.kisumuId,
+              subcountyId: ctx.kisumuCentralId,
+              locality: 'Milimani',
+              latitude: -0.0917,
+              longitude: 34.768,
+            });
+            await approveFacility(prisma, f.id, 'ministry-test');
+            return f;
+          })()
+        ).id,
+        personId: person.id,
+        role: 'RECEPTION',
+        status: 'ACTIVE',
+        appointedBy: 'owner-test',
+        appointedByKind: 'SELF',
+      },
+    });
+
+    const after = await prisma.account.findFirstOrThrow({
+      where: { personId: person.id },
+      select: { passwordHash: true },
+    });
+    expect(after.passwordHash).toBe(before.passwordHash);
+
+    // And the password they chose still works.
+    const signedIn = await login(prisma, {
+      phone: `07${nationalId.slice(0, 8)}`,
+      password: theirOwnPassword,
+    });
+    expect(signedIn.status).not.toBe('INVALID_CREDENTIALS');
+  });
+});
+
+/**
+ * A STAFF MEMBER CAN STOP USING THE PASSWORD THEIR EMPLOYER KNOWS.
+ *
+ * The owner issues the first one, so until this runs the employer can sign
+ * in as them and every arrival they register is deniable.
+ */
+describe('changing your own password', () => {
+  async function accountFor(password: string) {
+    const nationalId = `94${Date.now().toString().slice(-6)}`;
+    const person = await registerAdult(prisma, {
+      nationalId,
+      phone: `07${nationalId.slice(0, 8)}`,
+      givenName: 'New',
+      familyName: 'Staff',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: new Date(Date.UTC(1992, 2, 2)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: await hashPassword(password),
+    });
+    const account = await prisma.account.findFirstOrThrow({
+      where: { personId: person.id },
+      select: { id: true },
+    });
+    await prisma.account.update({
+      where: { id: account.id },
+      data: { mustChangePassword: true },
+    });
+    return { account, phone: `07${nationalId.slice(0, 8)}` };
+  }
+
+  it('clears the flag that says somebody else chose it', async () => {
+    const { account } = await accountFor('issued-by-owner-1');
+    await changePassword(prisma, account.id, {
+      currentPassword: 'issued-by-owner-1',
+      newPassword: 'chosen-by-me-9876',
+    });
+    const after = await prisma.account.findUniqueOrThrow({
+      where: { id: account.id },
+      select: { mustChangePassword: true },
+    });
+    expect(after.mustChangePassword).toBe(false);
+  });
+
+  it('refuses without the current password', async () => {
+    const { account } = await accountFor('issued-by-owner-2');
+    // Otherwise an unlocked screen is enough to take the account over.
+    await expect(
+      changePassword(prisma, account.id, {
+        currentPassword: 'not-the-password',
+        newPassword: 'chosen-by-me-9876',
+      }),
+    ).rejects.toThrow(/current password is not right/i);
+  });
+
+  it('refuses a new password identical to the old one', async () => {
+    const { account } = await accountFor('issued-by-owner-3');
+    await expect(
+      changePassword(prisma, account.id, {
+        currentPassword: 'issued-by-owner-3',
+        newPassword: 'issued-by-owner-3',
+      }),
+    ).rejects.toThrow(/must be different/i);
   });
 });

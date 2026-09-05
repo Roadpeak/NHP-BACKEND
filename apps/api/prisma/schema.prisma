@@ -245,6 +245,14 @@ enum DirectorRole {
   DIRECTOR
   /// Delegated administration without ownership.
   MANAGER
+  /**
+   * Reception. Registers arrivals and sees the waiting room, and nothing
+   * else — no roster, no ownership evidence, no power to appoint anybody.
+   * Listed here rather than in a second table because a receptionist is
+   * the same shape as a director: a Person linked to a Facility with a
+   * role. Two tables holding the same relationship would drift.
+   */
+  RECEPTION
 }
 
 enum DirectorStatus {
@@ -612,18 +620,18 @@ model Guardianship {
 }
 
 model Account {
-  id              String     @id @default(uuid(7))
-  personId        String?    @unique @map("person_id")
-  person          Person?    @relation(fields: [personId], references: [id])
-  practitionerId  String?    @unique @map("practitioner_id")
-  ministryUserId  String?    @unique @map("ministry_user_id")
+  id                 String     @id @default(uuid(7))
+  personId           String?    @unique @map("person_id")
+  person             Person?    @relation(fields: [personId], references: [id])
+  practitionerId     String?    @unique @map("practitioner_id")
+  ministryUserId     String?    @unique @map("ministry_user_id")
   /**
    * What this account signs in WITH. For a citizen that is their phone; for
    * a clinician it is their licence number, because the phone already
    * belongs to their own citizen account and one number cannot key two.
    */
-  phone           String
-  phoneIndex      String     @unique @map("phone_index")
+  phone              String
+  phoneIndex         String     @unique @map("phone_index")
   /**
    * Where security codes are SENT.
    * Separate from `phone` because that column doubles as the sign-in
@@ -631,20 +639,30 @@ model Account {
    * codes texted to a number derived from that licence — one nobody owns.
    * Null means "use `phone`", which is correct for every citizen.
    */
-  smsPhone        String?    @map("sms_phone")
-  phoneVerifiedAt DateTime?  @map("phone_verified_at")
-  email           String?
-  emailIndex      String?    @map("email_index")
-  passwordHash    String     @map("password_hash")
-  passwordSetAt   DateTime   @default(now()) @map("password_set_at")
-  mfaMode         MfaMode    @default(NONE) @map("mfa_mode")
-  mfaSecret       String?    @map("mfa_secret")
-  status          AcctStatus @default(ACTIVE)
-  failedAttempts  Int        @default(0) @map("failed_attempts")
-  lockedUntil     DateTime?  @map("locked_until")
-  lastLoginAt     DateTime?  @map("last_login_at")
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  smsPhone           String?    @map("sms_phone")
+  phoneVerifiedAt    DateTime?  @map("phone_verified_at")
+  email              String?
+  emailIndex         String?    @map("email_index")
+  passwordHash       String     @map("password_hash")
+  passwordSetAt      DateTime   @default(now()) @map("password_set_at")
+  /**
+   * Set when somebody else chose this password.
+   * A facility owner currently issues the first password for their
+   * reception staff, which means the employer knows it: until the staff
+   * member changes it, anything done on that account is deniable. The flag
+   * makes that state visible rather than indistinguishable from a password
+   * its owner chose, and it is what the email-invite flow will clear
+   * instead when it replaces this.
+   */
+  mustChangePassword Boolean    @default(false) @map("must_change_password")
+  mfaMode            MfaMode    @default(NONE) @map("mfa_mode")
+  mfaSecret          String?    @map("mfa_secret")
+  status             AcctStatus @default(ACTIVE)
+  failedAttempts     Int        @default(0) @map("failed_attempts")
+  lockedUntil        DateTime?  @map("locked_until")
+  lastLoginAt        DateTime?  @map("last_login_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
 
