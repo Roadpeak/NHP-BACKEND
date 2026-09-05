@@ -61,7 +61,7 @@ services:
       # keep forever.
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
       BLIND_INDEX_PEPPER: ${BLIND_INDEX_PEPPER}
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://nationalhealthportal.com,https://www.nationalhealthportal.com}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://nationalhealthportal.com,https://www.nationalhealthportal.com,https://citizen.nationalhealthportal.com,https://worker.nationalhealthportal.com,https://facility.nationalhealthportal.com,https://ministry.nationalhealthportal.com}
       TEST_HOOK_SECRET: ${TEST_HOOK_SECRET:-}
       AT_API_KEY: ${AT_API_KEY:-}
       AT_USERNAME: ${AT_USERNAME:-}
