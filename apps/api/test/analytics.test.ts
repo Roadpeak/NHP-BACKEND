@@ -44,7 +44,7 @@ async function wipe() {
   for (const t of [
     'agg_condition_daily', 'recommendation', 'condition', 'medication',
     'allergy', 'encounter', 'access_log', 'break_glass', 'consent_grant',
-    'check_in', 'affiliation', 'licence', 'practitioner',
+    'check_in', 'affiliation', 'facility_director', 'licence', 'practitioner',
     'facility_capability', 'facility', 'guardianship', 'identifier',
     'account', 'person',
   ]) {

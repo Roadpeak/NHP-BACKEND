@@ -62,7 +62,7 @@ beforeAll(async () => {
   await q(`SET session_replication_role = replica`);
   for (const t of [
     'condition', 'medication', 'allergy', 'encounter', 'access_log',
-    'break_glass', 'consent_grant', 'check_in', 'affiliation', 'licence',
+    'break_glass', 'consent_grant', 'check_in', 'affiliation', 'facility_director', 'licence',
     'practitioner', 'facility_capability', 'facility', 'guardianship',
     'identifier', 'account', 'merge_request', 'agg_condition_daily',
     'person', 'ward', 'subcounty', 'county',

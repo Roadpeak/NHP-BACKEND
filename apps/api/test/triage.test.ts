@@ -35,7 +35,7 @@ async function wipeFacilities() {
   await owner.query('SET session_replication_role = replica');
   for (const t of [
     'recommendation', 'condition', 'medication', 'allergy', 'encounter',
-    'check_in', 'affiliation', 'licence', 'practitioner',
+    'check_in', 'affiliation', 'facility_director', 'licence', 'practitioner',
     'facility_capability', 'facility',
   ]) {
     await owner.query(`DELETE FROM ${t}`);

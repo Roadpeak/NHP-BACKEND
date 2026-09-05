@@ -40,7 +40,11 @@ setSmsProvider(smsBuffer);
  * Clears the operational tables, leaving the reference data (counties,
  * subcounties, vocabularies) that `pnpm seed` loads.
  *
- * Order matters — children before parents. `session_replication_role` is
+ * Order matters — children before parents. `facility_director` sits with
+ * the other facility children: leaving it out left directorships pointing
+ * at deleted facilities, and a directorship whose facility is gone makes
+ * the /auth/me join fail, so the owner is silently routed to the citizen
+ * portal instead of their own facility. `session_replication_role` is
  * set to `replica` so the append-only triggers on the clinical tables do
  * not refuse the delete: those triggers exist to stop the APPLICATION
  * rewriting history, and this runs as the owner against a dev database.
@@ -50,7 +54,8 @@ async function reset() {
     'agg_condition_daily', 'recommendation', 'counter_referral', 'referral',
     'observation', 'procedure', 'condition', 'medication', 'allergy',
     'encounter', 'access_log', 'break_glass', 'consent_grant', 'check_in',
-    'affiliation', 'licence', 'practitioner', 'facility_capability',
+    'affiliation', 'facility_director', 'licence', 'practitioner',
+    'facility_capability',
     'facility', 'guardianship', 'identifier', 'otp_challenge',
     'refresh_token', 'ministry_user', 'account', 'person',
   ];

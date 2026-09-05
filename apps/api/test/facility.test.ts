@@ -24,6 +24,7 @@ import {
 } from '../src/facility.js';
 import { registerAdult } from '../src/identity.js';
 import { registerPractitioner } from '../src/practitioner.js';
+import { blindIndex, normalisePhone } from '../src/crypto.js';
 import { requireFacilityDirector, requireFacilityScope } from '../src/facility-admin.js';
 import { login, hashPassword } from '../src/auth.js';
 
@@ -43,7 +44,7 @@ async function wipeFacilities() {
   await owner.query('SET session_replication_role = replica');
   for (const t of [
     'condition', 'medication', 'allergy', 'encounter', 'check_in',
-    'affiliation', 'licence', 'practitioner', 'facility_capability', 'facility',
+    'affiliation', 'facility_director', 'licence', 'practitioner', 'facility_capability', 'facility',
   ]) {
     await owner.query(`DELETE FROM ${t}`);
   }
@@ -795,5 +796,46 @@ describe('a director who is also a clinician', () => {
     await expect(
       requireFacilityScope(prisma, { practitionerId: practitioner.id }),
     ).rejects.toThrow(/does not administer a facility/i);
+  });
+});
+
+/**
+ * THE FACILITY'S PHONE IS NOT A LOGIN.
+ *
+ * The registration form asks for two numbers — the clinic's line and the
+ * owner's own — and two phone fields on one page invites the reading that
+ * one of them signs the facility in. Nothing does: the facility has no
+ * credential at all, by design, because a shared one walks out with
+ * whoever leaves and makes every action attributable to a building.
+ */
+describe('the facility contact number', () => {
+  it('creates no account, so it can never be signed in with', async () => {
+    const contactNumber = `0733${Date.now().toString().slice(-6)}`;
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-PHONE-${Date.now()}`,
+      name: 'Contactable Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+      phone: contactNumber,
+    });
+
+    // Stored, because a registrar has to ring it and a referral has to
+    // reach the place.
+    const saved = await prisma.facility.findUniqueOrThrow({
+      where: { id: f.id },
+      select: { phone: true },
+    });
+    expect(saved.phone).toBe(contactNumber);
+
+    // And attached to nothing that could authenticate.
+    const account = await prisma.account.findFirst({
+      where: { phoneIndex: blindIndex(contactNumber, normalisePhone) },
+    });
+    expect(account).toBeNull();
   });
 });

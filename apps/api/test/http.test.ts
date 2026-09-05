@@ -75,7 +75,7 @@ async function wipe() {
     'refresh_token', 'otp_challenge', 'sync_envelope', 'counter_referral',
     'referral', 'agg_condition_daily', 'recommendation', 'condition',
     'medication', 'allergy', 'encounter', 'access_log', 'break_glass',
-    'consent_grant', 'check_in', 'affiliation', 'licence', 'practitioner',
+    'consent_grant', 'check_in', 'affiliation', 'facility_director', 'licence', 'practitioner',
     'merge_request', 'facility_capability', 'facility', 'guardianship',
     'identifier', 'ministry_user', 'account', 'person',
   ]) {
