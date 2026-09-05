@@ -839,3 +839,113 @@ describe('the facility contact number', () => {
     expect(account).toBeNull();
   });
 });
+
+/**
+ * MORE THAN ONE NAMED DIRECTOR.
+ *
+ * A facility with a single director stops working the day that person
+ * leaves — which is the real problem a shared facility password appears to
+ * solve, and solves badly: a shared credential cannot be revoked for one
+ * person, and makes every action attributable to a building rather than a
+ * human.
+ *
+ * A second named director solves it properly. The clinic keeps running,
+ * and every action still has somebody's name on it.
+ */
+describe('appointing a second director', () => {
+  async function facilityWithDirector() {
+    const nationalId = `81${Date.now().toString().slice(-6)}`;
+    const first = await registerAdult(prisma, {
+      nationalId,
+      phone: `07${nationalId.slice(0, 8)}`,
+      givenName: 'First',
+      familyName: 'Director',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: new Date(Date.UTC(1970, 0, 1)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-TWO-${Date.now()}`,
+      name: 'Two Director Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    await prisma.facility.update({
+      where: { id: f.id },
+      data: { pendingDirectorPersonId: first.id },
+    });
+    await approveFacility(prisma, f.id, 'ministry-test');
+    return { facility: f, first };
+  }
+
+  it('lets the facility keep running when a director is replaced', async () => {
+    const { facility, first } = await facilityWithDirector();
+    const secondId = `82${Date.now().toString().slice(-6)}`;
+    const second = await registerAdult(prisma, {
+      nationalId: secondId,
+      phone: `07${secondId.slice(0, 8)}`,
+      givenName: 'Second',
+      familyName: 'Director',
+      sexAtBirth: 'MALE',
+      dateOfBirth: new Date(Date.UTC(1971, 0, 1)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+
+    await prisma.facilityDirector.create({
+      data: {
+        facilityId: facility.id,
+        personId: second.id,
+        status: 'ACTIVE',
+        appointedBy: first.id,
+        appointedByKind: 'SELF',
+      },
+    });
+
+    // The first leaves. The clinic still has somebody who can run it, and
+    // no password changed hands to make that true.
+    await prisma.facilityDirector.updateMany({
+      where: { facilityId: facility.id, personId: first.id },
+      data: { status: 'ENDED', endedAt: new Date() },
+    });
+
+    const scope = await requireFacilityDirector(prisma, second.id);
+    expect(scope.facilityId).toBe(facility.id);
+    await expect(requireFacilityDirector(prisma, first.id)).rejects.toThrow(
+      /does not direct a facility/i,
+    );
+  });
+
+  it('re-appointing someone who left reinstates them', async () => {
+    const { facility, first } = await facilityWithDirector();
+    await prisma.facilityDirector.updateMany({
+      where: { facilityId: facility.id, personId: first.id },
+      data: { status: 'ENDED', endedAt: new Date() },
+    });
+
+    // Upsert, not create: the unique (facility, person) pair would
+    // otherwise make a returning director impossible to reinstate.
+    await prisma.facilityDirector.upsert({
+      where: { facilityId_personId: { facilityId: facility.id, personId: first.id } },
+      create: {
+        facilityId: facility.id,
+        personId: first.id,
+        status: 'ACTIVE',
+        appointedBy: 'test',
+        appointedByKind: 'SELF',
+      },
+      update: { status: 'ACTIVE', endedAt: null },
+    });
+
+    const scope = await requireFacilityDirector(prisma, first.id);
+    expect(scope.facilityId).toBe(facility.id);
+  });
+});

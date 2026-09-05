@@ -1367,6 +1367,176 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     },
   );
 
+  /**
+   * The people who RUN the facility, as opposed to the clinicians who work
+   * in it.
+   *
+   * A facility with one director stops working the day that person leaves,
+   * which is the real problem a shared facility password appears to solve
+   * — and solves badly, because a shared credential cannot be revoked for
+   * one person and makes every action attributable to a building rather
+   * than a human. Naming a second director solves it properly: the clinic
+   * keeps running, and every action still has somebody's name on it.
+   */
+  app.get(`${v1}/facility/directors`, async (req) => {
+    const scope = await facilityScopeFrom(req);
+    const rows = await prisma.facilityDirector.findMany({
+      where: { facilityId: scope.facilityId, endedAt: null },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        startedAt: true,
+        appointedByKind: true,
+        person: { select: { id: true, givenName: true, familyName: true } },
+      },
+      orderBy: { startedAt: 'asc' },
+    });
+    return {
+      facilityName: scope.facilityName,
+      directors: rows.map((d) => ({
+        id: d.id,
+        personId: d.person.id,
+        displayName: `${decryptField(d.person.givenName)} ${decryptField(d.person.familyName)}`,
+        role: d.role,
+        status: d.status,
+        startedAt: d.startedAt,
+        appointedByKind: d.appointedByKind,
+        // So the caller can tell which row is theirs without a second
+        // request, and so "you cannot remove yourself" is explicable.
+        isYou: d.person.id === scope.actorPersonId,
+      })),
+    };
+  });
+
+  /**
+   * Appoint another director.
+   *
+   * By National ID or licence number, resolved through the same search the
+   * registration form uses — the person must already have an account, so
+   * this creates no credential and hands out no password.
+   */
+  app.post<{ Body: { identifier: string; role?: string } }>(
+    `${v1}/facility/directors`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['identifier'],
+          properties: {
+            identifier: { type: 'string', minLength: 6, maxLength: 64 },
+            role: { type: 'string', enum: ['OWNER', 'DIRECTOR', 'MANAGER'] },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const scope = await facilityScopeFrom(req);
+      const identifier = req.body.identifier.trim();
+
+      const licence = await prisma.licence.findFirst({
+        where: { licenceNumber: identifier.toUpperCase() },
+        select: { practitioner: { select: { personId: true } } },
+      });
+      let personId = licence?.practitioner?.personId ?? null;
+      if (!personId) {
+        const match = await prisma.identifier.findFirst({
+          where: {
+            type: 'NATIONAL_ID',
+            valueIndex: blindIndex(identifier),
+            status: 'ACTIVE',
+          },
+          select: { personId: true },
+        });
+        personId = match?.personId ?? null;
+      }
+      if (!personId) {
+        throw new FacilityAdminError(
+          'Nobody with that National ID or licence number has an account. They ' +
+            'must register first — a director signs in as themselves.',
+          'DIRECTOR_NOT_FOUND',
+        );
+      }
+
+      const person = await prisma.person.findUniqueOrThrow({
+        where: { id: personId },
+        select: { givenName: true, familyName: true },
+      });
+
+      // ACTIVE immediately: an existing director vouching for another is
+      // the facility's own decision, and the Ministry already verified the
+      // facility itself. Re-appointing someone who left reinstates them
+      // rather than failing on the unique pair.
+      const director = await prisma.facilityDirector.upsert({
+        where: { facilityId_personId: { facilityId: scope.facilityId, personId } },
+        create: {
+          facilityId: scope.facilityId,
+          personId,
+          role: (req.body.role ?? 'DIRECTOR') as never,
+          status: 'ACTIVE',
+          appointedBy: scope.actorPersonId ?? scope.actorPractitionerId ?? 'facility',
+          appointedByKind: 'SELF',
+        },
+        update: { status: 'ACTIVE', endedAt: null },
+      });
+
+      req.log.info(
+        { facilityId: scope.facilityId, personId },
+        'facility appointed a director',
+      );
+      return {
+        id: director.id,
+        personId,
+        displayName: `${decryptField(person.givenName)} ${decryptField(person.familyName)}`,
+        role: director.role,
+        status: director.status,
+      };
+    },
+  );
+
+  /** End a directorship. */
+  app.delete<{ Params: { directorId: string } }>(
+    `${v1}/facility/directors/:directorId`,
+    async (req) => {
+      const scope = await facilityScopeFrom(req);
+
+      const director = await prisma.facilityDirector.findUnique({
+        where: { id: req.params.directorId },
+        select: { id: true, facilityId: true, personId: true },
+      });
+      if (!director || director.facilityId !== scope.facilityId) {
+        throw new FacilityAdminError('Director not found', 'DIRECTOR_NOT_FOUND');
+      }
+
+      // Removing yourself leaves nobody able to undo it, and removing the
+      // last one leaves a facility nobody can administer — the exact state
+      // this whole feature exists to prevent.
+      if (scope.actorPersonId && director.personId === scope.actorPersonId) {
+        throw new FacilityAdminError(
+          'You cannot remove your own access. Appoint another director first, ' +
+            'and ask them to remove you.',
+          'CANNOT_REMOVE_SELF',
+        );
+      }
+
+      const remaining = await prisma.facilityDirector.count({
+        where: { facilityId: scope.facilityId, status: 'ACTIVE', endedAt: null },
+      });
+      if (remaining <= 1) {
+        throw new FacilityAdminError(
+          'A facility must always have a director. Appoint another one first.',
+          'LAST_DIRECTOR',
+        );
+      }
+
+      await prisma.facilityDirector.update({
+        where: { id: director.id },
+        data: { status: 'ENDED', endedAt: new Date() },
+      });
+      return { ended: true };
+    },
+  );
+
   app.delete<{ Params: { affiliationId: string } }>(
     `${v1}/facility/staff/:affiliationId`,
     async (req) => {
