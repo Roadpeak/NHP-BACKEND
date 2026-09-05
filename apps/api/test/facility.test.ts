@@ -24,6 +24,7 @@ import {
 } from '../src/facility.js';
 import { registerAdult } from '../src/identity.js';
 import { requireFacilityDirector } from '../src/facility-admin.js';
+import { login, hashPassword } from '../src/auth.js';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -657,5 +658,68 @@ describe('a facility director who holds no licence', () => {
     await expect(requireFacilityDirector(prisma, person.id)).rejects.toThrow(
       /does not direct a facility/i,
     );
+  });
+});
+
+/**
+ * A DIRECTOR IS PRIVILEGED.
+ *
+ * They hold no clinical licence, but they reach the reception queue — which
+ * carries patient names, ages and photographs. Treating them as an ordinary
+ * citizen left the facility surface reachable with a password alone.
+ */
+describe('a director must hold a second factor', () => {
+  it('is required to enrol one, unlike a plain citizen', async () => {
+    const nationalId = `65${Date.now().toString().slice(-6)}`;
+    const person = await registerAdult(prisma, {
+      nationalId,
+      phone: `07${nationalId.slice(0, 8)}`,
+      givenName: 'Mary',
+      familyName: 'Director',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: new Date(Date.UTC(1972, 1, 9)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: await hashPassword('director-pass-123'),
+    });
+
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-MFA-${Date.now()}`,
+      name: 'Second Factor Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    await approveFacility(prisma, f.id, 'ministry-test');
+
+    // Before the directorship they are an ordinary citizen: no second
+    // factor demanded, which is right — requiring one to read your own
+    // record would exclude the people it is meant to serve.
+    const asCitizen = await login(prisma, {
+      phone: `07${nationalId.slice(0, 8)}`,
+      password: 'director-pass-123',
+    });
+    expect(asCitizen.status).toBe('AUTHENTICATED');
+
+    await prisma.facilityDirector.create({
+      data: {
+        facilityId: f.id,
+        personId: person.id,
+        status: 'ACTIVE',
+        appointedBy: 'ministry-test',
+        appointedByKind: 'MINISTRY',
+      },
+    });
+
+    // The same account, now directing a facility, must enrol one.
+    const asDirector = await login(prisma, {
+      phone: `07${nationalId.slice(0, 8)}`,
+      password: 'director-pass-123',
+    });
+    expect(asDirector.status).toBe('MFA_ENROLMENT_REQUIRED');
   });
 });

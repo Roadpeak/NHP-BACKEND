@@ -417,7 +417,23 @@ export async function login(
     data: { failedAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
   });
 
-  const privileged = Boolean(account.practitionerId || account.ministryUserId);
+  /*
+   * Who must hold a second factor.
+   *
+   * Practitioners and Ministry users, plus anyone who DIRECTS a facility.
+   * A director reaches the reception queue, which carries patient names,
+   * ages and photographs — so the fact that they hold no clinical licence
+   * makes their account no less worth stealing. They were treated as
+   * ordinary citizens and never prompted to enrol, which left the facility
+   * surface reachable with a password alone.
+   */
+  const directs = account.personId
+    ? await db.facilityDirector.count({
+        where: { personId: account.personId, status: 'ACTIVE', endedAt: null },
+      })
+    : 0;
+
+  const privileged = Boolean(account.practitionerId || account.ministryUserId) || directs > 0;
 
   // MFA is mandatory for anyone who can reach identifiable health data, and
   // enforced here rather than trusted to the client.
