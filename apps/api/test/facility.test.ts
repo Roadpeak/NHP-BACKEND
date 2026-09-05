@@ -23,7 +23,8 @@ import {
   KEPH_LEVELS,
 } from '../src/facility.js';
 import { registerAdult } from '../src/identity.js';
-import { requireFacilityDirector } from '../src/facility-admin.js';
+import { registerPractitioner } from '../src/practitioner.js';
+import { requireFacilityDirector, requireFacilityScope } from '../src/facility-admin.js';
 import { login, hashPassword } from '../src/auth.js';
 
 const prisma = new PrismaClient({
@@ -721,5 +722,78 @@ describe('a director must hold a second factor', () => {
       password: 'director-pass-123',
     });
     expect(asDirector.status).toBe('MFA_ENROLMENT_REQUIRED');
+  });
+});
+
+/**
+ * A CLINICIAN WHO OWNS A CLINIC KEEPS ONE LOGIN.
+ *
+ * A clinician holds two accounts: a citizen one keyed on their phone, and a
+ * clinical one keyed on their licence. Only the first carries a personId.
+ * A directorship hangs off the Person, so it was invisible to the clinical
+ * session — the doctor could sign in with the account they actually use and
+ * be refused their own facility.
+ */
+/** A registered practitioner with a verified licence, and the Person behind them. */
+async function makeDoctor(licenceNumber: string) {
+  const nationalId = `7${Date.now().toString().slice(-7)}`;
+  const person = await registerAdult(prisma, {
+    nationalId,
+    phone: `07${nationalId.slice(0, 8)}`,
+    givenName: 'Owner',
+    familyName: 'Clinician',
+    sexAtBirth: 'FEMALE',
+    dateOfBirth: new Date(Date.UTC(1980, 0, 1)),
+    countyId: ctx.kisumuId,
+    subcountyId: ctx.kisumuCentralId,
+    passwordHash: 'argon2id$test',
+  });
+  const { practitioner } = await registerPractitioner(prisma, {
+    personId: person.id,
+    cadre: 'DOCTOR',
+    countyId: ctx.kisumuId,
+    subcountyId: ctx.kisumuCentralId,
+    licenceNumber,
+    familyName: 'Clinician',
+  });
+  return { person, practitioner };
+}
+
+describe('a director who is also a clinician', () => {
+  it('reaches the facility from the clinical session, which carries no personId', async () => {
+    const { practitioner } = await makeDoctor(`KMPDC/LINK/${Date.now()}`);
+    const f = await registerFacility(prisma, {
+      mflCode: `MFL-BOTH-${Date.now()}`,
+      name: 'Owner-Clinician Clinic',
+      kephLevel: 3,
+      ownership: 'PRIVATE_FOR_PROFIT',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      locality: 'Milimani',
+      latitude: -0.0917,
+      longitude: 34.768,
+    });
+    // Linked through the Person behind the practitioner, which is what the
+    // registration flow records when a licence is given.
+    await prisma.facility.update({
+      where: { id: f.id },
+      data: { pendingDirectorPersonId: practitioner.personId },
+    });
+    await approveFacility(prisma, f.id, 'ministry-test');
+
+    // The clinical token: a practitionerId and NO personId at all.
+    const scope = await requireFacilityScope(prisma, {
+      practitionerId: practitioner.id,
+    });
+    expect(scope.facilityId).toBe(f.id);
+  });
+
+  it('still refuses a clinician who directs nothing', async () => {
+    const { practitioner } = await makeDoctor(`KMPDC/NONE/${Date.now()}`);
+    // The refusal must survive the fall-through, or every practitioner who
+    // administers nothing gets a confusing director-shaped error instead.
+    await expect(
+      requireFacilityScope(prisma, { practitionerId: practitioner.id }),
+    ).rejects.toThrow(/does not administer a facility/i);
   });
 });

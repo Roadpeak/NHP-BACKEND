@@ -72,6 +72,7 @@ import {
   requireFacilityAdmin,
   requireFacilityScope,
   requireFacilityDirector,
+  actingPersonId,
   listStaff,
   registerArrival,
   listQueue,
@@ -1111,10 +1112,18 @@ export async function buildApp(prismaOverride?: PrismaClient) {
      * genuinely different facts, and a screen that needs to know whether
      * the person can also treat patients must be able to tell them apart.
      */
-    const directorOf = ctx.personId
+    // Either session resolves to the same human: a clinician's licence
+    // account carries no personId, so a directorship hangs off a Person the
+    // clinical token never mentions.
+    const actingPerson = await actingPersonId(prisma, {
+      practitionerId: ctx.practitionerId,
+      personId: ctx.personId,
+    });
+
+    const directorOf = actingPerson
       ? await prisma.facilityDirector.findFirst({
           where: {
-            personId: ctx.personId,
+            personId: actingPerson,
             status: 'ACTIVE',
             endedAt: null,
             facility: { registrationStatus: 'ACTIVE' },
@@ -1419,8 +1428,11 @@ export async function buildApp(prismaOverride?: PrismaClient) {
      * "this endpoint requires a clinical account" on their own reception
      * desk.
      */
-    if (!ctx.practitionerId && ctx.personId) {
-      const scope = await requireFacilityDirector(prisma, ctx.personId);
+    const directorPerson = ctx.practitionerId
+      ? null
+      : await actingPersonId(prisma, { personId: ctx.personId });
+    if (directorPerson) {
+      const scope = await requireFacilityDirector(prisma, directorPerson);
       return {
         facilityId: scope.facilityId,
         facilityName: scope.facilityName,
@@ -1428,7 +1440,7 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         // a legitimate who. It is not a licence claim — arrivals are
         // administrative, which is the whole reason reception can write
         // them at all.
-        practitionerId: ctx.personId,
+        practitionerId: directorPerson,
       };
     }
 

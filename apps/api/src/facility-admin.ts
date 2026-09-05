@@ -415,18 +415,62 @@ export async function requireFacilityScope(
   who: { practitionerId?: string; personId?: string },
   facilityId?: string,
 ): Promise<AdminScope> {
+  let firstRefusal: unknown = null;
   if (who.practitionerId) {
     try {
       return await requireFacilityAdmin(db, who.practitionerId, facilityId);
     } catch (err) {
-      // A practitioner who is also a director falls through to the second
-      // check rather than being refused on the first.
-      if (!who.personId) throw err;
+      /*
+       * Fall through, always.
+       *
+       * A clinician's licence session carries no personId at all, so
+       * requiring one here rethrew before the directorship could be looked
+       * up — a doctor who owns a clinic was refused their own facility on
+       * the account they actually sign in with. The refusal is kept and
+       * rethrown only if the director path also finds nothing, so the
+       * clearer message still wins for a practitioner who directs nothing.
+       */
+      firstRefusal = err;
     }
   }
-  if (who.personId) return requireFacilityDirector(db, who.personId, facilityId);
+  // Resolved through the Person, so a clinician's licence session finds the
+  // directorship that hangs off their citizen identity.
+  const person = await actingPersonId(db, who);
+  if (person) {
+    try {
+      return await requireFacilityDirector(db, person, facilityId);
+    } catch (err) {
+      throw firstRefusal ?? err;
+    }
+  }
+  if (firstRefusal) throw firstRefusal;
   throw new FacilityAdminError(
     'This account does not administer a facility.',
     'NOT_A_FACILITY_ADMIN',
   );
+}
+
+/**
+ * The Person behind whoever is signed in.
+ *
+ * A clinician holds TWO accounts: a citizen one keyed on their phone and a
+ * clinical one keyed on their licence. Only the first carries `personId`,
+ * so a directorship — which hangs off the Person — was invisible to the
+ * clinical session. A doctor who owns a clinic had to sign out and back in
+ * as themselves to run it, which is exactly the "one login" the linking
+ * flow promises.
+ *
+ * Returns the personId for either kind of session.
+ */
+export async function actingPersonId(
+  db: Db,
+  who: { practitionerId?: string; personId?: string },
+): Promise<string | null> {
+  if (who.personId) return who.personId;
+  if (!who.practitionerId) return null;
+  const prac = await db.practitioner.findUnique({
+    where: { id: who.practitionerId },
+    select: { personId: true },
+  });
+  return prac?.personId ?? null;
 }
