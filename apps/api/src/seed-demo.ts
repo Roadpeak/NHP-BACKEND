@@ -422,12 +422,22 @@ async function main() {
 
   // Malaria cases across several counties, so the choropleth has variation
   // and the suppression rules actually bite somewhere.
+  /*
+   * Counts high enough that a DAY clears the suppression threshold.
+   *
+   * These were sized for a single-day snapshot: 34 cases in Kisumu read
+   * fine as a total, but spread over a fortnight it is two a day, and the
+   * rollup suppressed every one of them. The trend chart drew a flat line
+   * at zero from data that was really there.
+   *
+   * Nairobi stays deliberately tiny, so suppression is still exercised.
+   */
   const spread: Array<[string, number]> = [
-    ['042', 34], // Kisumu — high
-    ['041', 28], // Siaya
-    ['043', 19], // Homa Bay
-    ['040', 12], // Busia
-    ['047', 4],  // Nairobi — below threshold, will suppress
+    ['042', 340], // Kisumu — high, ~24/day
+    ['041', 260], // Siaya
+    ['043', 180], // Homa Bay
+    ['040', 150], // Busia
+    ['047', 4],   // Nairobi — below threshold, will suppress
   ];
 
   for (const [code, cases] of spread) {
@@ -484,40 +494,86 @@ async function main() {
       grantedBy: 'ministry-demo',
       grantedByKind: 'MINISTRY',
     });
-    await checkIn(prisma, { practitionerId: p.id, facilityId: f.id });
+    /*
+     * A fortnight of cases, one backdated shift per day.
+     *
+     * Everything used to be written at now(), so the rollup produced a
+     * single day and every trend chart on the Ministry dashboard had one
+     * point to draw — no trend at all. A demo whose shape cannot exercise
+     * the screens it exists for is not much of a demo.
+     *
+     * The check-in is backdated as well as the diagnosis, because the
+     * check-in gate refuses a clinical row recorded before its session
+     * started — correctly. Opening a session per day is what a clinician
+     * actually does, so the seed does the same rather than working around
+     * the guard.
+     *
+     * The distribution is a curve, not uniform: a rise into a peak and a
+     * fall away, so a reader can see the chart is reading real variation.
+     */
+    const DAYS = 14;
+    let made = 0;
+    for (let d = DAYS - 1; d >= 0 && made < cases; d--) {
+      const when = new Date(Date.now() - d * 86_400_000);
+      // A clinician cannot hold two open sessions, so each day's shift is
+      // closed before the next opens — which is what actually happens.
+      const shift = await checkIn(
+        prisma,
+        { practitionerId: p.id, facilityId: f.id },
+        new Date(when.getTime() - 3_600_000),
+      );
 
-    for (let i = 0; i < cases; i++) {
-      const casePatient = await registerAdult(prisma, {
-        nationalId: `9${code}${String(i + 100).padStart(5, '0')}`,
-        phone: `07${code}${String(i + 1000).padStart(6, '0')}`,
-        givenName: `Case${i}`,
-        familyName: c.name,
-        sexAtBirth: i % 2 === 0 ? 'FEMALE' : 'MALE',
-        // Spread across adult age bands, so the rollup has real variation
-        // without generating anyone under 18.
-        dateOfBirth: new Date(Date.UTC(1950 + (i % 55), i % 12, 1 + (i % 28))),
-        countyId: c.id,
-        subcountyId: sub.id,
-        passwordHash: 'argon2id$demo',
-      });
-      const enc = await openEncounter(prisma, {
-        practitionerId: p.id,
-        personId: casePatient.id,
-        kind: 'OUTPATIENT',
-        chiefComplaint: 'fever',
-      });
-      await recordDiagnosis(prisma, {
-        practitionerId: p.id,
-        encounterId: enc.id,
-        icd11Code: '1F41.0',
+      // More cases toward the middle of the fortnight than at its edges.
+      const onThisDay = Math.max(
+        1,
+        Math.round((cases / DAYS) * (1 + Math.sin((Math.PI * (DAYS - 1 - d)) / (DAYS - 1)))),
+      );
+
+      for (let k = 0; k < onThisDay && made < cases; k++, made++) {
+        const casePatient = await registerAdult(prisma, {
+          nationalId: `9${code}${String(made + 100).padStart(5, '0')}`,
+          phone: `07${code}${String(made + 1000).padStart(6, '0')}`,
+          givenName: `Case${made}`,
+          familyName: c.name,
+          sexAtBirth: made % 2 === 0 ? 'FEMALE' : 'MALE',
+          // Spread across adult age bands, so the rollup has real variation
+          // without generating anyone under 18.
+          dateOfBirth: new Date(Date.UTC(1950 + (made % 55), made % 12, 1 + (made % 28))),
+          countyId: c.id,
+          subcountyId: sub.id,
+          passwordHash: 'argon2id$demo',
+        });
+        const enc = await openEncounter(prisma, {
+          practitionerId: p.id,
+          personId: casePatient.id,
+          kind: 'OUTPATIENT',
+          chiefComplaint: 'fever',
+          startedAt: when,
+        });
+        await recordDiagnosis(prisma, {
+          practitionerId: p.id,
+          encounterId: enc.id,
+          icd11Code: '1F41.0',
+          recordedAt: when,
+        });
+      }
+
+      await prisma.checkIn.update({
+        where: { id: shift.session.id },
+        data: { endedAt: new Date(when.getTime() + 3_600_000) },
       });
     }
+
+    // Leave one session open at the end, so signing in as this clinician
+    // lands on a portal that can actually record something.
+    await checkIn(prisma, { practitionerId: p.id, facilityId: f.id });
   }
 
   // Run the rollup, so the map reads aggregates rather than clinical rows.
+  // The window covers the whole fortnight the cases were spread across.
   const { rollupConditions } = await import('./analytics.js');
   await rollupConditions(prisma, {
-    from: new Date(Date.now() - 86_400_000),
+    from: new Date(Date.now() - 15 * 86_400_000),
     to: new Date(Date.now() + 86_400_000),
   });
 

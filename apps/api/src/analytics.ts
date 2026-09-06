@@ -920,3 +920,58 @@ export async function payerMixByCounty(db: Db, opts: { from: Date; to: Date }) {
     unrecordedShare: c.total ? (c.mix.UNKNOWN ?? 0) / c.total : null,
   }));
 }
+
+/**
+ * A daily series, for the trend charts.
+ *
+ * Reads the aggregate table like every other Ministry query — nhp_analyst
+ * holds no grant on `condition`, and a trend that reached the clinical table
+ * would make the role separation decorative.
+ *
+ * Suppressed cells contribute ZERO rather than being skipped. A day whose
+ * only county was suppressed is a day with no publishable cases, and
+ * dropping the point entirely would draw a line straight over it as though
+ * nothing had been withheld.
+ */
+export async function burdenTrend(
+  db: Db,
+  opts: { from: Date; to: Date; icd11Code?: string },
+) {
+  const rows = await db.aggConditionDaily.groupBy({
+    by: ['date'],
+    where: {
+      date: { gte: opts.from, lt: opts.to },
+      ...(opts.icd11Code ? { icd11Code: opts.icd11Code } : {}),
+      suppressed: false,
+    },
+    _sum: { caseCount: true, newCaseCount: true },
+    orderBy: { date: 'asc' },
+  });
+
+  return rows.map((r) => ({
+    date: r.date.toISOString().slice(0, 10),
+    cases: r._sum.caseCount ?? 0,
+    newCases: r._sum.newCaseCount ?? 0,
+  }));
+}
+
+/**
+ * The stated payer mix as a whole, for the composition chart.
+ *
+ * Reads agg_payer_daily, which is the only table nhp_analyst can see for
+ * this. The unrecorded share is returned as its own slice rather than
+ * dropped — a mix that hides how much was never asked is a confident and
+ * wrong picture of how Kenyans pay.
+ */
+export async function payerMixTotals(db: Db, opts: { from: Date; to: Date }) {
+  const rows = await db.aggPayerDaily.groupBy({
+    by: ['statedPayer'],
+    where: { date: { gte: opts.from, lt: opts.to }, suppressed: false },
+    _sum: { arrivalCount: true },
+  });
+
+  return rows
+    .map((r) => ({ payer: r.statedPayer, arrivals: r._sum.arrivalCount ?? 0 }))
+    .filter((r) => r.arrivals > 0)
+    .sort((a, b) => b.arrivals - a.arrivals);
+}

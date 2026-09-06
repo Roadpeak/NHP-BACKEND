@@ -416,6 +416,10 @@ export interface OpenEncounterInput {
   chiefComplaint: string;
   presentation?: Prisma.InputJsonValue;
   triageBand?: 'RED' | 'ORANGE' | 'YELLOW' | 'GREEN';
+  /**
+   * Backdates the encounter. SEEDING ONLY — see recordDiagnosis.recordedAt.
+   */
+  startedAt?: Date;
 }
 
 /**
@@ -426,7 +430,7 @@ export interface OpenEncounterInput {
  * braces is correct for the only write path into a national health record.
  */
 export async function openEncounter(db: Db, input: OpenEncounterInput) {
-  const gate = await canWriteClinical(db, input.practitionerId);
+  const gate = await canWriteClinical(db, input.practitionerId, input.startedAt);
   if (!gate.allowed) {
     throw new ClinicalError(gate.reason, gate.code);
   }
@@ -444,7 +448,7 @@ export async function openEncounter(db: Db, input: OpenEncounterInput) {
     );
   }
 
-  const now = new Date();
+  const now = input.startedAt ?? new Date();
   return db.encounter.create({
     data: {
       personId: input.personId,
@@ -637,9 +641,22 @@ export async function recordDiagnosis(
     onsetDate?: Date;
     isChronic?: boolean;
     notes?: string;
+    /**
+     * Backdates the record. SEEDING ONLY.
+     *
+     * No route passes this — the two callers are the demo seed and its
+     * tests. It exists because clinical rows are append-only, so a seed
+     * cannot write them at now() and then move them, and a demo whose
+     * cases all land on one day gives every trend chart a single point to
+     * draw.
+     */
+    recordedAt?: Date;
   },
 ) {
-  const gate = await canWriteClinical(db, input.practitionerId);
+  // The clock is `recordedAt` when the seed backdates a record, so the
+  // gate validates against the session that was open THEN. A live call
+  // passes nothing and gets now(), unchanged.
+  const gate = await canWriteClinical(db, input.practitionerId, input.recordedAt);
   if (!gate.allowed) throw new ClinicalError(gate.reason, gate.code);
 
   const encounter = await db.encounter.findUnique({
@@ -679,7 +696,7 @@ export async function recordDiagnosis(
       recordedBy: input.practitionerId,
       facilityId: gate.facilityId,
       licenceNumber: gate.licenceNumber,
-      recordedAt: new Date(),
+      recordedAt: input.recordedAt ?? new Date(),
       sensitivity: term.sensitivity,
       encounterId: encounter.id,
       icd11Code: term.icd11Code,

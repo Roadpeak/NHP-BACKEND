@@ -85,6 +85,8 @@ import {
 } from './facility-admin.js';
 import {
   burdenByCounty,
+  burdenTrend,
+  payerMixTotals,
   burdenBySubcounty,
   referralClosureByCounty,
   workforceByCounty,
@@ -2322,6 +2324,21 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     requireMinistry(ctx, ['ANALYST']);
     const { icd11Code, chapter } = req.query as { icd11Code?: string; chapter?: string };
     return burdenByCounty(prisma, { ...periodFrom(req.query as never), icd11Code, chapter });
+  });
+
+  /** The daily series behind the burden figure, for the trend chart. */
+  app.get(`${v1}/analytics/burden-trend`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['ANALYST']);
+    const { icd11Code } = req.query as { icd11Code?: string };
+    return burdenTrend(prisma, { ...periodFrom(req.query as never), icd11Code });
+  });
+
+  /** How visits were said to be paid for, as a whole. */
+  app.get(`${v1}/analytics/payer-mix`, async (req) => {
+    const ctx = await contextFrom(req);
+    requireMinistry(ctx, ['ANALYST']);
+    return payerMixTotals(prisma, periodFrom(req.query as never));
   });
 
   app.get<{ Params: { countyId: string } }>(
