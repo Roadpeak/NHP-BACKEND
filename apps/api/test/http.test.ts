@@ -133,8 +133,11 @@ const CITIZEN_PASSWORD = 'citizen-password-123';
 async function makePerson(givenName = 'Achieng') {
   seq++;
   const phone = `07140000${String(seq).padStart(2, '0')}`;
+  // Returned alongside the person, so a test can search by the National ID
+  // as reception would rather than only by the NHP number.
+  const nationalId = `810000${String(seq).padStart(2, '0')}`;
   const person = await registerAdult(prisma, {
-    nationalId: `810000${String(seq).padStart(2, '0')}`,
+    nationalId,
     phone,
     givenName,
     familyName: 'Otieno',
@@ -144,7 +147,7 @@ async function makePerson(givenName = 'Achieng') {
     subcountyId: ctx.subcountyId,
     passwordHash: await hashPassword(CITIZEN_PASSWORD),
   });
-  return Object.assign(person, { phone });
+  return Object.assign(person, { phone, nationalId });
 }
 
 const ROLE_PASSWORD = 'role-password-123';
@@ -3458,6 +3461,57 @@ describe('facility portal', () => {
     );
     expect(entry.displayName).toContain('Otieno');
     expect(entry.reasonForVisit).toBe('Cough since Tuesday');
+  });
+
+  it('checks somebody in by their National ID, not just the card', async () => {
+    /*
+     * A card gets left at home. An ID number is in somebody's head, and a
+     * desk that only accepts the card turns a forgotten card into "come
+     * back later" — which is how a queue is really formed.
+     */
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Wekesa');
+
+    const res = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.nationalId,
+    });
+    expect(res.statusCode).toBe(200);
+
+    const arrival = await prisma.arrival.findUniqueOrThrow({
+      where: { id: res.json().arrivalId },
+      select: { personId: true },
+    });
+    expect(arrival.personId).toBe(patient.id);
+  });
+
+  it('does not queue the same person twice across the two identifiers', async () => {
+    // The same person reached two ways is one person. Checking in by ID
+    // after checking in by card must not produce a second row, or the
+    // waiting count is wrong and somebody is seen twice.
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Chepkoech');
+
+    const byCard = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+    });
+    const byId = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.nationalId,
+    });
+
+    expect(byId.json().alreadyWaiting).toBe(true);
+    expect(byId.json().arrivalId).toBe(byCard.json().arrivalId);
+  });
+
+  it('says both ways of finding somebody when neither worked', async () => {
+    const admin = await facilityAdmin();
+    const res = await post('/facility/queue', admin.accessToken, {
+      nhpId: 'NHP-0000-0000',
+    });
+    expect(res.statusCode).toBe(400);
+    // The message has to name the second option, or reception does not
+    // know it exists. `detail` rather than `message` — the API answers in
+    // the RFC 7807 problem shape.
+    expect(res.json().detail).toMatch(/national id/i);
   });
 
   // --------------------------------------------------- stated payer

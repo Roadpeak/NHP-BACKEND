@@ -22,7 +22,7 @@
  */
 
 import type { PayerKind, PrismaClient } from '@prisma/client';
-import { decryptField } from './crypto.js';
+import { blindIndex, decryptField } from './crypto.js';
 
 type Db = PrismaClient;
 
@@ -328,10 +328,47 @@ export async function resolvePayer(
   return { statedPayer: kind, payerOrgId: org.id };
 }
 
+/**
+ * Finds the person behind whatever reception typed.
+ *
+ * An NHP number is on the card; a National ID is in somebody's head. A desk
+ * that only accepts the card turns a forgotten card into "come back later",
+ * which is how a queue is really formed.
+ *
+ * The National ID is looked up through its blind index, never compared in
+ * plain text — the same path the worker portal and the director search use.
+ * Nothing here returns the identifier, only the person it belongs to.
+ */
+export async function findPersonByAnyIdentifier(
+  db: Db,
+  raw: string,
+): Promise<{ id: string; lifeStatus: string } | null> {
+  const identifier = raw.trim();
+  if (!identifier) return null;
+
+  // An NHP number is unambiguous and cheap, so it goes first.
+  const byNhp = await db.person.findUnique({
+    where: { displayNumber: identifier.toUpperCase() },
+    select: { id: true, lifeStatus: true },
+  });
+  if (byNhp) return byNhp;
+
+  const match = await db.identifier.findFirst({
+    where: {
+      type: 'NATIONAL_ID',
+      valueIndex: blindIndex(identifier),
+      status: 'ACTIVE',
+    },
+    select: { person: { select: { id: true, lifeStatus: true } } },
+  });
+  return match?.person ?? null;
+}
+
 export async function registerArrival(
   db: Db,
   input: {
     facilityId: string;
+    /** An NHP number or a National ID — reception may have either. */
     nhpId: string;
     statedReason?: string;
     registeredBy: string;
@@ -341,13 +378,11 @@ export async function registerArrival(
     payerOrgId?: string | null;
   },
 ) {
-  const person = await db.person.findUnique({
-    where: { displayNumber: input.nhpId.trim().toUpperCase() },
-    select: { id: true, lifeStatus: true },
-  });
+  const person = await findPersonByAnyIdentifier(db, input.nhpId);
   if (!person) {
     throw new FacilityAdminError(
-      `No record found for ${input.nhpId}. Check the number on the card.`,
+      `No record found for ${input.nhpId}. Check the NHP number on their ` +
+        'card, or try their National ID.',
       'PERSON_NOT_FOUND',
     );
   }
