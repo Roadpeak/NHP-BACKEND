@@ -29,6 +29,18 @@ export type Db = PrismaClient | Prisma.TransactionClient;
  */
 export const UNCODED_MEDICATION = 'UNCODED';
 
+/**
+ * The sentinel code for a treatment that is not in the NHP-TX catalogue.
+ *
+ * Same reasoning as UNCODED_MEDICATION: a real value rather than null, so
+ * every query that groups by code keeps working, and an uncoded treatment is
+ * visibly uncoded instead of masquerading as a code nobody can look up.
+ *
+ * Clinicians do things the catalogue has not thought of, and a list that
+ * refuses them produces a record that quietly disagrees with what happened.
+ */
+export const UNCODED_TREATMENT = 'UNCODED';
+
 export class ClinicalError extends Error {
   constructor(
     message: string,
@@ -128,6 +140,54 @@ export async function searchDiagnoses(
     isNotifiable: term.isNotifiable,
     score,
   }));
+}
+
+/**
+ * Treatments matching what the clinician is typing.
+ *
+ * Ranked in memory like searchDiagnoses, and for the same reason: the
+ * vocabulary is small, and doing it here keeps the ordering explicit and
+ * testable rather than approximated in SQL.
+ */
+export async function searchTreatments(db: Db, query: string, limit = 8) {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+
+  const terms = await db.treatmentTerm.findMany({
+    select: {
+      txCode: true,
+      title: true,
+      plainEn: true,
+      plainSw: true,
+      category: true,
+      minKephLevel: true,
+      requiresConsent: true,
+      synonyms: true,
+    },
+  });
+
+  return terms
+    .map((t) => {
+      const candidates = [t.title, ...t.synonyms].map((c) => c.toLowerCase());
+      let best = 0;
+      for (const c of candidates) {
+        if (c === q) best = Math.max(best, 1000);
+        else if (c.startsWith(q)) best = Math.max(best, 500 - c.length);
+        else if (c.includes(q)) best = Math.max(best, 300 - c.length);
+      }
+      // Typing the code is a valid shortcut for someone who knows it.
+      if (t.txCode.toLowerCase().startsWith(q)) best = Math.max(best, 900);
+      return { term: t, score: best };
+    })
+    .filter((s) => s.score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      // Deterministic tiebreak, or the same query returns different
+      // treatments on different days depending on row order.
+      return a.term.txCode.localeCompare(b.term.txCode);
+    })
+    .slice(0, limit)
+    .map(({ term, score }) => ({ ...term, score }));
 }
 
 export async function searchMedications(db: Db, query: string, limit = 5) {
@@ -399,6 +459,164 @@ export async function openEncounter(db: Db, input: OpenEncounterInput) {
       presentation: input.presentation,
       triageBand: input.triageBand ?? null,
     },
+  });
+}
+
+/**
+ * Records a treatment administered during an encounter.
+ *
+ * Writes to `procedure`, which already carries everything a treatment needs —
+ * code, title, indication, outcome, the encounter it belongs to — and is
+ * already append-only and Tier-classified. A second table would have drifted.
+ *
+ * A treatment the catalogue does not list is recorded with the UNCODED
+ * sentinel and the clinician's own words as the title. Refusing it would
+ * produce a record that quietly disagrees with what actually happened.
+ */
+export async function recordTreatment(
+  db: Db,
+  input: {
+    practitionerId: string;
+    encounterId: string;
+    /** An NHP-TX code, or 'UNCODED' for a treatment not in the catalogue. */
+    txCode: string;
+    /** Required when txCode is 'UNCODED'; ignored otherwise. */
+    title?: string;
+    indication: string;
+    outcome?: string;
+    complications?: string;
+  },
+) {
+  const gate = await canWriteClinical(db, input.practitionerId);
+  if (!gate.allowed) throw new ClinicalError(gate.reason, gate.code);
+
+  const encounter = await db.encounter.findUnique({
+    where: { id: input.encounterId },
+    select: { id: true, personId: true, endedAt: true },
+  });
+  if (!encounter) throw new ClinicalError('Encounter not found', 'ENCOUNTER_NOT_FOUND');
+  if (encounter.endedAt) {
+    // Adding to a finished consultation would let the record grow after the
+    // clinician signed it off.
+    throw new ClinicalError(
+      'This encounter is closed. Record a correction instead.',
+      'ENCOUNTER_CLOSED',
+    );
+  }
+
+  if (!input.indication?.trim()) {
+    throw new ClinicalError(
+      'A treatment needs an indication — what it was for',
+      'INDICATION_REQUIRED',
+    );
+  }
+
+  let code = input.txCode;
+  let title: string;
+
+  if (code === UNCODED_TREATMENT) {
+    const typed = input.title?.trim();
+    if (!typed) {
+      throw new ClinicalError(
+        'An uncoded treatment needs a description',
+        'TREATMENT_TITLE_REQUIRED',
+      );
+    }
+    title = typed;
+  } else {
+    const term = await db.treatmentTerm.findUnique({
+      where: { txCode: code },
+      select: { txCode: true, title: true },
+    });
+    if (!term) {
+      throw new ClinicalError(
+        `${code} is not a treatment in the catalogue`,
+        'TREATMENT_NOT_FOUND',
+      );
+    }
+    // The catalogue's title, never the caller's: two facilities must not be
+    // able to record the same code under different names.
+    code = term.txCode;
+    title = term.title;
+  }
+
+  return db.procedure.create({
+    data: {
+      personId: encounter.personId,
+      checkInId: gate.checkInId,
+      recordedBy: input.practitionerId,
+      facilityId: gate.facilityId,
+      licenceNumber: gate.licenceNumber,
+      recordedAt: new Date(),
+      encounterId: encounter.id,
+      code,
+      title,
+      performedOn: new Date(),
+      datePrecision: 'EXACT',
+      performedAtFacilityId: gate.facilityId,
+      indication: input.indication.trim(),
+      outcome: input.outcome?.trim() || null,
+      complications: input.complications?.trim() || null,
+      isSelfReported: false,
+    },
+  });
+}
+
+/**
+ * Closes an encounter with a disposition.
+ *
+ * Goes through nhp_set_encounter_disposition, the same SECURITY DEFINER
+ * function the referral flow uses. `encounter` is append-only, so this is one
+ * of only two permitted UPDATE paths; granting UPDATE back would undo the
+ * guarantee the whole clinical record rests on.
+ *
+ * Refuses an encounter that is already closed. Reopening one would let a
+ * disposition be rewritten after the fact — a patient recorded as DIED could
+ * become DISCHARGED with no trace — which is precisely what append-only
+ * exists to prevent. A genuine correction goes through supersession.
+ */
+export async function closeEncounter(
+  db: Db,
+  input: {
+    practitionerId: string;
+    encounterId: string;
+    disposition: 'DISCHARGED' | 'ADMITTED' | 'REFERRED' | 'ABSCONDED' | 'DIED' | 'LEFT_AGAINST_ADVICE';
+  },
+) {
+  const gate = await canWriteClinical(db, input.practitionerId);
+  if (!gate.allowed) throw new ClinicalError(gate.reason, gate.code);
+
+  const encounter = await db.encounter.findUnique({
+    where: { id: input.encounterId },
+    select: { id: true, endedAt: true, recordedBy: true },
+  });
+  if (!encounter) throw new ClinicalError('Encounter not found', 'ENCOUNTER_NOT_FOUND');
+  if (encounter.endedAt) {
+    throw new ClinicalError(
+      'This encounter has already been closed.',
+      'ENCOUNTER_ALREADY_CLOSED',
+    );
+  }
+
+  // REFERRED is set by the referral flow, which also links the referral. A
+  // bare REFERRED here would claim a referral that does not exist.
+  if (input.disposition === 'REFERRED') {
+    throw new ClinicalError(
+      'Create the referral itself — that records the disposition and links it.',
+      'USE_REFERRAL_FLOW',
+    );
+  }
+
+  await db.$executeRawUnsafe(
+    `SELECT nhp_set_encounter_disposition($1::text, $2::text, $3::text)`,
+    encounter.id,
+    input.disposition,
+    null,
+  );
+
+  return db.encounter.findUniqueOrThrow({
+    where: { id: encounter.id },
+    select: { id: true, endedAt: true, disposition: true },
   });
 }
 

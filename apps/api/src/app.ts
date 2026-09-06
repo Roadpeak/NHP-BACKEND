@@ -31,6 +31,9 @@ import {
 import {
   searchDiagnoses,
   searchMedications,
+  searchTreatments,
+  recordTreatment,
+  closeEncounter,
   patientSummary,
   patientTimeline,
   openEncounter,
@@ -894,6 +897,33 @@ export async function buildApp(prismaOverride?: PrismaClient) {
   app.get<{ Querystring: { q?: string } }>(`${v1}/vocab/medications`, async (req) => {
     const q = req.query.q ?? '';
     return searchMedications(prisma, q);
+  });
+
+  /**
+   * The treatment catalogue.
+   *
+   * An empty query returns the whole list, unlike the diagnosis and
+   * medication endpoints. Those ship as a pre-built local index; this one is
+   * 83 rows, so the encounter screen fetches it once and searches it in the
+   * browser — which keeps working when the network drops mid-consultation.
+   */
+  app.get<{ Querystring: { q?: string } }>(`${v1}/vocab/treatments`, async (req) => {
+    const q = (req.query.q ?? '').trim();
+    if (!q) {
+      return prisma.treatmentTerm.findMany({
+        select: {
+          txCode: true,
+          title: true,
+          plainEn: true,
+          plainSw: true,
+          category: true,
+          minKephLevel: true,
+          requiresConsent: true,
+        },
+        orderBy: [{ category: 'asc' }, { title: 'asc' }],
+      });
+    }
+    return searchTreatments(prisma, q);
   });
 
   app.get(`${v1}/vocab/symptoms`, async (req) => {
@@ -3441,6 +3471,79 @@ export async function buildApp(prismaOverride?: PrismaClient) {
       encounterId: req.params.id,
       ...req.body,
     }),
+  );
+
+  app.post<{
+    Params: { id: string };
+    Body: {
+      /** An NHP-TX code, or 'UNCODED' for a treatment not in the catalogue. */
+      txCode: string;
+      /** Required when txCode is 'UNCODED'; ignored otherwise. */
+      title?: string;
+      indication: string;
+      outcome?: string;
+      complications?: string;
+    };
+  }>(
+    `${v1}/encounters/:id/treatments`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['txCode', 'indication'],
+          properties: {
+            txCode: { type: 'string', minLength: 1, maxLength: 32 },
+            title: { type: 'string', maxLength: 200 },
+            indication: { type: 'string', minLength: 1, maxLength: 500 },
+            outcome: { type: 'string', maxLength: 500 },
+            complications: { type: 'string', maxLength: 500 },
+          },
+        },
+      },
+    },
+    async (req) =>
+      recordTreatment(prisma, {
+        practitionerId: await practitionerFrom(req),
+        encounterId: req.params.id,
+        ...req.body,
+      }),
+  );
+
+  /**
+   * Finish a consultation.
+   *
+   * PATCH rather than POST: it completes an encounter that already exists.
+   * REFERRED is refused here — the referral flow records that disposition
+   * itself and links the referral, and a bare REFERRED would claim one that
+   * does not exist.
+   */
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      disposition: 'DISCHARGED' | 'ADMITTED' | 'REFERRED' | 'ABSCONDED' | 'DIED' | 'LEFT_AGAINST_ADVICE';
+    };
+  }>(
+    `${v1}/encounters/:id/close`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['disposition'],
+          properties: {
+            disposition: {
+              type: 'string',
+              enum: ['DISCHARGED', 'ADMITTED', 'REFERRED', 'ABSCONDED', 'DIED', 'LEFT_AGAINST_ADVICE'],
+            },
+          },
+        },
+      },
+    },
+    async (req) =>
+      closeEncounter(prisma, {
+        practitionerId: await practitionerFrom(req),
+        encounterId: req.params.id,
+        disposition: req.body.disposition,
+      }),
   );
 
   app.post<{

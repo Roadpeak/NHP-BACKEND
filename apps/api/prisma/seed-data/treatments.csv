@@ -1,0 +1,84 @@
+nhp_tx_code,title,plain_en,plain_sw,category,min_keph_level,synonyms,requires_consent,review_status
+NHP-TX-0001,Wound cleaning and dressing,Your wound was cleaned and covered,Jeraha lako lilisafishwa na kufungwa,WOUND_CARE,2,dressing|wound dressing|cleaning and dressing|kufunga jeraha,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0002,Simple suturing,Your cut was stitched closed,Jeraha lako lilishonwa,WOUND_CARE,2,suturing|stitches|suture|kushona jeraha,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0003,Suture removal,Your stitches were taken out,Nyuzi za jeraha zilitolewa,WOUND_CARE,2,removal of stitches|ROS|kutoa nyuzi,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0004,Wound debridement,Dead tissue was removed from your wound,Nyama iliyokufa iliondolewa kwenye jeraha,WOUND_CARE,4,debridement|wound toilet,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0005,Incision and drainage of abscess,A boil was opened and drained,Jipu lilifunguliwa na usaha kutolewa,WOUND_CARE,3,I and D|abscess drainage|incision drainage|kutoa usaha,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0006,Burn dressing,Your burn was cleaned and dressed,Kuungua kwako kulisafishwa na kufungwa,WOUND_CARE,3,burns dressing|dressing of burn,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0007,Removal of foreign body from skin,Something stuck in your skin was taken out,Kitu kilichokwama kwenye ngozi kilitolewa,WOUND_CARE,3,foreign body removal|FB removal,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0008,Pressure ulcer care,A pressure sore was cleaned and dressed,Kidonda cha kulalia kilisafishwa,WOUND_CARE,3,bed sore care|decubitus care,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0010,Oxygen therapy,You were given oxygen to help your breathing,Ulipewa hewa ya oksijeni kusaidia kupumua,RESPIRATORY,3,oxygen|O2|supplemental oxygen|oksijeni,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0011,Nebulisation,You breathed in medicine as a mist,Ulivuta dawa kama ukungu,RESPIRATORY,2,nebuliser|nebulizer|neb|salbutamol neb,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0012,Chest physiotherapy,Your chest was treated to help clear it,Kifua chako kilitibiwa kusaidia kusafisha,RESPIRATORY,4,chest physio|percussion,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0013,Suction of airway,Fluid was cleared from your airway,Maji yalitolewa kwenye njia ya hewa,RESPIRATORY,3,suctioning|airway suction,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0014,Assisted ventilation with bag and mask,You were helped to breathe with a bag and mask,Ulisaidiwa kupumua kwa mfuko na barakoa,RESPIRATORY,4,bag mask|BVM|ambu bag|manual ventilation,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0015,Intubation,A tube was put into your airway to help you breathe,Bomba liliwekwa kwenye njia ya hewa,RESPIRATORY,5,endotracheal intubation|ETT|intubate,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0020,Intravenous fluid therapy,You were given fluids through a drip,Ulipewa maji kwa njia ya mshipa,FLUIDS,3,IV fluids|drip|normal saline|infusion|dripu,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0021,Oral rehydration therapy,You were given fluids to drink to replace what you lost,Ulipewa maji ya kunywa kurudisha uliyopoteza,FLUIDS,1,ORS|ORT|oral rehydration|maji ya chumvi,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0022,Blood transfusion,You were given blood,Ulipewa damu,FLUIDS,4,transfusion|whole blood|packed cells|kuongezwa damu,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0023,Intravenous cannulation,A small tube was placed in your vein,Bomba dogo liliwekwa kwenye mshipa,FLUIDS,2,IV line|cannula|branula|IV access,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0024,Nasogastric tube insertion,A tube was passed through your nose into your stomach,Bomba lilipitishwa puani hadi tumboni,PROCEDURE,3,NG tube|nasogastric|NGT,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0030,Urinary catheterisation,A tube was placed to drain your bladder,Bomba liliwekwa kutoa mkojo,PROCEDURE,3,catheter|foley|urinary catheter|katheta,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0031,Removal of urinary catheter,Your urine tube was taken out,Bomba la mkojo lilitolewa,PROCEDURE,2,catheter removal,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0032,Bladder irrigation,Your bladder was washed out,Kibofu chako kilioshwa,PROCEDURE,4,bladder washout,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0033,Enema,Fluid was given to help you empty your bowels,Maji yalitolewa kusaidia kupata choo,PROCEDURE,3,enema administration,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0034,Manual removal of impacted stool,Hardened stool was removed by hand,Choo kigumu kilitolewa kwa mkono,PROCEDURE,4,manual evacuation|disimpaction,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0035,Lumbar puncture,Fluid was taken from your lower back for testing,Maji yalitolewa mgongoni kwa kipimo,PROCEDURE,4,LP|spinal tap,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0036,Pleural tap,Fluid was drained from around your lung,Maji yalitolewa karibu na pafu,PROCEDURE,5,thoracentesis|pleural aspiration,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0037,Ascitic tap,Fluid was drained from your abdomen,Maji yalitolewa tumboni,PROCEDURE,5,paracentesis|abdominal tap,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0038,Chest tube insertion,A tube was placed to drain your chest,Bomba liliwekwa kutoa maji kifuani,PROCEDURE,5,chest drain|thoracostomy|underwater seal,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0040,Fracture immobilisation with plaster cast,A plaster cast was put on your broken bone,Plasta iliwekwa kwenye mfupa uliovunjika,MUSCULOSKELETAL,3,POP|plaster of paris|casting|kuweka plasta,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0041,Splinting,A splint was put on to hold the injury still,Kibao kiliwekwa kushikilia jeraha,MUSCULOSKELETAL,2,splint|slab|immobilisation,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0042,Reduction of dislocation,A joint was put back into place,Kiungo kilirudishwa mahali pake,MUSCULOSKELETAL,4,dislocation reduction|relocation,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0043,Traction,Your limb was pulled steadily to align a bone,Mguu ulivutwa kunyoosha mfupa,MUSCULOSKELETAL,5,skeletal traction|skin traction,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0044,Physiotherapy session,You had exercises and treatment to help you move better,Ulifanya mazoezi kusaidia kutembea vizuri,REHABILITATION,3,physio|physical therapy|mazoezi tiba,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0045,Occupational therapy session,You were helped to manage daily activities,Ulisaidiwa kufanya shughuli za kila siku,REHABILITATION,4,OT|occupational therapy,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0046,Speech and language therapy,You were helped with speaking or swallowing,Ulisaidiwa kuzungumza au kumeza,REHABILITATION,4,speech therapy|SLT,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0050,Wound suturing under local anaesthetic,Your wound was numbed and stitched,Jeraha lilifanywa ganzi na kushonwa,ANAESTHESIA,3,local anaesthetic suturing|LA suturing,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0051,Local anaesthetic infiltration,The area was numbed with an injection,Eneo lilifanywa ganzi kwa sindano,ANAESTHESIA,3,local anaesthesia|LA|lignocaine infiltration|ganzi,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0060,Normal vaginal delivery,Your baby was delivered normally,Mtoto alizaliwa kwa njia ya kawaida,MATERNAL,3,SVD|normal delivery|vaginal delivery|kujifungua kawaida,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0061,Assisted vaginal delivery,Your baby was delivered with help from instruments,Mtoto alizaliwa kwa msaada wa vifaa,MATERNAL,4,vacuum delivery|forceps delivery|instrumental delivery,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0062,Caesarean section,Your baby was delivered by an operation,Mtoto alizaliwa kwa upasuaji,MATERNAL,4,C-section|CS|caesarean|upasuaji wa kuzaa,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0063,Manual removal of placenta,The afterbirth was removed by hand,Kondo la nyuma lilitolewa kwa mkono,MATERNAL,4,MRP|manual removal,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0064,Repair of perineal tear,A tear from childbirth was stitched,Mpasuko wa kuzaa ulishonwa,MATERNAL,3,perineal repair|episiotomy repair,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0065,Manual vacuum aspiration,The womb was emptied using gentle suction,Mji wa mimba ulisafishwa kwa kuvuta,MATERNAL,4,MVA|uterine evacuation,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0066,Antenatal check-up,Your pregnancy was checked,Ujauzito wako ulipimwa,MATERNAL,2,ANC|antenatal care|kliniki ya ujauzito,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0067,Postnatal check-up,You and your baby were checked after birth,Wewe na mtoto mlipimwa baada ya kuzaa,MATERNAL,2,PNC|postnatal care,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0068,Newborn resuscitation,Your baby was helped to breathe at birth,Mtoto alisaidiwa kupumua alipozaliwa,MATERNAL,3,neonatal resuscitation|HBB|newborn resus,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0070,Immunisation,You were given a vaccine,Ulipewa chanjo,PREVENTIVE,1,vaccination|vaccine|immunization|chanjo,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0071,Vitamin A supplementation,You were given vitamin A,Ulipewa vitamini A,PREVENTIVE,1,vitamin A|VAS,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0072,Deworming,You were given medicine for worms,Ulipewa dawa ya minyoo,PREVENTIVE,1,deworming|anthelmintic|dawa ya minyoo,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0073,Insecticide-treated net provided,You were given a treated mosquito net,Ulipewa neti ya mbu,PREVENTIVE,1,ITN|bed net|mosquito net|neti,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0074,Growth monitoring,Your child's growth was measured,Ukuaji wa mtoto ulipimwa,PREVENTIVE,1,growth monitoring|weighing|kupima uzito,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0075,Nutritional supplementation,You were given food supplements,Ulipewa chakula cha ziada,PREVENTIVE,2,RUTF|therapeutic feeding|supplementary feeding,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0080,Health education,You were given advice about your health,Ulipewa ushauri kuhusu afya yako,COUNSELLING,1,health talk|education|elimu ya afya,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0081,Adherence counselling,You were helped to keep taking your medicine correctly,Ulisaidiwa kutumia dawa vizuri,COUNSELLING,2,adherence support|treatment adherence,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0082,Nutritional counselling,You were advised about what to eat,Ulishauriwa kuhusu chakula,COUNSELLING,2,diet advice|nutrition counselling|ushauri wa lishe,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0083,Family planning counselling,You were advised about family planning,Ulishauriwa kuhusu upangaji uzazi,COUNSELLING,2,FP counselling|contraception counselling|uzazi wa mpango,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0084,Psychological first aid,You were supported after a distressing event,Ulisaidiwa baada ya tukio gumu,COUNSELLING,2,PFA|psychosocial support,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0085,Physical restraint,You were held safely to prevent harm,Ulishikiliwa kwa usalama kuzuia madhara,BEHAVIOURAL,4,restraint|physical restraint,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0090,Observation,You were watched closely for a period,Ulifuatiliwa kwa muda,MONITORING,2,observation|monitoring|kuangaliwa,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0091,Vital signs monitoring,"Your pulse, blood pressure and temperature were checked","Mapigo, shinikizo na joto vilipimwa",MONITORING,1,vitals|obs|vital signs|kupima vitals,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0092,Blood glucose monitoring,Your blood sugar was measured,Sukari ya damu ilipimwa,MONITORING,1,RBS|blood sugar|glucose check|kupima sukari,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0100,Eye irrigation,Your eye was washed out,Jicho lako lilioshwa,ENT_EYE,2,eye wash|ocular irrigation,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0101,Removal of foreign body from eye,Something was taken out of your eye,Kitu kilitolewa jichoni,ENT_EYE,4,eye FB removal,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0102,Ear syringing,Your ear was washed out,Sikio lako lilioshwa,ENT_EYE,3,ear wash|ear syringe|aural toilet,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0103,Removal of foreign body from ear or nose,Something was taken out of your ear or nose,Kitu kilitolewa sikioni au puani,ENT_EYE,3,ENT FB removal,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0104,Nasal packing for nosebleed,Your nose was packed to stop bleeding,Pua ilizibwa kusimamisha damu,ENT_EYE,3,epistaxis packing|nasal pack,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0110,Dental extraction,A tooth was removed,Jino liling'olewa,DENTAL,3,tooth extraction|dental extraction|kung'oa jino,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0111,Dental filling,A tooth was filled,Jino lilizibwa,DENTAL,4,filling|restoration,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0112,Scaling and polishing,Your teeth were cleaned,Meno yako yalisafishwa,DENTAL,4,dental cleaning|scaling,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0120,Cardiopulmonary resuscitation,Your heart and breathing were restarted,Moyo na pumzi vilirudishwa,EMERGENCY,2,CPR|resuscitation|resus,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0121,Defibrillation,An electric shock was given to your heart,Mshtuko wa umeme ulitolewa moyoni,EMERGENCY,4,defib|cardioversion|shock,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0122,Recovery position,You were placed on your side to keep your airway clear,Uliwekwa upande kuweka njia ya hewa wazi,EMERGENCY,1,recovery position,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0123,Control of bleeding by direct pressure,Pressure was applied to stop the bleeding,Shinikizo lilitumika kusimamisha damu,EMERGENCY,1,haemostasis|direct pressure|kusimamisha damu,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0124,Cervical spine immobilisation,Your neck was held still to protect it,Shingo ilishikiliwa kuilinda,EMERGENCY,3,C-spine|collar|cervical collar,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0125,Gastric lavage,Your stomach was washed out,Tumbo lilioshwa,EMERGENCY,4,stomach washout|gastric lavage,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0126,Activated charcoal administration,You were given charcoal to absorb poison,Ulipewa mkaa kunyonya sumu,EMERGENCY,3,charcoal|activated charcoal,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0130,Phototherapy,Your baby was placed under a special light,Mtoto aliwekwa chini ya taa maalum,NEONATAL,3,phototherapy|blue light|jaundice light,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0131,Kangaroo mother care,Your baby was held skin to skin to stay warm,Mtoto alishikiliwa ngozi kwa ngozi apate joto,NEONATAL,2,KMC|kangaroo care,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0132,Umbilical cord care,Your baby's cord was cleaned,Kitovu cha mtoto kilisafishwa,NEONATAL,1,cord care|chlorhexidine cord,false,NEEDS_CLINICAL_REVIEW
+NHP-TX-0140,Dialysis,Your blood was filtered by a machine,Damu yako ilichujwa na mashine,SPECIALIST,5,haemodialysis|dialysis|kuchuja damu,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0141,Chemotherapy administration,You were given medicine to treat cancer,Ulipewa dawa ya kutibu saratani,SPECIALIST,5,chemo|chemotherapy,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0142,Radiotherapy,You were treated with radiation,Ulitibiwa kwa mionzi,SPECIALIST,5,radiation therapy|radiotherapy,true,NEEDS_CLINICAL_REVIEW
+NHP-TX-0143,Surgical operation under general anaesthetic,You had an operation while asleep,Ulifanyiwa upasuaji ukiwa umelala,SPECIALIST,4,surgery|operation|GA surgery|upasuaji,true,NEEDS_CLINICAL_REVIEW

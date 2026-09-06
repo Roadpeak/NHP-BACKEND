@@ -365,6 +365,49 @@ async function seedMedications() {
  * leave a stale band behind that quietly reintroduces the gap or overlap
  * that check exists to prevent.
  */
+/**
+ * Treatments that are not medicines.
+ *
+ * Coded NHP-TX-#### locally rather than with WHO ICHI — see TreatmentTerm in
+ * the schema for why. Upserted on the code so a title or plain-language fix
+ * lands on the next seed run without duplicating the row.
+ *
+ * Every row ships as NEEDS_CLINICAL_REVIEW. These describe things done to a
+ * person's body, and the plain-language wording is what a citizen reads back
+ * in their own record — neither should reach a real patient before a
+ * practising clinician has read them.
+ */
+async function seedTreatments() {
+  const path = join(SEED_DIR, 'treatments.csv');
+  if (!existsSync(path)) {
+    console.warn('  treatments.csv not found — skipping');
+    return { treatments: 0, unreviewed: 0 };
+  }
+
+  const rows = readCsv(path);
+  let unreviewed = 0;
+  for (const r of rows) {
+    if (!r.nhp_tx_code || !r.title) continue;
+    if (r.review_status !== 'CLINICALLY_REVIEWED') unreviewed++;
+    const data = {
+      title: r.title,
+      plainEn: r.plain_en,
+      plainSw: r.plain_sw,
+      category: r.category,
+      minKephLevel: Number(r.min_keph_level) || 1,
+      synonyms: (r.synonyms || '').split('|').filter(Boolean),
+      requiresConsent: r.requires_consent === 'true',
+      reviewStatus: r.review_status || 'NEEDS_CLINICAL_REVIEW',
+    };
+    await prisma.treatmentTerm.upsert({
+      where: { txCode: r.nhp_tx_code },
+      update: data,
+      create: { txCode: r.nhp_tx_code, ...data },
+    });
+  }
+  return { treatments: rows.length, unreviewed };
+}
+
 async function seedWeightBands() {
   const path = join(SEED_DIR, 'weight_bands.csv');
   if (!existsSync(path)) {
@@ -540,6 +583,9 @@ async function main() {
   const meds = await seedMedications();
   console.log(`  medications   ${meds.medications}  (${meds.controlled} controlled)`);
 
+  const tx = await seedTreatments();
+  console.log(`  treatments    ${tx.treatments}`);
+
   const bands = await seedWeightBands();
   console.log(`  weight bands  ${bands.bands}  (${bands.drugs} drugs)`);
 
@@ -572,6 +618,15 @@ async function main() {
       `\n  WARNING: ${dx.unreviewed}/${dx.diagnoses} diagnoses are not ` +
         'CLINICALLY_REVIEWED. ICD-11 codes were written from knowledge, not ' +
         'extracted from the WHO release — verify before any real patient data.',
+    );
+  }
+
+  if (tx.unreviewed > 0) {
+    console.warn(
+      `\n  WARNING: ${tx.unreviewed}/${tx.treatments} treatments are not ` +
+        'CLINICALLY_REVIEWED. These describe things done to a person\'s body, ' +
+        'and the plain-language wording is what a citizen reads back in their ' +
+        'own record — verify before any real patient data.',
     );
   }
 

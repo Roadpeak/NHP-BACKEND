@@ -16,6 +16,9 @@ import {
   checkPrescribing,
   openEncounter,
   recordDiagnosis,
+  recordTreatment,
+  searchTreatments,
+  closeEncounter,
   recordAllergy,
   prescribe,
   amendDiagnosis,
@@ -1011,5 +1014,268 @@ describe('an uncoded medicine', () => {
     // actually given, not a blank where the formulary lookup failed.
     const summary = await patientSummary(prisma, patient.id);
     expect(JSON.stringify(summary)).toMatch(/Imported antiviral/);
+  });
+});
+
+describe('treatments administered', () => {
+  /**
+   * Treatments are the non-medicine half of what a clinician does: wound
+   * care, oxygen, delivery, counselling, resuscitation. They write to
+   * `procedure`, which is append-only and already carries the shape.
+   */
+
+  it('records a coded treatment against the encounter', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'cut on the hand',
+    });
+
+    const tx = await recordTreatment(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      txCode: 'NHP-TX-0002',
+      indication: 'laceration to the left palm',
+    });
+
+    expect(tx.code).toBe('NHP-TX-0002');
+    // The catalogue's title, not the caller's: two facilities must not be
+    // able to record the same code under different names.
+    expect(tx.title).toBe('Simple suturing');
+    expect(tx.encounterId).toBe(encounter.id);
+  });
+
+  it('takes the title from the catalogue, not from the caller', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'wound',
+    });
+
+    const tx = await recordTreatment(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      txCode: 'NHP-TX-0001',
+      title: 'something else entirely',
+      indication: 'dirty wound',
+    });
+    expect(tx.title).toBe('Wound cleaning and dressing');
+  });
+
+  it('records a treatment the catalogue does not list', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'unusual presentation',
+    });
+
+    // Clinicians do things the catalogue has not thought of. Refusing them
+    // produces a record that quietly disagrees with what happened.
+    const tx = await recordTreatment(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      txCode: 'UNCODED',
+      title: 'Traditional bone-setting reviewed and re-splinted',
+      indication: 'presented after treatment elsewhere',
+    });
+    expect(tx.code).toBe('UNCODED');
+    expect(tx.title).toMatch(/bone-setting/);
+  });
+
+  it('refuses an uncoded treatment with no description', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'x',
+    });
+
+    // 'UNCODED' with no words is a row that says nothing at all.
+    await expect(
+      recordTreatment(prisma, {
+        practitionerId: practitioner.id,
+        encounterId: encounter.id,
+        txCode: 'UNCODED',
+        indication: 'something',
+      }),
+    ).rejects.toThrow(/description/i);
+  });
+
+  it('refuses a treatment code that is not in the catalogue', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'x',
+    });
+
+    await expect(
+      recordTreatment(prisma, {
+        practitionerId: practitioner.id,
+        encounterId: encounter.id,
+        txCode: 'NHP-TX-9999',
+        indication: 'something',
+      }),
+    ).rejects.toThrow(/not a treatment/i);
+  });
+
+  it('needs an indication — what the treatment was for', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'x',
+    });
+
+    await expect(
+      recordTreatment(prisma, {
+        practitionerId: practitioner.id,
+        encounterId: encounter.id,
+        txCode: 'NHP-TX-0001',
+        indication: '   ',
+      }),
+    ).rejects.toThrow(/indication/i);
+  });
+
+  it('finds treatments by name, synonym and code', async () => {
+    const byName = await searchTreatments(prisma, 'suturing');
+    expect(byName[0].txCode).toBe('NHP-TX-0002');
+
+    // A clinician typing what they say out loud, not the catalogue title.
+    const bySynonym = await searchTreatments(prisma, 'neb');
+    expect(bySynonym.some((t) => t.txCode === 'NHP-TX-0011')).toBe(true);
+
+    const byCode = await searchTreatments(prisma, 'NHP-TX-0010');
+    expect(byCode[0].txCode).toBe('NHP-TX-0010');
+
+    // Swahili speakers describe the same act in their own words.
+    const swahili = await searchTreatments(prisma, 'kufunga jeraha');
+    expect(swahili.some((t) => t.txCode === 'NHP-TX-0001')).toBe(true);
+  });
+
+  it('orders the same query the same way every time', async () => {
+    // Without a deterministic tiebreak the winner depends on row order, so
+    // the same search returns different treatments on different days.
+    const a = await searchTreatments(prisma, 'wound');
+    const b = await searchTreatments(prisma, 'wound');
+    expect(a.map((t) => t.txCode)).toEqual(b.map((t) => t.txCode));
+  });
+});
+
+describe('closing an encounter', () => {
+  it('sets the disposition and the time it ended', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'fever',
+    });
+    expect(encounter.endedAt).toBeNull();
+
+    const closed = await closeEncounter(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      disposition: 'DISCHARGED',
+    });
+    expect(closed.disposition).toBe('DISCHARGED');
+    expect(closed.endedAt).not.toBeNull();
+  });
+
+  it('WILL NOT REOPEN A CLOSED ENCOUNTER', async () => {
+    /*
+     * The sharpest edge in the feature. If closing were repeatable, a
+     * patient recorded as DIED could be rewritten to DISCHARGED with no
+     * trace — exactly what append-only exists to prevent.
+     */
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'collapse',
+    });
+
+    await closeEncounter(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      disposition: 'DIED',
+    });
+
+    await expect(
+      closeEncounter(prisma, {
+        practitionerId: practitioner.id,
+        encounterId: encounter.id,
+        disposition: 'DISCHARGED',
+      }),
+    ).rejects.toThrow(/already been closed/i);
+
+    const after = await prisma.encounter.findUniqueOrThrow({
+      where: { id: encounter.id },
+      select: { disposition: true },
+    });
+    expect(after.disposition).toBe('DIED');
+  });
+
+  it('sends REFERRED through the referral flow instead', async () => {
+    // A bare REFERRED would claim a referral that does not exist.
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'chest pain',
+    });
+
+    await expect(
+      closeEncounter(prisma, {
+        practitionerId: practitioner.id,
+        encounterId: encounter.id,
+        disposition: 'REFERRED',
+      }),
+    ).rejects.toThrow(/referral/i);
+  });
+
+  it('will not add a treatment to a closed encounter', async () => {
+    const { practitioner } = await makeClinician();
+    const patient = await makePerson();
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: patient.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'wound',
+    });
+    await closeEncounter(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      disposition: 'DISCHARGED',
+    });
+
+    await expect(
+      recordTreatment(prisma, {
+        practitionerId: practitioner.id,
+        encounterId: encounter.id,
+        txCode: 'NHP-TX-0001',
+        indication: 'late addition',
+      }),
+    ).rejects.toThrow(/closed/i);
   });
 });

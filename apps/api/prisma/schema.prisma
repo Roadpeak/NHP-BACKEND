@@ -1348,6 +1348,40 @@ model DiagnosisTerm {
   @@map("diagnosis_term")
 }
 
+/// Treatments a clinician administers that are NOT medicines.
+///
+/// Wound care, oxygen, physiotherapy, counselling, delivery, resuscitation.
+/// Coded as NHP-TX-#### rather than ICHI: the WHO intervention classification
+/// is still in beta, has no bulk source comparable to the ICD-11 API, and is
+/// far more granular than a Level 2 dispensary needs. The codes are stable and
+/// can be mapped to ICHI later without changing what is stored here.
+///
+/// `minKephLevel` mirrors the medication formulary: a dispensary should not be
+/// offered intubation, and a treatment recorded below its level is a data
+/// error worth seeing.
+model TreatmentTerm {
+  id              String   @id @default(uuid(7))
+  txCode          String   @unique @map("tx_code")
+  title           String
+  plainEn         String   @map("plain_en")
+  plainSw         String   @map("plain_sw")
+  /// WOUND_CARE, RESPIRATORY, MATERNAL, EMERGENCY and so on. A plain string
+  /// rather than an enum: the list is seeded data and grows without a
+  /// migration, exactly as body_system does for diagnoses.
+  category        String
+  minKephLevel    Int      @map("min_keph_level")
+  /// Pipe-delimited in the CSV; stored as an array for search.
+  synonyms        String[]
+  /// Treatments a patient must agree to before they happen. Recorded so the
+  /// question can be asked later — this flag does not itself gate anything.
+  requiresConsent Boolean  @default(false) @map("requires_consent")
+  reviewStatus    String   @map("review_status")
+
+  @@index([category])
+  @@index([minKephLevel])
+  @@map("treatment_term")
+}
+
 model MedicationTerm {
   id                String   @id @default(uuid(7))
   kemlCode          String   @unique @map("keml_code")
