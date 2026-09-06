@@ -21,7 +21,7 @@
  *     a busy waiting room is the least private place in the building.
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { PayerKind, PrismaClient } from '@prisma/client';
 import { decryptField } from './crypto.js';
 
 type Db = PrismaClient;
@@ -246,6 +246,88 @@ function ageFrom(dob: Date | null): number | null {
  * `statedReason` is the person's own words, kept as free text so nobody
  * is tempted to read it as triage.
  */
+/**
+ * Kinds that name a specific organisation, and kinds that must not.
+ *
+ * Without this a row can claim "cash, paid by Jubilee" — internally
+ * contradictory, and it corrupts the payer mix in both directions at once.
+ */
+const KINDS_NEEDING_ORG = new Set(['PRIVATE_INSURANCE', 'EMPLOYER', 'NGO_DONOR']);
+
+/**
+ * Every payer kind, for route schema validation.
+ *
+ * Declared here beside the rule that uses them so a new kind cannot be added
+ * to the enum without this file being opened.
+ */
+export const PAYER_KINDS = [
+  'CASH',
+  'SHA',
+  'PRIVATE_INSURANCE',
+  'EMPLOYER',
+  'NGO_DONOR',
+  'WAIVER',
+  'UNKNOWN',
+] as const;
+
+/**
+ * Check the stated payer against the organisation named alongside it.
+ *
+ * Returns the organisation id to store, or null. Throws when the pair is
+ * incoherent rather than quietly dropping one half — reception should see
+ * that the desk got it wrong, not discover later that the record disagrees
+ * with what they typed.
+ */
+export async function resolvePayer(
+  db: Db,
+  input: { statedPayer?: string | null; payerOrgId?: string | null },
+): Promise<{ statedPayer: PayerKind; payerOrgId: string | null }> {
+  const kind = (input.statedPayer ?? 'UNKNOWN') as PayerKind;
+  const orgId = input.payerOrgId?.trim() || null;
+
+  if (!KINDS_NEEDING_ORG.has(kind)) {
+    if (orgId) {
+      throw new FacilityAdminError(
+        `A payer organisation cannot be recorded for ${kind.toLowerCase()}.`,
+        'PAYER_ORG_NOT_ALLOWED',
+      );
+    }
+    // SHA is a single scheme; it needs no organisation row to be meaningful.
+    return { statedPayer: kind, payerOrgId: null };
+  }
+
+  if (!orgId) {
+    throw new FacilityAdminError(
+      'Choose which scheme or insurer is paying.',
+      'PAYER_ORG_REQUIRED',
+    );
+  }
+
+  const org = await db.payerOrganisation.findUnique({
+    where: { id: orgId },
+    select: { id: true, kind: true, isActive: true, name: true },
+  });
+  if (!org) {
+    throw new FacilityAdminError('That payer is not on the register.', 'PAYER_ORG_NOT_FOUND');
+  }
+  if (!org.isActive) {
+    // Deactivated insurers stay readable on historical arrivals but must
+    // not be selectable for a new one.
+    throw new FacilityAdminError(
+      `${org.name} is no longer on the register.`,
+      'PAYER_ORG_INACTIVE',
+    );
+  }
+  if (org.kind !== kind) {
+    throw new FacilityAdminError(
+      `${org.name} is not ${kind === 'EMPLOYER' ? 'an employer scheme' : 'that kind of payer'}.`,
+      'PAYER_KIND_MISMATCH',
+    );
+  }
+
+  return { statedPayer: kind, payerOrgId: org.id };
+}
+
 export async function registerArrival(
   db: Db,
   input: {
@@ -253,6 +335,10 @@ export async function registerArrival(
     nhpId: string;
     statedReason?: string;
     registeredBy: string;
+    /// How the patient says the visit will be paid for. Absent means
+    /// "not asked", which is a real answer and the default.
+    statedPayer?: string | null;
+    payerOrgId?: string | null;
   },
 ) {
   const person = await db.person.findUnique({
@@ -265,6 +351,8 @@ export async function registerArrival(
       'PERSON_NOT_FOUND',
     );
   }
+
+  const payer = await resolvePayer(db, input);
 
   // Already waiting. Reception desks are busy and the same person gets
   // entered twice; a second row would show them queued twice and make the
@@ -287,10 +375,48 @@ export async function registerArrival(
       facilityId: input.facilityId,
       statedReason: input.statedReason?.trim() || null,
       registeredBy: input.registeredBy,
+      statedPayer: payer.statedPayer,
+      payerOrgId: payer.payerOrgId,
     },
     select: { id: true, arrivedAt: true },
   });
   return { arrivalId: arrival.id, alreadyWaiting: false, arrivedAt: arrival.arrivedAt };
+}
+
+/**
+ * Correct the payer on an arrival that has not been closed.
+ *
+ * Scoped to the facility the caller is standing in, so one desk cannot amend
+ * another's records. Refused once the arrival is closed: at that point the
+ * visit has been counted, and a later edit would silently restate a figure
+ * the Ministry may already have aggregated.
+ */
+export async function updateArrivalPayer(
+  db: Db,
+  arrivalId: string,
+  facilityId: string,
+  input: { statedPayer?: string | null; payerOrgId?: string | null },
+) {
+  const arrival = await db.arrival.findFirst({
+    where: { id: arrivalId, facilityId },
+    select: { id: true, status: true },
+  });
+  if (!arrival) {
+    throw new FacilityAdminError('That arrival is not on this desk.', 'ARRIVAL_NOT_FOUND');
+  }
+  if (arrival.status === 'COMPLETED' || arrival.status === 'LEFT') {
+    throw new FacilityAdminError(
+      'This visit is closed and its payer can no longer be changed.',
+      'ARRIVAL_CLOSED',
+    );
+  }
+
+  const payer = await resolvePayer(db, input);
+  await db.arrival.update({
+    where: { id: arrival.id },
+    data: { statedPayer: payer.statedPayer, payerOrgId: payer.payerOrgId },
+  });
+  return { arrivalId: arrival.id, ...payer };
 }
 
 /** Who is waiting, in arrival order. Identity only — see `QueueEntry`. */

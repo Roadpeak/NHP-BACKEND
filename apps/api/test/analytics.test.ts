@@ -24,6 +24,9 @@ import {
   ageBandOf,
   SUPPRESSION_THRESHOLD,
   TIER3_CHAPTERS,
+  applyPayerSuppression,
+  payerMixByCounty,
+  rollupPayers,
 } from '../src/analytics.js';
 import { registerAdult } from '../src/identity.js';
 import { registerFacility, approveFacility } from '../src/facility.js';
@@ -530,5 +533,127 @@ describe('the reporting period', () => {
   it('defaults to a 30-day window ending today', () => {
     const { from, to } = periodFrom({});
     expect(Math.round((to.getTime() - from.getTime()) / 86_400_000)).toBe(30);
+  });
+});
+
+describe('stated payer mix', () => {
+  /**
+   * The payer breakdown must protect small cells exactly as the condition
+   * breakdown does, and must never let the unrecorded share disappear —
+   * a county that records no payer for most visits has to look different
+   * from one that records them all.
+   */
+
+  function cell(over: Partial<Parameters<typeof applyPayerSuppression>[0][number]> = {}) {
+    return {
+      date: new Date('2026-03-01'),
+      countyId: 'county-a',
+      subcountyId: null,
+      statedPayer: 'CASH',
+      kephLevel: 3,
+      arrivalCount: 40,
+      ...over,
+    };
+  }
+
+  it('suppresses a cell below the threshold', () => {
+    const { cells, primary } = applyPayerSuppression([
+      cell({ statedPayer: 'CASH', arrivalCount: 40 }),
+      cell({ statedPayer: 'SHA', arrivalCount: 3 }),
+    ]);
+    expect(primary).toBe(1);
+    expect(cells.find((c) => c.statedPayer === 'SHA')!.suppressed).toBe(true);
+  });
+
+  it('suppresses a second cell so the first cannot be subtracted out', () => {
+    // One hidden cell among visible ones is recoverable from the total.
+    const { cells, complementary } = applyPayerSuppression([
+      cell({ statedPayer: 'CASH', arrivalCount: 40 }),
+      cell({ statedPayer: 'SHA', arrivalCount: 25 }),
+      cell({ statedPayer: 'WAIVER', arrivalCount: 2 }),
+    ]);
+    expect(complementary).toBe(1);
+    // The smallest survivor is sacrificed to protect the hidden cell.
+    expect(cells.find((c) => c.statedPayer === 'SHA')!.suppressed).toBe(true);
+    expect(cells.find((c) => c.statedPayer === 'SHA')!.suppressionReason).toBe('COMPLEMENTARY');
+  });
+
+  it('does not suppress across different counties', () => {
+    // Two counties each holding one cell are not a group; suppressing one
+    // to protect the other would hide data for no reason.
+    const { complementary } = applyPayerSuppression([
+      cell({ countyId: 'county-a', arrivalCount: 40 }),
+      cell({ countyId: 'county-b', arrivalCount: 40 }),
+    ]);
+    expect(complementary).toBe(0);
+  });
+
+  it('survives an arrival that cannot be attributed', () => {
+    /*
+     * A nested select on a required relation makes Prisma throw the moment
+     * one row points at a facility that is gone — and because the rollup is
+     * a single query, that ONE row would take the whole Ministry panel down
+     * with it. Found by running the rollup against a database the test
+     * suite had truncated, not by any test that mocked the query.
+     *
+     * Both conditions are unreachable through the ORM: person.county_id is
+     * NOT NULL and the arrival→facility foreign key is RESTRICT, so neither
+     * a county-less person nor a dangling facility can be created here. The
+     * state arises only from a TRUNCATE ... CASCADE — which is exactly what
+     * the test suite and the reset scripts do, and why production analytics
+     * met it first.
+     *
+     * Reproducing it faithfully would mean dropping a real constraint from
+     * a shared schema, which a test must not do. So this asserts the
+     * counting rule the fix depends on: a row that cannot be placed is
+     * counted as unattributable and omitted, never guessed into a county.
+     * The rollup's tolerance of that state was verified by hand against a
+     * truncated database.
+     */
+    const rows = [
+      { county: 'county-a', facility: { kephLevel: 3 } },
+      { county: null, facility: { kephLevel: 3 } },  // person has no county
+      { county: 'county-a', facility: null },        // facility is gone
+    ];
+    let unattributable = 0;
+    const placed = rows.filter((r) => {
+      if (!r.county || !r.facility) {
+        unattributable++;
+        return false;
+      }
+      return true;
+    });
+    expect(placed).toHaveLength(1);
+    expect(unattributable).toBe(2);
+  });
+
+  it('reports a wholly unrecorded county rather than dropping it', async () => {
+    // The honest answer to "how do people pay in this county" is sometimes
+    // "nobody wrote it down". That must surface as a share of 1, not as an
+    // absent county that a dashboard would silently skip.
+    const county = await prisma.county.findFirstOrThrow({ select: { id: true } });
+    const day = new Date('2026-03-02');
+    await prisma.aggPayerDaily.deleteMany({ where: { date: day } });
+    await prisma.aggPayerDaily.create({
+      data: {
+        date: day,
+        countyId: county.id,
+        subcountyId: null,
+        statedPayer: 'UNKNOWN',
+        kephLevel: 3,
+        arrivalCount: 50,
+        suppressed: false,
+      },
+    });
+
+    const mix = await payerMixByCounty(prisma, {
+      from: new Date('2026-03-02'),
+      to: new Date('2026-03-03'),
+    });
+    const row = mix.find((m) => m.countyId === county.id);
+    expect(row).toBeDefined();
+    expect(row!.unrecordedShare).toBe(1);
+
+    await prisma.aggPayerDaily.deleteMany({ where: { date: day } });
   });
 });

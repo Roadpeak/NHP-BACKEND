@@ -709,3 +709,214 @@ export async function provenance(db: Db, opts: { from: Date; to: Date }) {
       'Confirmed diagnoses only; suspected excluded.',
   };
 }
+
+/**
+ * Stated payer mix — Phase 7b.
+ *
+ * How visits were said to be paid for, by county. The point of the figure is
+ * the gap between SHA coverage and cash actually paid at the desk, which is
+ * a number Kenya does not have well and which falls out of reception doing
+ * its ordinary job.
+ *
+ * Two constraints are structural rather than stylistic:
+ *
+ *   1. NO DIAGNOSIS DIMENSION. Payer crossed with condition and county is a
+ *      poverty map keyed to health conditions. The join is absent from the
+ *      schema and from this function, which is a stronger guarantee than a
+ *      comment asking nobody to write it.
+ *
+ *   2. UNKNOWN IS REPORTED, NOT DROPPED. A county recording no payer for
+ *      40% of visits must look different from one recording 2%. Dropping
+ *      the unrecorded share would turn a data-quality problem into a
+ *      confident and wrong statistic.
+ */
+interface PayerCell {
+  date: Date;
+  countyId: string;
+  subcountyId: string | null;
+  statedPayer: string;
+  kephLevel: number;
+  arrivalCount: number;
+}
+
+/**
+ * Suppression for payer cells.
+ *
+ * Separate from `applySuppression` because that groups by icd11Code, which
+ * a payer breakdown does not have. The rule is the same: hide small cells,
+ * then hide a second one whenever a lone hidden cell could be recovered by
+ * subtracting the visible ones from a total the reader can see.
+ */
+export function applyPayerSuppression(
+  cells: PayerCell[],
+  threshold = SUPPRESSION_THRESHOLD,
+): { cells: Array<PayerCell & { suppressed: boolean; suppressionReason: string | null }>; primary: number; complementary: number } {
+  const result = cells.map((c) => ({
+    ...c,
+    suppressed: c.arrivalCount < threshold,
+    suppressionReason: c.arrivalCount < threshold ? 'PRIMARY' : null,
+  }));
+
+  let primary = result.filter((c) => c.suppressed).length;
+  let complementary = 0;
+
+  // The published breakdown holds date, county and facility level constant
+  // and splits by payer, so those three identify a group that sums to a
+  // visible total.
+  const groups = new Map<string, typeof result>();
+  for (const c of result) {
+    const key = [c.date.toISOString().slice(0, 10), c.countyId, c.subcountyId ?? '', c.kephLevel].join('|');
+    const list = groups.get(key) ?? [];
+    list.push(c);
+    groups.set(key, list);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const hidden = group.filter((c) => c.suppressed);
+    if (hidden.length !== 1) continue;
+
+    const survivors = group
+      .filter((c) => !c.suppressed)
+      .sort((a, b) => a.arrivalCount - b.arrivalCount);
+    if (!survivors.length) continue;
+
+    survivors[0].suppressed = true;
+    survivors[0].suppressionReason = 'COMPLEMENTARY';
+    complementary++;
+  }
+
+  return { cells: result, primary, complementary };
+}
+
+export async function rollupPayers(db: Db, opts: { from: Date; to: Date; threshold?: number }) {
+  const threshold = opts.threshold ?? SUPPRESSION_THRESHOLD;
+
+  /*
+   * Foreign keys are read directly, and the two lookups are done by hand.
+   *
+   * A nested `select` on `facility` makes Prisma throw "Field facility is
+   * required to return data, got null" the moment ONE arrival references a
+   * facility that no longer exists — and because this is a single query,
+   * that one row takes down the whole payer rollup and with it the Ministry
+   * panel. It is the same failure that blanked the dashboard when a single
+   * 403 rejected a Promise.all batch.
+   *
+   * An aggregate that omits a handful of unattributable rows and says so is
+   * correct. One that reports nothing at all is not.
+   */
+  const arrivals = await db.arrival.findMany({
+    where: { arrivedAt: { gte: opts.from, lt: opts.to } },
+    select: { arrivedAt: true, statedPayer: true, personId: true, facilityId: true },
+  });
+
+  const [people, facilities] = await Promise.all([
+    db.person.findMany({
+      where: { id: { in: [...new Set(arrivals.map((a) => a.personId))] } },
+      select: { id: true, countyId: true, subcountyId: true },
+    }),
+    db.facility.findMany({
+      where: { id: { in: [...new Set(arrivals.map((a) => a.facilityId))] } },
+      select: { id: true, kephLevel: true },
+    }),
+  ]);
+  const personById = new Map(people.map((p) => [p.id, p]));
+  const facilityById = new Map(facilities.map((f) => [f.id, f]));
+
+  let unattributable = 0;
+  const cells = new Map<string, PayerCell>();
+  for (const a of arrivals) {
+    const person = personById.get(a.personId);
+    const facility = facilityById.get(a.facilityId);
+    // An arrival that cannot be placed — no county, or a person or facility
+    // that no longer exists — is counted nowhere rather than somewhere wrong.
+    if (!person?.countyId || !facility) {
+      unattributable++;
+      continue;
+    }
+
+    const date = new Date(a.arrivedAt.toISOString().slice(0, 10));
+    const key = [
+      date.toISOString().slice(0, 10),
+      person.countyId,
+      person.subcountyId ?? '',
+      a.statedPayer,
+      facility.kephLevel,
+    ].join('|');
+    const cell = cells.get(key);
+    if (cell) {
+      cell.arrivalCount++;
+    } else {
+      cells.set(key, {
+        date,
+        countyId: person.countyId,
+        subcountyId: person.subcountyId ?? null,
+        statedPayer: a.statedPayer,
+        kephLevel: facility.kephLevel,
+        arrivalCount: 1,
+      });
+    }
+  }
+
+  const suppressed = applyPayerSuppression([...cells.values()], threshold);
+
+  // Delete-then-create, matching rollupConditions. An upsert would leave a
+  // stale row behind when a re-run no longer produces a cell that existed
+  // before — a payer that stopped appearing would keep its old count.
+  await db.aggPayerDaily.deleteMany({ where: { date: { gte: opts.from, lt: opts.to } } });
+
+  for (const cell of suppressed.cells) {
+    await db.aggPayerDaily.create({
+      data: {
+        date: cell.date,
+        countyId: cell.countyId,
+        subcountyId: cell.subcountyId,
+        statedPayer: cell.statedPayer,
+        kephLevel: cell.kephLevel,
+        // A suppressed cell stores ZERO, as the condition rollup does: the
+        // true count is never written, so no query can serve it by accident.
+        arrivalCount: cell.suppressed ? 0 : cell.arrivalCount,
+        suppressed: cell.suppressed,
+        suppressionReason: cell.suppressionReason,
+      },
+    });
+  }
+
+  return {
+    cellsWritten: suppressed.cells.length,
+    primarySuppressed: suppressed.primary,
+    complementarySuppressed: suppressed.complementary,
+    /// Rows that could not be placed on a map. Returned rather than logged
+    /// so a caller can surface a number that is quietly incomplete.
+    unattributable,
+  };
+}
+
+/**
+ * The payer mix a dashboard reads. Aggregates only, never arrivals.
+ *
+ * The unrecorded share is returned as its own figure rather than folded
+ * away, because it is the honest measure of how much the rest can be
+ * trusted.
+ */
+export async function payerMixByCounty(db: Db, opts: { from: Date; to: Date }) {
+  const rows = await db.aggPayerDaily.groupBy({
+    by: ['countyId', 'statedPayer'],
+    where: { date: { gte: opts.from, lt: opts.to }, suppressed: false },
+    _sum: { arrivalCount: true },
+  });
+
+  const byCounty = new Map<string, { countyId: string; total: number; mix: Record<string, number> }>();
+  for (const r of rows) {
+    const n = r._sum.arrivalCount ?? 0;
+    const entry = byCounty.get(r.countyId) ?? { countyId: r.countyId, total: 0, mix: {} };
+    entry.mix[r.statedPayer] = n;
+    entry.total += n;
+    byCounty.set(r.countyId, entry);
+  }
+
+  return [...byCounty.values()].map((c) => ({
+    ...c,
+    unrecordedShare: c.total ? (c.mix.UNKNOWN ?? 0) / c.total : null,
+  }));
+}

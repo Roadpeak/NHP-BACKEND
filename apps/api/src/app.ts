@@ -75,6 +75,8 @@ import {
   actingPersonId,
   listStaff,
   registerArrival,
+  updateArrivalPayer,
+  PAYER_KINDS,
   listQueue,
   closeArrival,
 } from './facility-admin.js';
@@ -852,6 +854,17 @@ export async function buildApp(prismaOverride?: PrismaClient) {
   // account, so these cannot sit behind the Ministry guard the way
   // /analytics/counties does. They are the published administrative
   // divisions of Kenya — public record, not patient data.
+
+  // The payer register. Public for the same reason the counties are: it is
+  // a published list of licensed insurers, and reception needs it on screen
+  // before anyone has authenticated the visit.
+  app.get(`${v1}/reference/payers`, async () =>
+    prisma.payerOrganisation.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, name: true, kind: true },
+      orderBy: [{ kind: 'asc' }, { name: 'asc' }],
+    }),
+  );
 
   app.get(`${v1}/geo/counties`, async () =>
     prisma.county.findMany({
@@ -1946,7 +1959,14 @@ export async function buildApp(prismaOverride?: PrismaClient) {
     };
   });
 
-  app.post<{ Body: { nhpId: string; statedReason?: string } }>(
+  app.post<{
+    Body: {
+      nhpId: string;
+      statedReason?: string;
+      statedPayer?: string;
+      payerOrgId?: string;
+    };
+  }>(
     `${v1}/facility/queue`,
     {
       schema: {
@@ -1956,6 +1976,10 @@ export async function buildApp(prismaOverride?: PrismaClient) {
           properties: {
             nhpId: { type: 'string', minLength: 1, maxLength: 32 },
             statedReason: { type: 'string', maxLength: 280 },
+            // Optional, and absent means UNKNOWN — "not asked" is a real
+            // answer, and every existing caller keeps working untouched.
+            statedPayer: { type: 'string', enum: PAYER_KINDS },
+            payerOrgId: { type: 'string', minLength: 1, maxLength: 64 },
           },
         },
       },
@@ -1967,6 +1991,43 @@ export async function buildApp(prismaOverride?: PrismaClient) {
         nhpId: req.body.nhpId,
         statedReason: req.body.statedReason,
         registeredBy: scope.practitionerId,
+        statedPayer: req.body.statedPayer,
+        payerOrgId: req.body.payerOrgId,
+      });
+    },
+  );
+
+  /**
+   * Correct the payer on an arrival that is still open.
+   *
+   * Reception mistypes, or the patient produces a card after being checked
+   * in. Without this the only way to fix a dropdown is to close the arrival
+   * and register the person again, which corrupts both the waiting time and
+   * the arrival count. `arrival` is not a clinical table, so amending it
+   * does not cross the append-only boundary.
+   */
+  app.patch<{
+    Params: { arrivalId: string };
+    Body: { statedPayer: string; payerOrgId?: string };
+  }>(
+    `${v1}/facility/queue/:arrivalId/payer`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['statedPayer'],
+          properties: {
+            statedPayer: { type: 'string', enum: PAYER_KINDS },
+            payerOrgId: { type: 'string', minLength: 1, maxLength: 64 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const scope = await receptionScope(req);
+      return updateArrivalPayer(prisma, req.params.arrivalId, scope.facilityId, {
+        statedPayer: req.body.statedPayer,
+        payerOrgId: req.body.payerOrgId,
       });
     },
   );

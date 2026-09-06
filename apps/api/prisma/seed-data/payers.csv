@@ -1,0 +1,24 @@
+code,name,kind,notes
+SHA,Social Health Authority,SHA,Statutory scheme established under the Social Health Insurance Act 2023; successor to NHIF
+AAR,AAR Insurance Kenya Limited,PRIVATE_INSURANCE,
+APA,APA Insurance Limited,PRIVATE_INSURANCE,
+BRITAM,Britam General Insurance Company (K) Limited,PRIVATE_INSURANCE,
+CIC,CIC General Insurance Limited,PRIVATE_INSURANCE,
+FIRST_ASSURANCE,First Assurance Company Limited,PRIVATE_INSURANCE,
+GA_INSURANCE,GA Insurance Limited,PRIVATE_INSURANCE,
+HERITAGE,Heritage Insurance Company Limited,PRIVATE_INSURANCE,
+JUBILEE_HEALTH,Jubilee Health Insurance Limited,PRIVATE_INSURANCE,
+KENYA_ORIENT,Kenya Orient Life Assurance Limited,PRIVATE_INSURANCE,
+MADISON,Madison General Insurance Kenya Limited,PRIVATE_INSURANCE,
+MUA,MUA Insurance (Kenya) Limited,PRIVATE_INSURANCE,
+OLD_MUTUAL,Old Mutual General Insurance Kenya Limited,PRIVATE_INSURANCE,
+PACIS,Pacis Insurance Company Limited,PRIVATE_INSURANCE,
+PIONEER,Pioneer General Insurance Limited,PRIVATE_INSURANCE,
+PRUDENTIAL,Prudential Life Assurance Kenya Limited,PRIVATE_INSURANCE,
+RESOLUTION,Resolution Insurance Company Limited,PRIVATE_INSURANCE,
+SANLAM,Sanlam General Insurance Limited,PRIVATE_INSURANCE,
+STAR_DISCOVER,Star Discover General Insurance Company Limited,PRIVATE_INSURANCE,
+TRIDENT,Trident Insurance Company Limited,PRIVATE_INSURANCE,
+UAP,UAP Insurance Company Limited,PRIVATE_INSURANCE,
+EMPLOYER_SCHEME,Employer scheme (not separately listed),EMPLOYER,Generic bucket where the employer self-insures rather than using a licensed insurer
+NGO_PROGRAMME,Donor or NGO programme (not separately listed),NGO_DONOR,Generic bucket for programme-funded care — HIV/TB/immunisation and similar

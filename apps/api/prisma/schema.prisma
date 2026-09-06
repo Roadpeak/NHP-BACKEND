@@ -939,6 +939,15 @@ model Arrival {
   /// diagnosis, and it is never treated as one.
   statedReason String?  @map("stated_reason")
 
+  /// How the patient says this visit will be paid for — see PayerKind.
+  /// Defaults to UNKNOWN so an existing caller that says nothing records
+  /// "not asked" rather than silently asserting cash.
+  statedPayer PayerKind          @default(UNKNOWN) @map("stated_payer")
+  /// Which insurer or scheme, when the kind names one. Null for cash,
+  /// waivers and unrecorded — a row must not claim "cash, paid by Jubilee".
+  payerOrgId  String?            @map("payer_org_id")
+  payerOrg    PayerOrganisation? @relation(fields: [payerOrgId], references: [id])
+
   status       ArrivalStatus @default(WAITING)
   /// The practitioner who took them through. Set when an encounter opens.
   seenById     String?       @map("seen_by_id")
@@ -950,6 +959,54 @@ model Arrival {
   @@index([facilityId, status, arrivedAt])
   @@index([personId, arrivedAt])
   @@map("arrival")
+}
+
+/// How the patient SAYS this visit will be paid for.
+///
+/// A claim recorded at reception, never a verified fact and never a payment.
+/// Nobody checks a card at the desk. NHP submits no claims and moves no
+/// money — putting a payment rail inside a clinical record would give the
+/// record a financial reason to prefer one diagnosis over another.
+///
+/// WAIVER and NGO_DONOR are separate from CASH deliberately: a visit that is
+/// free at the point of care is not a cash payment, and collapsing them
+/// would corrupt the one statistic this exists to produce — how much care is
+/// paid out of pocket despite SHA coverage.
+enum PayerKind {
+  CASH
+  SHA
+  PRIVATE_INSURANCE
+  /// The employer self-insures rather than buying cover from an insurer.
+  EMPLOYER
+  /// Programme-funded care — HIV, TB, immunisation and similar.
+  NGO_DONOR
+  /// The facility waived the fee. Policy-relevant, and not the same as cash.
+  WAIVER
+  /// Not recorded. The default, and a first-class answer: forcing a choice
+  /// yields whatever sits first in the dropdown, and the national picture
+  /// becomes an artefact of list ordering.
+  UNKNOWN
+}
+
+/// SHA, licensed insurers, and the two generic buckets.
+///
+/// A reference table rather than free text, for the same reason counties
+/// are: "Jubilee" spelled forty ways is not analysable. Seeded from
+/// payers.csv, which should be reconciled against the IRA's published
+/// register of licensed insurers.
+model PayerOrganisation {
+  id   String    @id @default(uuid(7))
+  code String    @unique
+  name String
+  kind PayerKind
+
+  /// Deactivated rather than deleted when a licence lapses: an insurer that
+  /// disappears would take years of historical arrivals with it.
+  isActive Boolean @default(true) @map("is_active")
+
+  arrivals Arrival[]
+
+  @@map("payer_organisation")
 }
 
 enum ArrivalStatus {
@@ -1589,6 +1646,36 @@ model Recommendation {
 
 // ---------------------------------------------------- aggregates (P7)
 // Read by the ANALYST role, which holds NO grant on any clinical table.
+
+/// Stated payer mix, aggregated for the Ministry dashboard.
+///
+/// Deliberately carries NO diagnosis dimension. Payer crossed with condition
+/// and county is a poverty map keyed to health conditions — leaving the join
+/// out of the schema is a stronger guarantee than a comment asking nobody to
+/// write it.
+///
+/// Exists at all because nhp_analyst holds no grant on `arrival`, only on
+/// the aggregate tables. A dashboard that queried arrivals directly would
+/// make the role separation decorative.
+model AggPayerDaily {
+  id          String   @id @default(uuid(7))
+  date        DateTime @db.Date
+  countyId    String   @map("county_id")
+  subcountyId String?  @map("subcounty_id")
+  /// The PayerKind as a plain string, matching AggConditionDaily.sex — the
+  /// county-total row carries 'ALL', which is not a payer.
+  statedPayer String   @map("stated_payer")
+  kephLevel   Int      @map("keph_level")
+
+  arrivalCount Int @map("arrival_count")
+
+  suppressed        Boolean @default(false)
+  suppressionReason String? @map("suppression_reason")
+
+  @@unique([date, countyId, subcountyId, statedPayer, kephLevel], name: "agg_payer_grain")
+  @@index([date, countyId])
+  @@map("agg_payer_daily")
+}
 
 model AggConditionDaily {
   id                  String   @id @default(uuid(7))

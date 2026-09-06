@@ -161,6 +161,52 @@ async function seedGeography() {
   return { counties: COUNTIES.length, subcounties: created, unmatched };
 }
 
+/**
+ * SHA, the licensed insurers, and the two generic buckets.
+ *
+ * A reference table rather than free text at reception, for the same reason
+ * counties are one: "Jubilee" spelled forty ways cannot be aggregated.
+ *
+ * Upserted on `code`, so a name correction or a licence lapse applies on the
+ * next seed run without creating a duplicate. Rows absent from the CSV are
+ * DEACTIVATED rather than deleted — an insurer that vanished would take
+ * every historical arrival referencing it with it.
+ *
+ * The list should be reconciled against the IRA's published register of
+ * licensed insurers; it was assembled from general knowledge of the Kenyan
+ * market and may lag the register.
+ */
+async function seedPayers() {
+  const path = join(SEED_DIR, 'payers.csv');
+  if (!existsSync(path)) {
+    console.warn('  payers.csv not found — skipping');
+    return { payers: 0, deactivated: 0 };
+  }
+
+  const rows = readCsv(path);
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (!r.code || !r.name || !r.kind) continue;
+    seen.add(r.code);
+    await prisma.payerOrganisation.upsert({
+      where: { code: r.code },
+      update: { name: r.name, kind: r.kind as 'SHA', isActive: true },
+      create: {
+        code: r.code,
+        name: r.name,
+        kind: r.kind as 'SHA',
+      },
+    });
+  }
+
+  const { count: deactivated } = await prisma.payerOrganisation.updateMany({
+    where: { code: { notIn: [...seen] }, isActive: true },
+    data: { isActive: false },
+  });
+
+  return { payers: seen.size, deactivated };
+}
+
 async function seedCapabilities() {
   const path = join(SEED_DIR, 'capabilities.csv');
   if (!existsSync(path)) {
@@ -478,6 +524,12 @@ async function main() {
 
   const caps = await seedCapabilities();
   console.log(`  capabilities  ${caps.capabilities}`);
+
+  const payers = await seedPayers();
+  console.log(
+    `  payers        ${payers.payers}` +
+      (payers.deactivated ? `  (${payers.deactivated} deactivated)` : ''),
+  );
 
   const dx = await seedDiagnoses();
   console.log(

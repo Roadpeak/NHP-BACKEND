@@ -3075,6 +3075,14 @@ describe('checking in and out of a facility', () => {
       ...(payload ? { payload } : {}),
     });
 
+  const patch = (url: string, token: string, payload?: Record<string, unknown>) =>
+    app.inject({
+      method: 'PATCH',
+      url: `/api/v1${url}`,
+      headers: { authorization: `Bearer ${token}` },
+      ...(payload ? { payload } : {}),
+    });
+
   /** A clinician with a licence but NO affiliation anywhere. */
   async function unaffiliated() {
     const person = await makePerson('Peter');
@@ -3450,6 +3458,189 @@ describe('facility portal', () => {
     );
     expect(entry.displayName).toContain('Otieno');
     expect(entry.reasonForVisit).toBe('Cough since Tuesday');
+  });
+
+  // --------------------------------------------------- stated payer
+
+  /**
+   * The payer recorded at reception is a CLAIM, not a verified payment.
+   * These tests hold two lines: a payer kind and the organisation named
+   * beside it must agree, and "not asked" must survive as its own answer
+   * rather than collapsing into cash.
+   */
+
+  async function activeInsurer() {
+    return prisma.payerOrganisation.findFirstOrThrow({
+      where: { kind: 'PRIVATE_INSURANCE', isActive: true },
+      select: { id: true, name: true },
+    });
+  }
+
+  it('defaults an unstated payer to UNKNOWN rather than assuming cash', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Wanjiku');
+
+    // The pre-payer call shape, unchanged. Every existing caller sends this.
+    const res = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+    });
+    expect(res.statusCode).toBe(200);
+
+    const arrival = await prisma.arrival.findUniqueOrThrow({
+      where: { id: res.json().arrivalId },
+      select: { statedPayer: true, payerOrgId: true },
+    });
+    expect(arrival.statedPayer).toBe('UNKNOWN');
+    expect(arrival.payerOrgId).toBeNull();
+  });
+
+  it('records an insurer against a private-insurance visit', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Achieng');
+    const insurer = await activeInsurer();
+
+    const res = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+      statedPayer: 'PRIVATE_INSURANCE',
+      payerOrgId: insurer.id,
+    });
+    expect(res.statusCode).toBe(200);
+
+    const arrival = await prisma.arrival.findUniqueOrThrow({
+      where: { id: res.json().arrivalId },
+      select: { statedPayer: true, payerOrgId: true },
+    });
+    expect(arrival.statedPayer).toBe('PRIVATE_INSURANCE');
+    expect(arrival.payerOrgId).toBe(insurer.id);
+  });
+
+  it('refuses an insurer alongside a cash payment', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Mutiso');
+    const insurer = await activeInsurer();
+
+    // "Cash, paid by Jubilee" is internally contradictory and would corrupt
+    // the payer mix in both directions at once.
+    const res = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+      statedPayer: 'CASH',
+      payerOrgId: insurer.id,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PAYER_ORG_NOT_ALLOWED');
+  });
+
+  it('refuses private insurance with no insurer named', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Barasa');
+
+    const res = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+      statedPayer: 'PRIVATE_INSURANCE',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PAYER_ORG_REQUIRED');
+  });
+
+  it('refuses an insurer being passed off as an employer scheme', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Chelimo');
+    const insurer = await activeInsurer();
+
+    const res = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+      statedPayer: 'EMPLOYER',
+      payerOrgId: insurer.id,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PAYER_KIND_MISMATCH');
+  });
+
+  it('refuses a payer that has been struck off the register', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Kiptoo');
+    const lapsed = await prisma.payerOrganisation.create({
+      data: { code: `LAPSED-${Date.now()}`, name: 'Lapsed Assurance', kind: 'PRIVATE_INSURANCE', isActive: false },
+      select: { id: true },
+    });
+
+    const res = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+      statedPayer: 'PRIVATE_INSURANCE',
+      payerOrgId: lapsed.id,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('PAYER_ORG_INACTIVE');
+  });
+
+  it('lets reception correct the payer while the visit is open', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Nafula');
+    const insurer = await activeInsurer();
+
+    const registered = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+    });
+    const arrivalId = registered.json().arrivalId;
+
+    // The patient produces a card after being checked in.
+    const fixed = await patch(`/facility/queue/${arrivalId}/payer`, admin.accessToken, {
+      statedPayer: 'PRIVATE_INSURANCE',
+      payerOrgId: insurer.id,
+    });
+    expect(fixed.statusCode).toBe(200);
+
+    const arrival = await prisma.arrival.findUniqueOrThrow({
+      where: { id: arrivalId },
+      select: { statedPayer: true, payerOrgId: true },
+    });
+    expect(arrival.statedPayer).toBe('PRIVATE_INSURANCE');
+    expect(arrival.payerOrgId).toBe(insurer.id);
+  });
+
+  it('will not let one desk amend another facility\'s arrival', async () => {
+    const admin = await facilityAdmin();
+    const elsewhere = await facilityAdmin('PRIVATE_FOR_PROFIT');
+    const patient = await makePerson('Omondi');
+
+    const registered = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+    });
+
+    const res = await patch(
+      `/facility/queue/${registered.json().arrivalId}/payer`,
+      elsewhere.accessToken,
+      { statedPayer: 'CASH' },
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('ARRIVAL_NOT_FOUND');
+  });
+
+  it('will not change the payer once the visit has been counted', async () => {
+    const admin = await facilityAdmin();
+    const patient = await makePerson('Cherono');
+
+    const registered = await post('/facility/queue', admin.accessToken, {
+      nhpId: patient.displayNumber,
+    });
+    const arrivalId = registered.json().arrivalId;
+    await patch(`/facility/queue/${arrivalId}`, admin.accessToken, { status: 'COMPLETED' });
+
+    const res = await patch(`/facility/queue/${arrivalId}/payer`, admin.accessToken, {
+      statedPayer: 'CASH',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('ARRIVAL_CLOSED');
+  });
+
+  it('publishes the payer register without a session', async () => {
+    // Reception needs the list on screen; it is a licence register, not
+    // patient data.
+    const res = await app.inject({ method: 'GET', url: '/api/v1/reference/payers' });
+    expect(res.statusCode).toBe(200);
+    const payers = res.json();
+    expect(payers.some((p: { code: string }) => p.code === 'SHA')).toBe(true);
+    expect(payers.every((p: { isActive?: boolean }) => p.isActive !== false)).toBe(true);
   });
 
   it('does not queue the same person twice', async () => {
