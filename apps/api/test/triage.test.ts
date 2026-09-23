@@ -21,8 +21,17 @@ import {
   unknownSymptoms,
   DISCLAIMER_EN,
   DISCLAIMER_SW,
+  historyFactors,
+  HISTORY_CAPABILITIES,
 } from '../src/triage.js';
 import { registerFacility, approveFacility, claimCapability } from '../src/facility.js';
+import { registerAdult } from '../src/identity.js';
+import { openEncounter, recordDiagnosis } from '../src/clinical.js';
+import {
+  registerPractitioner,
+  grantAffiliation,
+  checkIn as checkInPractitioner,
+} from '../src/practitioner.js';
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -483,5 +492,334 @@ describe('rule evaluation', () => {
 
     expect(fired.map((r) => r.ruleId)).toContain('RF004');
     expect(inactiveMatched).toContain('RF001');
+  });
+});
+
+/*
+ * ROUTING ON WHAT WE ALREADY KNOW.
+ *
+ * A person's chronic conditions change where they should be sent: a
+ * diabetic with an infection is better served somewhere that can also
+ * handle the diabetes. That influence is a small explicit lookup table,
+ * never an inference, and these tests pin the three properties that make
+ * it safe to ship:
+ *
+ *   - every capability it names actually EXISTS in the vocabulary, or it
+ *     silently narrows the search to nothing;
+ *   - a resolved condition stops counting;
+ *   - a red flag ignores history entirely, because in an emergency the
+ *     nearest capable facility beats the best-matched one.
+ */
+describe('history-aware routing', () => {
+  /**
+   * The guard that would have caught a real bug in this table.
+   *
+   * `SPEC_NEUROLOGIST` was written here and does not exist — every epileptic
+   * would have been routed to a facility holding a capability nothing can
+   * hold, which returns no facilities at all. A typo in this table fails
+   * closed and silently, so it is checked against the database.
+   */
+  it('EVERY capability in the history table exists in the vocabulary', async () => {
+    const named = [...new Set(HISTORY_CAPABILITIES.flatMap((h) => h.capabilities))];
+    const found = await prisma.capability.findMany({
+      where: { code: { in: named } },
+      select: { code: true },
+    });
+    const missing = named.filter((c) => !found.some((f) => f.code === c));
+    expect(missing).toEqual([]);
+  });
+
+  async function personWithCondition(
+    icd11Code: string,
+    icd11Title: string,
+    opts: { chronic?: boolean; status?: 'ACTIVE' | 'CONFIRMED' | 'RESOLVED' } = {},
+  ) {
+    const facility = await makeFacility('History Clinic', 4, ['OPD_GENERAL']);
+    const person = await registerAdult(prisma, {
+      nationalId: `77${Math.floor(Math.random() * 1_000_000)}`,
+      phone: `0733${Math.floor(100000 + Math.random() * 899999)}`,
+      givenName: 'Akinyi',
+      familyName: 'Onyango',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: new Date(Date.UTC(1980, 0, 1)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+
+    const docPerson = await registerAdult(prisma, {
+      nationalId: `88${Math.floor(Math.random() * 1_000_000)}`,
+      phone: `0744${Math.floor(100000 + Math.random() * 899999)}`,
+      givenName: 'Doctor',
+      familyName: 'Otieno',
+      sexAtBirth: 'MALE',
+      dateOfBirth: new Date(Date.UTC(1975, 0, 1)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+    const { practitioner } = await registerPractitioner(prisma, {
+      personId: docPerson.id,
+      cadre: 'DOCTOR',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      licenceNumber: `KMPDC/HX/${Math.floor(Math.random() * 100000)}`,
+    });
+    await grantAffiliation(prisma, {
+      practitionerId: practitioner.id,
+      facilityId: facility.id,
+      grantedBy: 'ministry-1',
+      grantedByKind: 'MINISTRY',
+    });
+    await checkInPractitioner(prisma, {
+      practitionerId: practitioner.id,
+      facilityId: facility.id,
+    });
+
+    /*
+     * Written through the real service layer, not inserted directly.
+     *
+     * A direct insert was rejected by the licence trigger — the append-only
+     * hardening refuses a row whose licence number does not belong to an
+     * active licence. That refusal is correct, and going through
+     * `openEncounter`/`recordDiagnosis` means this fixture exercises the
+     * same gate a clinician does.
+     */
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: person.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'Routine review',
+    });
+    await recordDiagnosis(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      icd11Code,
+      clinicalStatus: opts.status ?? 'ACTIVE',
+      isChronic: opts.chronic ?? true,
+    });
+
+    return person;
+  }
+
+  it('an active chronic condition widens the search, and says why', async () => {
+    const person = await personWithCondition('5A11', 'Type 2 diabetes mellitus');
+
+    const factors = await historyFactors(prisma, person.id);
+
+    expect(factors).toHaveLength(1);
+    expect(factors[0].label).toBe('diabetes');
+    expect(factors[0].capabilities).toContain('DIABETES_CLINIC');
+  });
+
+  it('CONFIRMED counts, not only ACTIVE — it is what clinicians record', async () => {
+    /*
+     * The bug this pins.
+     *
+     * The first version of this filter matched `clinicalStatus: 'ACTIVE'`
+     * alone. `recordDiagnosis` writes CONFIRMED, so every confirmed diabetic
+     * in the database was invisible to routing — and the failure was silent:
+     * the search simply was not widened and nothing said why.
+     */
+    const person = await personWithCondition('5A11', 'Type 2 diabetes mellitus', {
+      status: 'CONFIRMED',
+    });
+
+    const factors = await historyFactors(prisma, person.id);
+
+    expect(factors.map((f) => f.label)).toContain('diabetes');
+  });
+
+  it('a RESOLVED condition stops narrowing their options', async () => {
+    // Someone whose diabetes is in the record as resolved must not be
+    // routed for the rest of their life as though it were active.
+    const person = await personWithCondition('5A11', 'Type 2 diabetes mellitus', {
+      status: 'RESOLVED',
+    });
+
+    expect(await historyFactors(prisma, person.id)).toEqual([]);
+  });
+
+  it('a one-off condition does not count as history', async () => {
+    const person = await personWithCondition('5A11', 'Type 2 diabetes mellitus', {
+      chronic: false,
+    });
+
+    expect(await historyFactors(prisma, person.id)).toEqual([]);
+  });
+
+  it('folds the history capability in when a facility can honour it', async () => {
+    /*
+     * The facility must hold everything the SYMPTOM rules need as well as
+     * the preferred capability, or the preferred search finds nothing and
+     * the engine correctly falls back — see "history never eliminates every
+     * option" below. An earlier version of this test omitted MALARIA_RDT
+     * and PHARMACY and then asserted the preference had applied, which it
+     * had not.
+     */
+    const person = await personWithCondition('5A11', 'Type 2 diabetes mellitus');
+    await makeFacility('Diabetes-capable', 4, [
+      'OPD_GENERAL',
+      'LAB_BASIC',
+      'MALARIA_RDT',
+      'PHARMACY',
+      'DIABETES_CLINIC',
+    ]);
+
+    const result = await recommend(prisma, {
+      symptoms: ['fever'],
+      ageYears: 45,
+      personId: person.id,
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+    });
+
+    expect(result.requiredCapabilities).toContain('DIABETES_CLINIC');
+    expect(result.historyFactors.map((f) => f.label)).toContain('diabetes');
+    expect(result.facilities.map((f) => f.name)).toContain('Diabetes-capable');
+  });
+
+  it('A RED FLAG IGNORES HISTORY — the nearest capable facility wins', async () => {
+    await activateRule('RF001');
+    const person = await personWithCondition('5A11', 'Type 2 diabetes mellitus');
+
+    const result = await recommend(prisma, {
+      symptoms: ['chest_pain', 'breathlessness'],
+      ageYears: 45,
+      personId: person.id,
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+    });
+
+    expect(result.redFlag).toBe(true);
+    // Adding "must also have a diabetes clinic" here could rule out the
+    // nearest hospital with an open theatre. That trade is never worth it.
+    expect(result.requiredCapabilities).not.toContain('DIABETES_CLINIC');
+    expect(result.historyFactors).toEqual([]);
+  });
+});
+
+/*
+ * HISTORY MUST NOT LEAVE SOMEBODY WITH NOWHERE TO GO.
+ *
+ * Adding "must also have a diabetes clinic" is right when such a facility
+ * exists. When none does, insisting on it returns nothing — and a diabetic
+ * with a fever is told there is nowhere to go, which is false and is the
+ * worst answer the system could give. So history is a preference with a
+ * fallback, and the screen only claims the record shaped the result when it
+ * actually did.
+ */
+describe('history never eliminates every option', () => {
+  async function diabeticPerson() {
+    const person = await registerAdult(prisma, {
+      nationalId: `66${Math.floor(Math.random() * 1_000_000)}`,
+      phone: `0755${Math.floor(100000 + Math.random() * 899999)}`,
+      givenName: 'Wanjiru',
+      familyName: 'Kamau',
+      sexAtBirth: 'FEMALE',
+      dateOfBirth: new Date(Date.UTC(1980, 0, 1)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+    const facility = await makeFacility('Basic Clinic', 4, [
+      'OPD_GENERAL',
+      'LAB_BASIC',
+      'MALARIA_RDT',
+      'PHARMACY',
+    ]);
+    const docPerson = await registerAdult(prisma, {
+      nationalId: `55${Math.floor(Math.random() * 1_000_000)}`,
+      phone: `0766${Math.floor(100000 + Math.random() * 899999)}`,
+      givenName: 'Doctor',
+      familyName: 'Owino',
+      sexAtBirth: 'MALE',
+      dateOfBirth: new Date(Date.UTC(1975, 0, 1)),
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      passwordHash: 'argon2id$test',
+    });
+    const { practitioner } = await registerPractitioner(prisma, {
+      personId: docPerson.id,
+      cadre: 'DOCTOR',
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+      licenceNumber: `KMPDC/FB/${Math.floor(Math.random() * 100000)}`,
+    });
+    await grantAffiliation(prisma, {
+      practitionerId: practitioner.id,
+      facilityId: facility.id,
+      grantedBy: 'ministry-1',
+      grantedByKind: 'MINISTRY',
+    });
+    await checkInPractitioner(prisma, {
+      practitionerId: practitioner.id,
+      facilityId: facility.id,
+    });
+    const encounter = await openEncounter(prisma, {
+      practitionerId: practitioner.id,
+      personId: person.id,
+      kind: 'OUTPATIENT',
+      chiefComplaint: 'Review',
+    });
+    await recordDiagnosis(prisma, {
+      practitionerId: practitioner.id,
+      encounterId: encounter.id,
+      icd11Code: '5A11',
+      clinicalStatus: 'CONFIRMED',
+      isChronic: true,
+    });
+    return person;
+  }
+
+  it('FALLS BACK to what the symptoms need when nowhere has the preferred capability', async () => {
+    // No facility in this world holds DIABETES_CLINIC.
+    const person = await diabeticPerson();
+
+    const result = await recommend(prisma, {
+      symptoms: ['cough', 'fever'],
+      ageYears: 45,
+      personId: person.id,
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+    });
+
+    // The answer a diabetic with a cough must never get is "nowhere".
+    expect(result.facilities.length).toBeGreaterThan(0);
+    // …and the screen must not claim the record shaped a result it did not.
+    expect(result.historyFactors).toEqual([]);
+    expect(result.requiredCapabilities).not.toContain('DIABETES_CLINIC');
+  });
+
+  it('PREFERS the capable facility when one exists, and says so', async () => {
+    const person = await diabeticPerson();
+    await makeFacility('Diabetes Centre', 4, [
+      'OPD_GENERAL',
+      'LAB_BASIC',
+      'MALARIA_RDT',
+      'PHARMACY',
+      'DIABETES_CLINIC',
+    ]);
+
+    const result = await recommend(prisma, {
+      symptoms: ['cough', 'fever'],
+      ageYears: 45,
+      personId: person.id,
+      countyId: ctx.kisumuId,
+      subcountyId: ctx.kisumuCentralId,
+    });
+
+    /*
+     * Asserted on EXCLUSIVITY, not membership.
+     *
+     * "Diabetes Centre is in the list" passes even with the preference
+     * removed — both facilities match the symptoms, so both appear. What
+     * proves the preference ran is that the basic clinic is FILTERED OUT.
+     */
+    const names = result.facilities.map((f) => f.name);
+    expect(names).toContain('Diabetes Centre');
+    expect(names).not.toContain('Basic Clinic');
+    expect(result.historyFactors.map((f) => f.label)).toContain('diabetes');
+    expect(result.requiredCapabilities).toContain('DIABETES_CLINIC');
   });
 });

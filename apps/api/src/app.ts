@@ -44,6 +44,7 @@ import {
   procedureHistory,
   resolvePersonId,
   ClinicalError,
+  allergyLabelMatches,
 } from './clinical.js';
 import {
   filteredRecord,
@@ -55,7 +56,15 @@ import {
   denialAnomalies,
   ConsentError,
 } from './consent.js';
-import { recommend, symptomPicker, TriageError } from './triage.js';
+import {
+  recommend,
+  symptomPicker,
+  saveRecommendation,
+  DISCLAIMER_EN,
+  DISCLAIMER_SW,
+  TriageError,
+} from './triage.js';
+import { suggestDestinations } from './referral.js';
 import {
   citizenSummary,
   citizenTimeline,
@@ -68,6 +77,11 @@ import {
   findFacilities,
   registerFacility,
   approveFacility,
+  claimCapability,
+  reconfirmCapabilities,
+  freshnessOf,
+  STALE_AFTER_DAYS,
+  EXPIRED_AFTER_DAYS,
   FacilityError,
 } from './facility.js';
 import {
@@ -1867,6 +1881,713 @@ export async function buildApp(prismaOverride?: PrismaClient) {
 
       await endAffiliation(prisma, affiliation.id);
       return { ended: true };
+    },
+  );
+
+  // ------------------------------------------------- clinical decision support
+  //
+  // Everything here is ADVISORY and deterministic. Nothing writes to a
+  // record, nothing chooses a diagnosis, and nothing scores a patient. Each
+  // route answers a question the clinician asked, and the clinician decides.
+
+  /**
+   * Where can this patient be sent?
+   *
+   * The referral half of the routing engine. Takes the capabilities the
+   * clinician says the patient needs and returns facilities that hold them,
+   * nearest first, excluding the one they are standing in.
+   */
+  app.get(`${v1}/clinical/destinations`, async (req) => {
+    const practitionerId = await practitionerFrom(req);
+    const gate = await canWriteClinical(prisma, practitionerId);
+    if (!gate.allowed) throw new ClinicalError(gate.reason, gate.code);
+
+    const { capabilities, limit } = req.query as { capabilities?: string; limit?: string };
+    const required = capabilities
+      ? capabilities.split(',').map((c) => c.trim()).filter(Boolean)
+      : [];
+
+    const here = await prisma.facility.findUniqueOrThrow({
+      where: { id: gate.facilityId },
+      select: { countyId: true, latitude: true, longitude: true },
+    });
+
+    const matches = await suggestDestinations(prisma, {
+      requiredCapabilities: required,
+      countyId: here.countyId,
+      near: { latitude: here.latitude, longitude: here.longitude },
+      excludeFacilityId: gate.facilityId,
+      limit: limit ? Number(limit) : 5,
+    });
+
+    return { requiredCapabilities: required, destinations: matches };
+  });
+
+  /**
+   * Does this patient have a recorded allergy to what is about to be
+   * prescribed?
+   *
+   * A lookup against what a clinician already wrote in this patient's
+   * record — not a pharmacological model. It cannot know about an allergy
+   * nobody recorded, and the response says so rather than implying the
+   * absence of a warning means the drug is safe.
+   */
+  app.get<{ Params: { nhpId: string }; Querystring: { kemlCode?: string } }>(
+    `${v1}/clinical/:nhpId/allergy-check`,
+    async (req) => {
+      const practitionerId = await practitionerFrom(req);
+      const gate = await canWriteClinical(prisma, practitionerId);
+      if (!gate.allowed) throw new ClinicalError(gate.reason, gate.code);
+
+      const personId = await resolvePersonId(prisma, req.params.nhpId);
+      const kemlCode = (req.query.kemlCode ?? '').trim();
+      if (!kemlCode) {
+        throw new ClinicalError('A KEML code is required', 'KEML_CODE_REQUIRED');
+      }
+
+      const drug = await prisma.medicationTerm.findUnique({
+        where: { kemlCode },
+        select: { kemlCode: true, genericName: true },
+      });
+      if (!drug) {
+        throw new ClinicalError(
+          `Unknown medicine '${kemlCode}'. Medicines come from the Kenya ` +
+            'Essential Medicines List.',
+          'UNKNOWN_MEDICATION',
+        );
+      }
+
+      const allergies = await prisma.allergy.findMany({
+        where: { personId, supersededAt: null },
+        select: {
+          substanceKind: true,
+          substanceCode: true,
+          substanceLabel: true,
+          reaction: true,
+          severity: true,
+        },
+      });
+
+      /*
+       * Matched on the coded substance first, then on the generic name.
+       *
+       * The name rule is a WORD-END match, not a bare substring and not a
+       * whole word. Drug families are named by suffix: benzylpenicillin and
+       * phenoxymethylpenicillin are both penicillins, and a clinician who
+       * recorded "Penicillin" meant all of them. A whole-word rule misses
+       * every one of those — which is how a recorded anaphylaxis produces
+       * no warning.
+       *
+       * It stays anchored to the end of a word so it cannot match across
+       * unrelated families: "penicillin" must not fire on "amoxicillin".
+       */
+      const matches = allergies.filter(
+        (a) =>
+          (a.substanceCode !== null && a.substanceCode === drug.kemlCode) ||
+          allergyLabelMatches(a.substanceLabel, drug.genericName),
+      );
+
+      await logAccess(prisma, {
+        personId,
+        practitionerId,
+        checkInId: gate.checkInId,
+        facilityId: gate.facilityId,
+        action: 'VIEW_SUMMARY',
+        tierReached: 'TIER_2_GENERAL',
+        reason: 'ACTIVE_CONSULTATION',
+        outcome: 'GRANTED',
+        requestId: req.id,
+      });
+
+      return {
+        medication: { kemlCode: drug.kemlCode, genericName: drug.genericName },
+        conflicts: matches.map((m) => ({
+          substanceLabel: m.substanceLabel,
+          reaction: m.reaction,
+          severity: m.severity,
+        })),
+        // Said plainly, because "no conflicts" reads as "safe" and it is not
+        // the same claim.
+        checkedAgainst: allergies.length,
+        note:
+          allergies.length === 0
+            ? 'No allergies have been recorded for this patient. That is not ' +
+              'the same as having none.'
+            : null,
+      };
+    },
+  );
+
+  /**
+   * The patient in a paragraph.
+   *
+   * Assembled from the structured record — active chronic conditions,
+   * current medicines, recorded allergies and the last visit. Rule-based
+   * and quotable: every line traces to a row a clinician wrote.
+   */
+  app.get<{ Params: { nhpId: string } }>(
+    `${v1}/clinical/:nhpId/brief`,
+    async (req) => {
+      const practitionerId = await practitionerFrom(req);
+      const gate = await canWriteClinical(prisma, practitionerId);
+      if (!gate.allowed) throw new ClinicalError(gate.reason, gate.code);
+
+      const personId = await resolvePersonId(prisma, req.params.nhpId);
+
+      const [person, chronic, meds, allergies, lastEncounter] = await Promise.all([
+        prisma.person.findUniqueOrThrow({
+          where: { id: personId },
+          select: { dateOfBirth: true, sexAtBirth: true },
+        }),
+        prisma.condition.findMany({
+          where: { personId, isChronic: true, clinicalStatus: 'ACTIVE', supersededAt: null },
+          select: { icd11Title: true, onsetDate: true },
+          orderBy: { recordedAt: 'desc' },
+        }),
+        prisma.medication.findMany({
+          where: { personId, supersededAt: null },
+          select: { genericName: true, kemlCode: true },
+          orderBy: { recordedAt: 'desc' },
+          take: 10,
+        }),
+        prisma.allergy.findMany({
+          where: { personId, supersededAt: null },
+          select: { substanceLabel: true, reaction: true, severity: true },
+        }),
+        prisma.encounter.findFirst({
+          where: { personId },
+          select: { startedAt: true, facilityId: true },
+          orderBy: { startedAt: 'desc' },
+        }),
+      ]);
+
+      const ageYears = Math.floor(
+        (Date.now() - person.dateOfBirth.getTime()) / (365.25 * 86_400_000),
+      );
+
+      const lastFacility = lastEncounter
+        ? await prisma.facility.findUnique({
+            where: { id: lastEncounter.facilityId },
+            select: { name: true },
+          })
+        : null;
+
+      /*
+       * Severe allergies lead, because they are the one thing on this screen
+       * that changes what the clinician must NOT do.
+       */
+      const severe = allergies.filter((a) => a.severity === 'SEVERE');
+
+      const lines: string[] = [];
+      lines.push(`${ageYears}-year-old ${person.sexAtBirth.toLowerCase()}.`);
+      if (severe.length) {
+        lines.push(
+          `SEVERE allergy: ${severe
+            .map((a) => `${a.substanceLabel} (${a.reaction})`)
+            .join('; ')}.`,
+        );
+      }
+      if (chronic.length) {
+        lines.push(`Living with ${chronic.map((c) => c.icd11Title).join(', ')}.`);
+      }
+      if (meds.length) {
+        lines.push(`Currently on ${meds.map((m) => m.genericName).join(', ')}.`);
+      }
+      if (lastEncounter && lastFacility) {
+        lines.push(
+          `Last seen ${lastEncounter.startedAt.toISOString().slice(0, 10)} at ${lastFacility.name}.`,
+        );
+      }
+      if (lines.length === 1) lines.push('No chronic conditions, medicines or allergies recorded.');
+
+      await logAccess(prisma, {
+        personId,
+        practitionerId,
+        checkInId: gate.checkInId,
+        facilityId: gate.facilityId,
+        action: 'VIEW_SUMMARY',
+        tierReached: 'TIER_2_GENERAL',
+        reason: 'ACTIVE_CONSULTATION',
+        outcome: 'GRANTED',
+        requestId: req.id,
+      });
+
+      return {
+        brief: lines.join(' '),
+        ageYears,
+        severeAllergies: severe.map((a) => ({
+          substanceLabel: a.substanceLabel,
+          reaction: a.reaction,
+        })),
+        chronicConditions: chronic.map((c) => c.icd11Title),
+        currentMedications: meds.map((m) => m.genericName),
+        lastSeen: lastEncounter
+          ? { date: lastEncounter.startedAt, facilityName: lastFacility?.name ?? null }
+          : null,
+        // Every line above came from a row somebody wrote. Nothing here was
+        // generated, and the screen should say so.
+        derivedFrom: 'STRUCTURED_RECORD' as const,
+      };
+    },
+  );
+
+  /**
+   * Triage assist, for a clinician rather than a citizen.
+   *
+   * Differs from the citizen route in one important way: it reports the
+   * red-flag rules that MATCHED but are inactive, by rule id. A clinician
+   * is the right audience for "RF001 would have fired here" — it is the
+   * feedback that gets the rule set reviewed and signed off.
+   */
+  app.post<{ Body: { nhpId: string; symptoms: string[] } }>(
+    `${v1}/clinical/triage-assist`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['nhpId', 'symptoms'],
+          properties: {
+            nhpId: { type: 'string', minLength: 3, maxLength: 64 },
+            symptoms: {
+              type: 'array',
+              items: { type: 'string', minLength: 2, maxLength: 64 },
+              minItems: 1,
+              maxItems: 20,
+            },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const practitionerId = await practitionerFrom(req);
+      const gate = await canWriteClinical(prisma, practitionerId);
+      if (!gate.allowed) throw new ClinicalError(gate.reason, gate.code);
+
+      const personId = await resolvePersonId(prisma, req.body.nhpId);
+      const person = await prisma.person.findUniqueOrThrow({
+        where: { id: personId },
+        select: { dateOfBirth: true, sexAtBirth: true, countyId: true, subcountyId: true },
+      });
+      const ageYears = Math.floor(
+        (Date.now() - person.dateOfBirth.getTime()) / (365.25 * 86_400_000),
+      );
+
+      const result = await recommend(prisma, {
+        symptoms: req.body.symptoms,
+        ageYears,
+        sex: person.sexAtBirth as 'MALE' | 'FEMALE' | 'INTERSEX',
+        personId,
+        countyId: person.countyId,
+        subcountyId: person.subcountyId,
+      });
+
+      return {
+        urgency: result.urgency,
+        redFlag: result.redFlag,
+        rulesFired: result.rulesFired,
+        /*
+         * Named for the clinician, unlike the citizen route.
+         *
+         * These are rules a clinician has not yet signed off. Showing which
+         * ones matched is how they get reviewed — and a clinician reading
+         * "RF001 matched but is inactive" is exactly the person who can say
+         * whether it should be.
+         */
+        inactiveRulesMatched: result.inactiveRulesMatched,
+        requiredCapabilities: result.requiredCapabilities,
+        minKephLevel: result.minKephLevel,
+        historyFactors: result.historyFactors,
+        adviceEn: result.adviceEn,
+        // Decision support, never a verdict. The clinician in the room has
+        // information no rule set has.
+        advisory: true as const,
+        disclaimer:
+          'Decision support only. These rules do not diagnose, and the ' +
+          'clinical judgement in the room overrides them.',
+      };
+    },
+  );
+
+  // ------------------------------------------------------------ care finder
+  //
+  // The citizen-facing half of the routing engine. Deterministic throughout:
+  // symptoms come from a controlled vocabulary, match numbered rules written
+  // by clinicians, and the rules name the capabilities a facility must hold.
+  // No model is anywhere in this decision path, which is what makes every
+  // recommendation explainable to the person who received it.
+
+  /**
+   * The symptom picker, tailored to who is asking.
+   *
+   * Age and sex filter the vocabulary because asking a sixty-year-old man
+   * about pregnancy symptoms wastes his time and makes the portal feel like
+   * it does not know him.
+   */
+  app.get(`${v1}/care/symptoms`, async (req) => {
+    const ctx = await contextFrom(req);
+    const { lang } = req.query as { lang?: 'en' | 'sw' };
+
+    let ageYears = 30;
+    let sex: 'MALE' | 'FEMALE' | 'INTERSEX' | undefined;
+
+    if (ctx.personId) {
+      const person = await prisma.person.findUnique({
+        where: { id: ctx.personId },
+        select: { dateOfBirth: true, sexAtBirth: true },
+      });
+      if (person) {
+        ageYears = Math.floor(
+          (Date.now() - person.dateOfBirth.getTime()) / (365.25 * 86_400_000),
+        );
+        sex = person.sexAtBirth as 'MALE' | 'FEMALE' | 'INTERSEX';
+      }
+    }
+
+    return {
+      ageYears,
+      groups: await symptomPicker(prisma, { ageYears, sex, lang: lang ?? 'en' }),
+    };
+  });
+
+  /**
+   * Where should I go?
+   *
+   * The person's own record widens the search — a diabetic is routed to a
+   * facility that can also handle diabetes — and the reason is returned
+   * alongside, so the screen can say WHY rather than silently reordering.
+   *
+   * A red flag deliberately returns NO facility list. Every red-flag rule
+   * is currently inactive pending a practising clinician's sign-off, and
+   * routing an unreviewed emergency is the single worst thing this system
+   * could do. What it returns instead is the one instruction that is right
+   * regardless of which rule fired: go now, to the nearest emergency
+   * department.
+   */
+  app.post<{
+    Body: { symptoms: string[]; lang?: 'en' | 'sw'; latitude?: number; longitude?: number };
+  }>(
+    `${v1}/care/recommend`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['symptoms'],
+          properties: {
+            symptoms: {
+              type: 'array',
+              items: { type: 'string', minLength: 2, maxLength: 64 },
+              minItems: 1,
+              maxItems: 20,
+            },
+            lang: { type: 'string', enum: ['en', 'sw'] },
+            latitude: { type: 'number', minimum: -5, maximum: 5 },
+            longitude: { type: 'number', minimum: 33, maximum: 42 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const ctx = await contextFrom(req);
+      if (!ctx.personId) {
+        throw new AuthError('This endpoint is for citizen accounts', 'NOT_A_CITIZEN', 403);
+      }
+
+      const person = await prisma.person.findUniqueOrThrow({
+        where: { id: ctx.personId },
+        select: {
+          dateOfBirth: true,
+          sexAtBirth: true,
+          countyId: true,
+          subcountyId: true,
+        },
+      });
+
+      const ageYears = Math.floor(
+        (Date.now() - person.dateOfBirth.getTime()) / (365.25 * 86_400_000),
+      );
+
+      const result = await recommend(prisma, {
+        symptoms: req.body.symptoms,
+        ageYears,
+        sex: person.sexAtBirth as 'MALE' | 'FEMALE' | 'INTERSEX',
+        personId: ctx.personId,
+        countyId: person.countyId,
+        subcountyId: person.subcountyId,
+        ...(req.body.latitude !== undefined && req.body.longitude !== undefined
+          ? { location: { latitude: req.body.latitude, longitude: req.body.longitude } }
+          : {}),
+      });
+
+      const lang = req.body.lang ?? 'en';
+
+      /*
+       * A red-flag match, with every red-flag rule still unreviewed.
+       *
+       * `inactiveRulesMatched` is how the engine reports "something serious
+       * matched, but I am not permitted to act on it". Handing back a
+       * facility list here would be acting on it.
+       */
+      const gatedEmergency = result.inactiveRulesMatched.length > 0;
+
+      if (gatedEmergency) {
+        return {
+          urgency: 'EMERGENCY' as const,
+          emergency: true,
+          adviceEn:
+            'Your symptoms may be serious. Go to the nearest emergency ' +
+            'department now, or call 999 for an ambulance.',
+          adviceSw:
+            'Dalili zako zinaweza kuwa hatari. Nenda idara ya dharura iliyo ' +
+            'karibu sasa hivi, au piga 999 kuomba gari la wagonjwa.',
+          facilities: [],
+          scope: 'NONE' as const,
+          historyFactors: [],
+          rulesFired: [],
+          disclaimer: lang === 'sw' ? DISCLAIMER_SW : DISCLAIMER_EN,
+        };
+      }
+
+      // Recorded so the loop can be closed later: whether somebody acted on
+      // what they were told is the only honest measure of whether the rules
+      // route correctly.
+      await saveRecommendation(
+        prisma,
+        {
+          symptoms: req.body.symptoms,
+          ageYears,
+          personId: ctx.personId,
+          countyId: person.countyId,
+          subcountyId: person.subcountyId,
+        },
+        result,
+      );
+
+      return {
+        urgency: result.urgency,
+        emergency: false,
+        adviceEn: result.adviceEn,
+        adviceSw: result.adviceSw,
+        facilities: result.facilities,
+        scope: result.scope,
+        historyFactors: result.historyFactors,
+        rulesFired: result.rulesFired,
+        requiredCapabilities: result.requiredCapabilities,
+        disclaimer: lang === 'sw' ? DISCLAIMER_SW : DISCLAIMER_EN,
+      };
+    },
+  );
+
+  // ----------------------------------------------------- capability register
+
+  /**
+   * What this facility says it can treat.
+   *
+   * The whole of NHP's routing rests on this list being true. A capability
+   * claimed and then not honoured sends a patient past a hospital that could
+   * have helped them to one that cannot — so every claim carries the date it
+   * was last confirmed, and decays visibly when nobody renews it.
+   *
+   * Returns the full vocabulary, not only what is held, because the screen
+   * this serves is a checklist: you cannot tick what you are not shown.
+   */
+  app.get(`${v1}/facility/capabilities`, async (req) => {
+    const scope = await facilityScopeFrom(req);
+
+    const facility = await prisma.facility.findUniqueOrThrow({
+      where: { id: scope.facilityId },
+      select: { kephLevel: true },
+    });
+
+    const [vocabulary, held] = await Promise.all([
+      prisma.capability.findMany({
+        select: {
+          code: true,
+          labelEn: true,
+          labelSw: true,
+          domain: true,
+          minKephLevel: true,
+        },
+        orderBy: [{ domain: 'asc' }, { labelEn: 'asc' }],
+      }),
+      prisma.facilityCapability.findMany({
+        where: { facilityId: scope.facilityId },
+        select: {
+          availability: true,
+          status: true,
+          verifiedAt: true,
+          lastConfirmedAt: true,
+          capability: { select: { code: true } },
+        },
+      }),
+    ]);
+
+    const byCode = new Map(held.map((h) => [h.capability.code, h]));
+    const now = new Date();
+
+    const items = vocabulary.map((c) => {
+      const h = byCode.get(c.code);
+      return {
+        code: c.code,
+        labelEn: c.labelEn,
+        labelSw: c.labelSw,
+        domain: c.domain,
+        minKephLevel: c.minKephLevel,
+        /*
+         * A capability above this facility's KEPH level cannot be claimed —
+         * `claimCapability` refuses it. Saying so here means the checkbox
+         * arrives disabled with a reason, rather than failing on save.
+         */
+        eligible: c.minKephLevel === null || facility.kephLevel >= c.minKephLevel,
+        held: h ? h.status !== 'SUSPENDED' : false,
+        status: h?.status ?? null,
+        availability: h?.availability ?? null,
+        verifiedAt: h?.verifiedAt ?? null,
+        lastConfirmedAt: h?.lastConfirmedAt ?? null,
+        freshness: h ? freshnessOf(h.lastConfirmedAt, now) : null,
+      };
+    });
+
+    const live = items.filter((i) => i.held);
+    return {
+      facilityName: scope.facilityName,
+      kephLevel: facility.kephLevel,
+      staleAfterDays: STALE_AFTER_DAYS,
+      expiredAfterDays: EXPIRED_AFTER_DAYS,
+      summary: {
+        claimed: live.length,
+        verified: live.filter((i) => i.status === 'VERIFIED').length,
+        stale: live.filter((i) => i.freshness === 'STALE').length,
+        expired: live.filter((i) => i.freshness === 'EXPIRED').length,
+        /*
+         * The oldest confirmation is what the facility should act on: it is
+         * the first claim that will drop out of routing.
+         */
+        oldestConfirmedAt: live.length
+          ? live
+              .map((i) => i.lastConfirmedAt as Date)
+              .reduce((a, b) => (a < b ? a : b))
+          : null,
+      },
+      capabilities: items,
+    };
+  });
+
+  /** Claim one capability, or change how available it is. */
+  app.post<{
+    Body: {
+      capabilityCode: string;
+      availability?: 'ROUTINE' | 'BUSINESS_HOURS' | 'ON_CALL' | 'REFERRAL_ONLY';
+    };
+  }>(
+    `${v1}/facility/capabilities`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['capabilityCode'],
+          properties: {
+            capabilityCode: { type: 'string', minLength: 2, maxLength: 64 },
+            availability: {
+              type: 'string',
+              enum: ['ROUTINE', 'BUSINESS_HOURS', 'ON_CALL', 'REFERRAL_ONLY'],
+            },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const scope = await facilityScopeFrom(req);
+      const row = await claimCapability(prisma, {
+        facilityId: scope.facilityId,
+        capabilityCode: req.body.capabilityCode,
+        availability: req.body.availability,
+      });
+      return {
+        claimed: true,
+        status: row.status,
+        availability: row.availability,
+        lastConfirmedAt: row.lastConfirmedAt,
+      };
+    },
+  );
+
+  /**
+   * Withdraw a claim.
+   *
+   * Suspended, never deleted. What a facility once said it could do is part
+   * of the record — a patient routed there last month was routed on this
+   * claim, and erasing it would erase the reason.
+   */
+  app.delete<{ Params: { code: string } }>(
+    `${v1}/facility/capabilities/:code`,
+    async (req) => {
+      const scope = await facilityScopeFrom(req);
+      const capability = await prisma.capability.findUnique({
+        where: { code: req.params.code },
+        select: { id: true },
+      });
+      if (!capability) {
+        throw new FacilityError('Unknown capability', 'UNKNOWN_CAPABILITY');
+      }
+
+      const existing = await prisma.facilityCapability.findUnique({
+        where: {
+          facilityId_capabilityId: {
+            facilityId: scope.facilityId,
+            capabilityId: capability.id,
+          },
+        },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw new FacilityError(
+          'This facility has not claimed that capability',
+          'CAPABILITY_NOT_CLAIMED',
+        );
+      }
+
+      await prisma.facilityCapability.update({
+        where: { id: existing.id },
+        data: { status: 'SUSPENDED' },
+      });
+      return { suspended: true };
+    },
+  );
+
+  /**
+   * "Everything on this list is still true."
+   *
+   * The whole register is reconfirmed in one action, because a facility that
+   * must re-tick forty boxes every quarter will not do it, and a register
+   * nobody renews is worse than none — it is confidently wrong. Whatever is
+   * left out of the list is suspended, so this is also how a capability that
+   * has lapsed gets removed.
+   */
+  app.post<{ Body: { capabilityCodes: string[] } }>(
+    `${v1}/facility/capabilities/reconfirm`,
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['capabilityCodes'],
+          properties: {
+            capabilityCodes: {
+              type: 'array',
+              items: { type: 'string', minLength: 2, maxLength: 64 },
+              maxItems: 500,
+            },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const scope = await facilityScopeFrom(req);
+      const result = await reconfirmCapabilities(
+        prisma,
+        scope.facilityId,
+        req.body.capabilityCodes,
+      );
+      return { ...result, confirmedAt: new Date() };
     },
   );
 

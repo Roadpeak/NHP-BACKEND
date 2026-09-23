@@ -41,7 +41,12 @@ import {
   grantAffiliation,
   checkIn,
 } from '../src/practitioner.js';
-import { openEncounter, recordDiagnosis, recordAllergy } from '../src/clinical.js';
+import {
+  openEncounter,
+  recordDiagnosis,
+  recordAllergy,
+  allergyLabelMatches,
+} from '../src/clinical.js';
 import {
   hashPassword,
   enrolSms,
@@ -3333,6 +3338,49 @@ describe('facility portal', () => {
     return { ...doctor, adminFacility: f };
   }
 
+  /**
+   * A receptionist at the given facility, signed in.
+   *
+   * Created through the real staff-accounts endpoint rather than by writing
+   * the rows directly: a fixture that forges its own access cannot detect a
+   * bug in how access is granted.
+   */
+  async function receptionAt(facilityId: string, adminToken: string) {
+    seq++;
+    const phone = `07160000${String(seq).padStart(2, '0')}`;
+    const staffPassword = 'reception-password-123';
+    const res = await post('/facility/staff-accounts', adminToken, {
+      nationalId: `830000${String(seq).padStart(2, '0')}`,
+      name: `Grace Wanjiru${seq}`,
+      phone,
+      password: staffPassword,
+    });
+    if (res.statusCode !== 200) {
+      throw new Error(`Could not create reception staff: ${res.body}`);
+    }
+
+    /*
+     * A newly issued staff account cannot sign in until it has enrolled a
+     * second factor — `login` returns MFA_ENROLMENT_REQUIRED, not a session.
+     * Enrolled the same way `makeAccount` does, so the fixture reaches the
+     * state a real receptionist reaches on their first sign-in.
+     */
+    const account = await prisma.account.findFirstOrThrow({
+      where: { personId: res.json().personId },
+      select: { id: true },
+    });
+    await enrolSms(prisma, account.id);
+    const code = sms.sent.at(-1)?.body.match(/\b(\d{6})\b/)?.[1];
+    if (!code) throw new Error('Enrolment code was not sent');
+    await confirmSms(prisma, account.id, code);
+
+    const session = await signIn(phone, staffPassword);
+    if (!session.accessToken) {
+      throw new Error(`Reception could not sign in: ${JSON.stringify(session)}`);
+    }
+    return { ...session, facilityId };
+  }
+
   it('names the facility an administrator runs, and the staffing rule', async () => {
     const admin = await facilityAdmin('PRIVATE_FOR_PROFIT');
 
@@ -3717,6 +3765,173 @@ describe('facility portal', () => {
     ).toHaveLength(1);
   });
 
+
+  /*
+   * THE CAPABILITY REGISTER.
+   *
+   * Routing is only ever as honest as this list. Three things have to hold,
+   * and each one is a way a patient gets sent to the wrong building:
+   *
+   *   - A facility cannot claim what its KEPH level cannot support. A
+   *     dispensary claiming an ICU is a typo, and honouring it routes a
+   *     critically ill patient to a room with no oxygen.
+   *   - Withdrawing a claim suspends it, never deletes it. Someone was
+   *     routed there on that claim last month; erasing it erases the reason.
+   *   - Reception cannot touch the register at all.
+   */
+  it('returns the whole vocabulary, marking what is held and what is out of reach', async () => {
+    const admin = await facilityAdmin(); // KEPH 3
+
+    const res = await get('/facility/capabilities', admin.accessToken);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.kephLevel).toBe(3);
+    // The screen is a checklist: it must show what is NOT held, or there is
+    // nothing to tick.
+    expect(body.capabilities.length).toBeGreaterThan(100);
+    expect(body.summary.claimed).toBe(0);
+
+    const antenatal = body.capabilities.find((c: { code: string }) => c.code === 'ANTENATAL');
+    expect(antenatal.eligible).toBe(true);
+    expect(antenatal.held).toBe(false);
+
+    // Above this facility's level — offered, but marked unreachable, so the
+    // checkbox arrives disabled with a reason rather than failing on save.
+    const ct = body.capabilities.find((c: { code: string }) => c.code === 'BLOOD_CULTURE');
+    expect(ct.minKephLevel).toBe(5);
+    expect(ct.eligible).toBe(false);
+  });
+
+  it('claims a capability and reports it as fresh', async () => {
+    const admin = await facilityAdmin();
+
+    const claim = await post('/facility/capabilities', admin.accessToken, {
+      capabilityCode: 'ANTENATAL',
+      availability: 'BUSINESS_HOURS',
+    });
+    expect(claim.statusCode).toBe(200);
+    expect(claim.json().status).toBe('CLAIMED');
+
+    const body = (await get('/facility/capabilities', admin.accessToken)).json();
+    const antenatal = body.capabilities.find((c: { code: string }) => c.code === 'ANTENATAL');
+    expect(antenatal.held).toBe(true);
+    expect(antenatal.availability).toBe('BUSINESS_HOURS');
+    expect(antenatal.freshness).toBe('FRESH');
+    expect(body.summary.claimed).toBe(1);
+    expect(body.summary.oldestConfirmedAt).not.toBeNull();
+  });
+
+  it('REFUSES a capability above the facility KEPH level', async () => {
+    const admin = await facilityAdmin(); // KEPH 3
+
+    const res = await post('/facility/capabilities', admin.accessToken, {
+      capabilityCode: 'BLOOD_CULTURE', // needs KEPH 5
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('CAPABILITY_ABOVE_FACILITY_LEVEL');
+    // And nothing was written — a refused claim must not leave a row that
+    // routing could later read.
+    const body = (await get('/facility/capabilities', admin.accessToken)).json();
+    expect(body.summary.claimed).toBe(0);
+  });
+
+  it('refuses a capability that is not in the controlled vocabulary', async () => {
+    const admin = await facilityAdmin();
+
+    const res = await post('/facility/capabilities', admin.accessToken, {
+      capabilityCode: 'WE_DO_EVERYTHING',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('UNKNOWN_CAPABILITY');
+    expect(res.json().detail).toMatch(/free text would break the triage engine/i);
+  });
+
+  it('SUSPENDS a withdrawn claim rather than deleting it', async () => {
+    const admin = await facilityAdmin();
+    await post('/facility/capabilities', admin.accessToken, { capabilityCode: 'ANTENATAL' });
+
+    const res = await del('/facility/capabilities/ANTENATAL', admin.accessToken);
+    expect(res.statusCode).toBe(200);
+
+    const body = (await get('/facility/capabilities', admin.accessToken)).json();
+    const antenatal = body.capabilities.find((c: { code: string }) => c.code === 'ANTENATAL');
+    expect(antenatal.held).toBe(false);
+    expect(antenatal.status).toBe('SUSPENDED');
+    expect(body.summary.claimed).toBe(0);
+
+    // The row survives: what the facility once claimed is part of the record.
+    const row = await prisma.facilityCapability.findFirst({
+      where: { facilityId: admin.adminFacility.id, capability: { code: 'ANTENATAL' } },
+    });
+    expect(row).not.toBeNull();
+    expect(row!.status).toBe('SUSPENDED');
+  });
+
+  it('refuses to withdraw a capability that was never claimed', async () => {
+    const admin = await facilityAdmin();
+
+    const res = await del('/facility/capabilities/ANTENATAL', admin.accessToken);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('CAPABILITY_NOT_CLAIMED');
+  });
+
+  it('reconfirms the whole register at once, suspending whatever was left out', async () => {
+    const admin = await facilityAdmin();
+    await post('/facility/capabilities', admin.accessToken, { capabilityCode: 'ANTENATAL' });
+    await post('/facility/capabilities', admin.accessToken, { capabilityCode: 'BLOOD_SUGAR' });
+
+    // Age both claims past the staleness threshold, so reconfirmation has
+    // something real to do rather than passing on rows that were fresh anyway.
+    await prisma.facilityCapability.updateMany({
+      where: { facilityId: admin.adminFacility.id },
+      data: { lastConfirmedAt: new Date(Date.now() - 200 * 86_400_000) },
+    });
+    const stale = (await get('/facility/capabilities', admin.accessToken)).json();
+    expect(stale.summary.stale).toBe(2);
+
+    const res = await post('/facility/capabilities/reconfirm', admin.accessToken, {
+      capabilityCodes: ['ANTENATAL'],
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().confirmed).toBe(1);
+    expect(res.json().suspended).toBe(1);
+
+    const body = (await get('/facility/capabilities', admin.accessToken)).json();
+    expect(body.summary.claimed).toBe(1);
+    expect(body.summary.stale).toBe(0);
+    const sugar = body.capabilities.find((c: { code: string }) => c.code === 'BLOOD_SUGAR');
+    expect(sugar.status).toBe('SUSPENDED');
+  });
+
+  it('RECEPTION CANNOT TOUCH THE REGISTER', async () => {
+    const admin = await facilityAdmin();
+    const receptionist = await receptionAt(admin.adminFacility.id, admin.accessToken);
+
+    const read = await get('/facility/capabilities', receptionist.accessToken);
+    expect(read.statusCode).toBe(403);
+    expect(read.json().code).toBe('NOT_A_FACILITY_ADMIN');
+
+    const claim = await post('/facility/capabilities', receptionist.accessToken, {
+      capabilityCode: 'ANTENATAL',
+    });
+    expect(claim.statusCode).toBe(403);
+
+    const reconfirm = await post('/facility/capabilities/reconfirm', receptionist.accessToken, {
+      capabilityCodes: [],
+    });
+    expect(reconfirm.statusCode).toBe(403);
+  });
+
+  it('refuses the register without a session', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/facility/capabilities' });
+    expect(res.statusCode).toBe(401);
+  });
+
   it('THE RECEPTION BOUNDARY — the queue payload carries nothing clinical', async () => {
     const admin = await facilityAdmin();
     const patient = await makePerson('Kamau');
@@ -4043,5 +4258,308 @@ describe('the reception desk resolves which facility it is', () => {
     expect(
       queue.json().queue.some((q: { nhpId: string }) => q.nhpId === patient.displayNumber),
     ).toBe(true);
+  });
+});
+
+/*
+ * THE CARE FINDER, OVER THE WIRE.
+ *
+ * The citizen-facing half of the routing engine. Three properties matter
+ * more than the happy path, and each is a way somebody gets hurt:
+ *
+ *   - A red-flag match returns NO facility list while the red-flag rules
+ *     are unreviewed. Handing back a destination would be acting on a rule
+ *     no clinician has signed.
+ *   - Symptoms come from a controlled vocabulary. Free text into a rules
+ *     engine is a promise the engine cannot keep.
+ *   - A clinician's account is not a citizen's. The route reads the
+ *     signed-in person's own record, so it must refuse anyone who is not
+ *     a citizen rather than guessing whose history to use.
+ */
+describe('care finder', () => {
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  const post = (url: string, token: string, payload: Record<string, unknown>) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1${url}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+
+  async function citizen() {
+    const person = await makePerson('Achieng');
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { phone: person.phone, password: CITIZEN_PASSWORD },
+    });
+    return { person, token: login.json().accessToken as string };
+  }
+
+  it('offers a symptom picker grouped by body system', async () => {
+    const { token } = await citizen();
+
+    const res = await get('/care/symptoms', token);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.groups.length).toBeGreaterThan(0);
+    expect(body.groups[0].items[0]).toHaveProperty('code');
+    expect(body.groups[0].items[0]).toHaveProperty('question');
+  });
+
+  it('A RED FLAG RETURNS NO FACILITY LIST while the rules are unreviewed', async () => {
+    const { token } = await citizen();
+
+    const res = await post('/care/recommend', token, {
+      symptoms: ['chest_pain', 'breathlessness'],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.emergency).toBe(true);
+    expect(body.urgency).toBe('EMERGENCY');
+    // The whole point: no destination is offered, because no clinician has
+    // signed the rule that would choose one.
+    expect(body.facilities).toEqual([]);
+    expect(body.adviceEn).toMatch(/emergency department now|call 999/i);
+    // And it must not leak which unreviewed rule matched to a citizen.
+    expect(res.body).not.toMatch(/RF0\d\d/);
+  });
+
+  it('refuses a symptom that is not in the vocabulary', async () => {
+    const { token } = await citizen();
+
+    const res = await post('/care/recommend', token, {
+      symptoms: ['i_feel_unwell_generally'],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('UNKNOWN_SYMPTOM');
+    expect(res.json().detail).toMatch(/controlled vocabulary/i);
+  });
+
+  it('refuses a clinician account — it reads the caller\'s own record', async () => {
+    const doctor = await clinician();
+
+    const res = await post('/care/recommend', doctor.accessToken, {
+      symptoms: ['fever'],
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('NOT_A_CITIZEN');
+  });
+
+  it('refuses without a session', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/care/recommend',
+      payload: { symptoms: ['fever'] },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('always carries the disclaimer', async () => {
+    const { token } = await citizen();
+
+    const res = await post('/care/recommend', token, { symptoms: ['fever'] });
+
+    // NHP routes people; it does not diagnose them, and no recommendation
+    // may reach a citizen without saying so.
+    expect(res.json().disclaimer).toMatch(/not a diagnosis/i);
+  });
+});
+
+/*
+ * CLINICAL DECISION SUPPORT.
+ *
+ * Advisory throughout. Nothing here writes to a record or chooses a
+ * diagnosis, and every route sits behind the same check-in gate as the rest
+ * of the clinical surface — an unlicensed account reaches none of it.
+ */
+describe('clinical decision support', () => {
+  const get = (url: string, token: string) =>
+    app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
+
+  const post = (url: string, token: string, payload: Record<string, unknown>) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1${url}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+
+  it('suggests referral destinations, excluding where the clinician stands', async () => {
+    const doctor = await clinician();
+
+    const res = await get('/clinical/destinations?capabilities=OPD_GENERAL', doctor.accessToken);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.requiredCapabilities).toEqual(['OPD_GENERAL']);
+    // Referring a patient to the building they are already in is not a
+    // referral.
+    expect(body.destinations.every((d: { id: string }) => d.id !== doctor.facility.id)).toBe(true);
+  });
+
+  it('WARNS when a prescription conflicts with a recorded allergy', async () => {
+    const doctor = await clinician();
+    const patient = await makePerson('Wanjiru');
+
+    await recordAllergy(prisma, {
+      practitionerId: doctor.practitioner.id,
+      personId: patient.id,
+      substanceKind: 'DRUG',
+      substanceLabel: 'Penicillin',
+      reaction: 'Anaphylaxis',
+      severity: 'SEVERE',
+    });
+
+    const drug = await prisma.medicationTerm.findFirst({
+      where: { genericName: { contains: 'enicillin' } },
+      select: { kemlCode: true, genericName: true },
+    });
+    if (!drug) return; // KEML not seeded; nothing to assert against
+
+    const res = await get(
+      `/clinical/${patient.displayNumber}/allergy-check?kemlCode=${drug.kemlCode}`,
+      doctor.accessToken,
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().conflicts.length).toBeGreaterThan(0);
+    expect(res.json().conflicts[0].severity).toBe('SEVERE');
+  });
+
+  /*
+   * THE ALLERGY MATCHING RULE, TESTED DIRECTLY.
+   *
+   * Tested as a unit rather than through the route, deliberately. The KEML
+   * contains no two medicines that distinguish the anchored rule from a bare
+   * substring, so a route-level test cannot tell a correct implementation
+   * from a careless one — it would pass either way, which is worse than no
+   * test. Calling the rule with the inputs that matter is the only way to
+   * pin it.
+   */
+  describe('the allergy matching rule', () => {
+    it('catches the whole drug family a clinician meant', () => {
+      // Someone who wrote "Penicillin" meant all of them. Missing these is
+      // how a recorded anaphylaxis produces no warning.
+      expect(allergyLabelMatches('Penicillin', 'Benzylpenicillin')).toBe(true);
+      expect(allergyLabelMatches('Penicillin', 'Phenoxymethylpenicillin (Penicillin V)')).toBe(true);
+      expect(allergyLabelMatches('Penicillin', 'Penicillin')).toBe(true);
+    });
+
+    it('DOES NOT cry wolf on an unrelated drug', () => {
+      // amoxicillin ends in -cillin, not -penicillin.
+      expect(allergyLabelMatches('Penicillin', 'Amoxicillin')).toBe(false);
+      expect(allergyLabelMatches('Amoxicillin', 'Benzylpenicillin')).toBe(false);
+      expect(allergyLabelMatches('Aspirin', 'Paracetamol')).toBe(false);
+    });
+
+    it('stays anchored — a label must not match a longer word it merely begins', () => {
+      // The single property a bare `includes` would break: "Carbamazepin"
+      // must not silently cover "Carbamazepine", or every truncated entry
+      // becomes a wildcard.
+      expect(allergyLabelMatches('Carbamazepin', 'Carbamazepine')).toBe(false);
+    });
+
+    it('ignores an empty or whitespace label rather than matching everything', () => {
+      expect(allergyLabelMatches('', 'Amoxicillin')).toBe(false);
+      expect(allergyLabelMatches('   ', 'Amoxicillin')).toBe(false);
+    });
+  });
+
+  it('says plainly that no recorded allergies is not the same as none', async () => {
+    const doctor = await clinician();
+    const patient = await makePerson('Kiptoo');
+
+    const drug = await prisma.medicationTerm.findFirst({ select: { kemlCode: true } });
+    if (!drug) return;
+
+    const res = await get(
+      `/clinical/${patient.displayNumber}/allergy-check?kemlCode=${drug.kemlCode}`,
+      doctor.accessToken,
+    );
+
+    expect(res.json().conflicts).toEqual([]);
+    // An empty result must not read as a safety guarantee.
+    expect(res.json().note).toMatch(/not the same as having none/i);
+  });
+
+  it('refuses a medicine outside the Essential Medicines List', async () => {
+    const doctor = await clinician();
+    const patient = await makePerson('Otieno');
+
+    const res = await get(
+      `/clinical/${patient.displayNumber}/allergy-check?kemlCode=NOT_A_DRUG`,
+      doctor.accessToken,
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('UNKNOWN_MEDICATION');
+  });
+
+  it('briefs the clinician from the structured record, leading with severe allergies', async () => {
+    const doctor = await clinician();
+    const patient = await makePerson('Njoroge');
+
+    await recordAllergy(prisma, {
+      practitionerId: doctor.practitioner.id,
+      personId: patient.id,
+      substanceKind: 'DRUG',
+      substanceLabel: 'Penicillin',
+      reaction: 'Anaphylaxis',
+      severity: 'SEVERE',
+    });
+
+    const res = await get(`/clinical/${patient.displayNumber}/brief`, doctor.accessToken);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.brief).toMatch(/SEVERE allergy: Penicillin/);
+    // The brief is assembled, not generated — and the response says so, so
+    // nobody mistakes it for a model's summary.
+    expect(body.derivedFrom).toBe('STRUCTURED_RECORD');
+    expect(body.severeAllergies[0].substanceLabel).toBe('Penicillin');
+  });
+
+  it('NAMES the inactive red-flag rules to a clinician, unlike the citizen route', async () => {
+    const doctor = await clinician();
+    const patient = await makePerson('Adhiambo');
+
+    const res = await post('/clinical/triage-assist', doctor.accessToken, {
+      nhpId: patient.displayNumber,
+      symptoms: ['chest_pain', 'breathlessness'],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // A clinician is exactly the person who can say whether RF001 should be
+    // signed off, so they are told it matched.
+    expect(body.inactiveRulesMatched).toContain('RF001');
+    expect(body.advisory).toBe(true);
+    expect(body.disclaimer).toMatch(/clinical judgement in the room overrides/i);
+  });
+
+  it('refuses decision support to an account with no licence', async () => {
+    const { person } = await (async () => {
+      const p = await makePerson('Mwangi');
+      return { person: p };
+    })();
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { phone: person.phone, password: CITIZEN_PASSWORD },
+    });
+
+    const res = await get(
+      '/clinical/destinations?capabilities=OPD_GENERAL',
+      login.json().accessToken,
+    );
+
+    expect([401, 403]).toContain(res.statusCode);
   });
 });

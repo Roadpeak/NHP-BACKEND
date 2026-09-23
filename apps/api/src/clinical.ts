@@ -624,6 +624,32 @@ export async function closeEncounter(
   });
 }
 
+
+/**
+ * Does a recorded allergy label cover this medicine's generic name?
+ *
+ * Drug families are named by SUFFIX: benzylpenicillin and
+ * phenoxymethylpenicillin are both penicillins, and a clinician who wrote
+ * "Penicillin" meant all of them. A whole-word rule misses every one of
+ * those, which is how a recorded anaphylaxis produces no warning at all.
+ *
+ * So the label is matched at a word END rather than as a whole word — but
+ * still anchored, so it cannot run past the end of the family name and
+ * match an unrelated drug that merely begins the same way.
+ *
+ * Exported and pure so the boundary can be tested directly. The KEML holds
+ * no two drugs that distinguish the anchored rule from a bare substring, so
+ * a route-level test cannot pin this; a unit test can.
+ */
+export function allergyLabelMatches(substanceLabel: string, genericName: string): boolean {
+  const label = substanceLabel.toLowerCase().trim();
+  const generic = genericName.toLowerCase().trim();
+  if (!label || !generic) return false;
+  if (label === generic) return true;
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`${escaped}\\b`).test(generic);
+}
+
 export async function recordDiagnosis(
   db: Db,
   input: {

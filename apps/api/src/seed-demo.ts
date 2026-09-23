@@ -15,6 +15,38 @@ import { PrismaClient } from '@prisma/client';
 import 'dotenv/config';
 import { registerAdult } from './identity.js';
 import { registerFacility, approveFacility, claimCapability } from './facility.js';
+
+/**
+ * What any functioning county hospital does.
+ *
+ * Held by all of them, so these never discriminate between facilities —
+ * which is what makes the extras below meaningful.
+ */
+const BASE_CAPABILITIES = [
+  'OPD_GENERAL',
+  'LAB_BASIC',
+  'MALARIA_RDT',
+  'PHARMACY',
+  'ANTENATAL',
+  'BLOOD_SUGAR',
+  'HIV_CARE',
+  'TB_TREATMENT',
+];
+
+/**
+ * What separates them, keyed by county code.
+ *
+ * Kisumu (042) is the best-equipped; Nairobi (047) deliberately lacks a
+ * blood bank and a theatre, so a demo can show a patient being routed OUT
+ * of the capital rather than into it.
+ */
+const EXTRA_CAPABILITIES: Record<string, string[]> = {
+  '042': ['EMERGENCY_24H', 'XRAY', 'ULTRASOUND', 'SURGERY_GENERAL', 'BLOOD_BANK', 'ECG', 'OXYGEN', 'PAEDIATRIC', 'NEWBORN_UNIT'],
+  '043': ['EMERGENCY_24H', 'XRAY', 'OXYGEN', 'PAEDIATRIC'],
+  '044': ['XRAY', 'ULTRASOUND', 'MENTAL_HEALTH', 'PHYSIOTHERAPY'],
+  '046': ['EMERGENCY_24H', 'ULTRASOUND', 'OXYGEN', 'SURGERY_GENERAL', 'ECG'],
+  '047': ['XRAY', 'DENTAL', 'MENTAL_HEALTH', 'PHYSIOTHERAPY'],
+};
 import { registerPractitioner, grantAffiliation, checkIn } from './practitioner.js';
 import {
   openEncounter,
@@ -469,6 +501,26 @@ async function main() {
       longitude: 34 + Math.random(),
     });
     await approveFacility(prisma, f.id, 'ministry-demo');
+
+    /*
+     * Capabilities, deliberately UNEVEN.
+     *
+     * Every county hospital holding an identical list would make routing
+     * look like it works when it is really just picking the nearest of six
+     * identical buildings. Real counties differ — one has a surgical
+     * theatre and a blood bank, another has neither — and the whole point
+     * of capability routing is to send a patient past the near hospital
+     * that cannot help them to the one that can.
+     *
+     * `claimCapability` still enforces the KEPH bound, so none of these
+     * can claim above level 4.
+     */
+    for (const cap of BASE_CAPABILITIES) {
+      await claimCapability(prisma, { facilityId: f.id, capabilityCode: cap });
+    }
+    for (const cap of EXTRA_CAPABILITIES[code] ?? []) {
+      await claimCapability(prisma, { facilityId: f.id, capabilityCode: cap });
+    }
 
     const docPerson = await registerAdult(prisma, {
       nationalId: `9${code}00001`,

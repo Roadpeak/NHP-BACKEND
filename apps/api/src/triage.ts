@@ -14,7 +14,7 @@
  *   2. An unreviewed red-flag rule cannot fire. It is loaded inactive and
  *      stays that way until a practising clinician signs it off.
  */
-import { PrismaClient, type Prisma } from '@prisma/client';
+import { PrismaClient, type Prisma, type CondStatus } from '@prisma/client';
 import { findFacilities, findWithWidening, type FacilityMatch } from './facility.js';
 
 export type Db = PrismaClient | Prisma.TransactionClient;
@@ -55,6 +55,14 @@ export interface TriageResult {
   scope: 'SUBCOUNTY' | 'COUNTY' | 'NATIONAL' | 'NONE';
   /** Set when a rule matched the symptoms but was gated by clinical review. */
   inactiveRulesMatched: string[];
+  /**
+   * What in this person's record widened the search, and why.
+   *
+   * Surfaced so the recommendation can SAY "because you are living with
+   * diabetes" rather than silently ranking differently. A citizen who
+   * cannot see why they were sent somewhere has no way to disagree.
+   */
+  historyFactors: HistoryFactor[];
   disclaimer: string;
 }
 
@@ -120,6 +128,101 @@ export async function evaluateRules(db: Db, input: TriageInput) {
  * is sent to the nearest facility that can handle an emergency, regardless
  * of what else matched.
  */
+
+/**
+ * Chronic conditions that change WHERE someone should be sent.
+ *
+ * Deliberately a short, explicit table rather than anything inferred. Each
+ * entry says: if this person is living with X, the facility they are routed
+ * to should also be able to handle X. A diabetic with a foot infection is
+ * better served somewhere with a diabetes clinic, and that is a lookup, not
+ * a prediction.
+ *
+ * Keyed by ICD-11 code PREFIX, so `5A11` matches `5A11.0` and the rest of
+ * the block. Anything not listed simply adds nothing — the routing falls
+ * back to what the symptoms alone require, which is the safe default.
+ *
+ * This table is the ONLY way a person's history influences routing. Keeping
+ * it small and readable is the point: a clinician can audit it in a minute,
+ * and every recommendation can name the condition that widened the search.
+ */
+export const HISTORY_CAPABILITIES: Array<{
+  icd11Prefix: string;
+  label: string;
+  capabilities: string[];
+}> = [
+  { icd11Prefix: '5A1', label: 'diabetes', capabilities: ['DIABETES_CLINIC'] },
+  { icd11Prefix: '5A2', label: 'diabetes', capabilities: ['DIABETES_CLINIC'] },
+  { icd11Prefix: 'BA0', label: 'hypertension', capabilities: ['ECG'] },
+  { icd11Prefix: 'BA4', label: 'a heart condition', capabilities: ['ECG', 'SPEC_CARDIOLOGIST'] },
+  { icd11Prefix: 'BA5', label: 'a heart condition', capabilities: ['ECG', 'SPEC_CARDIOLOGIST'] },
+  { icd11Prefix: 'CA23', label: 'asthma', capabilities: ['OXYGEN'] },
+  { icd11Prefix: '1C6', label: 'HIV', capabilities: ['HIV_CARE'] },
+  { icd11Prefix: '1B1', label: 'tuberculosis', capabilities: ['TB_TREATMENT'] },
+  { icd11Prefix: 'GB6', label: 'kidney disease', capabilities: ['DIALYSIS'] },
+  { icd11Prefix: '3A5', label: 'sickle cell disease', capabilities: ['BLOOD_BANK'] },
+  { icd11Prefix: '8A6', label: 'epilepsy', capabilities: ['MENTAL_HEALTH'] },
+];
+
+export interface HistoryFactor {
+  /** What the person is living with, in words a citizen would recognise. */
+  label: string;
+  /** What that adds to the facility search. */
+  capabilities: string[];
+}
+
+/**
+ * The statuses that mean the person still lives with the condition.
+ *
+ * Deliberately a named list rather than `status === 'ACTIVE'`. CONFIRMED is
+ * what a clinician actually records when they diagnose something — the
+ * first version of this filter matched only ACTIVE, and every confirmed
+ * diabetic in the database was silently invisible to routing. The failure
+ * was invisible too: the search simply was not widened, and nothing said so.
+ *
+ * SUSPECTED and REFUTED are excluded because neither is a diagnosis;
+ * RESOLVED and IN_REMISSION because the condition is no longer driving
+ * where this person should be sent.
+ */
+const LIVING_WITH: CondStatus[] = ['CONFIRMED', 'ACTIVE', 'RECURRENCE'];
+
+/**
+ * What this person's ongoing chronic conditions add to a facility search.
+ *
+ * Only current, non-superseded conditions count. A resolved condition must
+ * not keep narrowing someone's options for the rest of their life.
+ */
+export async function historyFactors(
+  db: Db,
+  personId: string,
+): Promise<HistoryFactor[]> {
+  const chronic = await db.condition.findMany({
+    where: {
+      personId,
+      isChronic: true,
+      clinicalStatus: { in: LIVING_WITH },
+      supersededAt: null,
+    },
+    select: { icd11Code: true },
+  });
+
+  const seen = new Map<string, HistoryFactor>();
+  for (const c of chronic) {
+    for (const entry of HISTORY_CAPABILITIES) {
+      if (!c.icd11Code.startsWith(entry.icd11Prefix)) continue;
+      const existing = seen.get(entry.label);
+      if (existing) {
+        for (const cap of entry.capabilities) {
+          if (!existing.capabilities.includes(cap)) existing.capabilities.push(cap);
+        }
+      } else {
+        seen.set(entry.label, { label: entry.label, capabilities: [...entry.capabilities] });
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
 export async function recommend(db: Db, input: TriageInput): Promise<TriageResult> {
   const unknown = await unknownSymptoms(db, input.symptoms);
   if (unknown.length > 0) {
@@ -148,6 +251,7 @@ export async function recommend(db: Db, input: TriageInput): Promise<TriageResul
       facilities: [],
       scope: 'NONE',
       inactiveRulesMatched: inactiveMatched,
+      historyFactors: [],
       disclaimer: DISCLAIMER_EN,
     };
   }
@@ -165,9 +269,35 @@ export async function recommend(db: Db, input: TriageInput): Promise<TriageResul
           : a,
       );
 
-  const capabilities = redFlags.length
+  /*
+   * The person's own record, folded in.
+   *
+   * Deliberately NOT applied to a red flag. In an emergency the only thing
+   * that matters is reaching a facility that can stabilise them; adding
+   * "must also have a diabetes clinic" could rule out the nearest hospital
+   * with an open theatre, and that trade is never worth making.
+   */
+  const factors = redFlags.length || !input.personId
+    ? []
+    : await historyFactors(db, input.personId);
+
+  /*
+   * What the SYMPTOMS require. Non-negotiable: a facility without these
+   * cannot treat what the person came for.
+   */
+  const symptomCapabilities = redFlags.length
     ? chosen.requiredCapabilities
     : [...new Set(fired.flatMap((r) => r.requiredCapabilities))];
+
+  /*
+   * What their HISTORY prefers, on top. Not the same kind of requirement —
+   * see the fallback below.
+   */
+  const preferred = [...new Set(factors.flatMap((f) => f.capabilities))].filter(
+    (c) => !symptomCapabilities.includes(c),
+  );
+
+  const capabilities = [...symptomCapabilities, ...preferred];
 
   const minKeph = redFlags.length
     ? chosen.minKephLevel
@@ -182,33 +312,57 @@ export async function recommend(db: Db, input: TriageInput): Promise<TriageResul
     limit: 5,
   };
 
-  let facilities: FacilityMatch[] = [];
-  let scope: TriageResult['scope'] = 'NONE';
+  async function runSearch(required: string[]) {
+    if (input.countyId && input.subcountyId) {
+      const widened = await findWithWidening(db, {
+        ...search,
+        requiredCapabilities: required,
+        countyId: input.countyId,
+        subcountyId: input.subcountyId,
+      });
+      return {
+        matches: widened.matches,
+        scope: (widened.matches.length ? widened.scope : 'NONE') as TriageResult['scope'],
+      };
+    }
+    const matches = await findFacilities(db, { ...search, requiredCapabilities: required });
+    return { matches, scope: (matches.length ? 'NATIONAL' : 'NONE') as TriageResult['scope'] };
+  }
 
-  if (input.countyId && input.subcountyId) {
-    const widened = await findWithWidening(db, {
-      ...search,
-      countyId: input.countyId,
-      subcountyId: input.subcountyId,
-    });
-    facilities = widened.matches;
-    scope = widened.matches.length ? widened.scope : 'NONE';
-  } else {
-    facilities = await findFacilities(db, search);
-    scope = facilities.length ? 'NATIONAL' : 'NONE';
+  /*
+   * History is a PREFERENCE, not a requirement.
+   *
+   * Asking for a diabetes clinic on top of what the symptoms need is right
+   * when such a facility exists. When none does, insisting on it returns
+   * NOTHING — and a diabetic with a fever is then told there is nowhere to
+   * go, which is both false and the worst possible answer.
+   *
+   * So the preferred search runs first, and falls back to what the symptoms
+   * alone require. `appliedHistory` records which one answered, so the
+   * screen only claims the record shaped the result when it actually did.
+   */
+  let { matches: facilities, scope } = await runSearch(capabilities);
+  let appliedHistory = preferred.length > 0;
+
+  if (!facilities.length && preferred.length) {
+    ({ matches: facilities, scope } = await runSearch(symptomCapabilities));
+    appliedHistory = false;
   }
 
   return {
     urgency: redFlags.length ? 'EMERGENCY' : (chosen.urgency as Urgency),
     redFlag: redFlags.length > 0,
     rulesFired: (redFlags.length ? redFlags : fired).map((r) => r.ruleId),
-    requiredCapabilities: capabilities,
+    requiredCapabilities: appliedHistory ? capabilities : symptomCapabilities,
     minKephLevel: minKeph,
     adviceEn: chosen.adviceEn,
     adviceSw: chosen.adviceSw,
     facilities,
     scope,
     inactiveRulesMatched: inactiveMatched,
+    // Reported only when it actually shaped the result — the screen says
+    // "because you are living with X", and that must not be a lie.
+    historyFactors: appliedHistory ? factors : [],
     disclaimer: DISCLAIMER_EN,
   };
 }
